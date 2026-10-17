@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Sonaa - صنعة",
+    "slug": "sonaa-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.sonaa.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "extra": {
+      "apiUrl": "https://sonaa-backend-v2.vercel.app/api"
+    }
+  }
+}
