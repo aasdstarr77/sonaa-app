@@ -23,7 +23,7 @@ jobs:
       - name: Install deps
         run: npm install --legacy-peer-deps
 
-      - name: Fix missing icon
+      - name: Fix missing icons
         run: |
           mkdir -p assets
           pip install Pillow
@@ -36,10 +36,15 @@ jobs:
           img.save('assets/splash-icon.png')
           print('icons created')
           "
-          ls -lh assets/
 
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
+
+      - name: Fix splashscreen color
+        run: |
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="splashscreen_background">#4F46E5</color></resources>' > android/app/src/main/res/values/splashscreen.xml
+          cat android/app/src/main/res/values/splashscreen.xml
+          ls android/app/src/main/res/values/
 
       - name: Build APK
         run: |
