@@ -26,11 +26,8 @@ jobs:
       - name: Fix missing icon
         run: |
           mkdir -p assets
-          echo "[STRIPPED 92 bytes]" | base64 -d > assets/icon.png
-          cp assets/icon.png assets/adaptive-icon.png
-          cp assets/icon.png assets/splash.png
-          cp assets/icon.png assets/splash-icon.png
-          ls assets/
+          python3 -c "import base64; data=base64.b64decode('[STRIPPED 92 bytes]'); open('assets/icon.png','wb').write(data); open('assets/adaptive-icon.png','wb').write(data); open('assets/splash.png','wb').write(data); open('assets/splash-icon.png','wb').write(data)"
+          ls -lh assets/
 
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
