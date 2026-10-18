@@ -1,4 +1,5 @@
-here{
+
+{
   "cli": {
     "version": ">= 5.9.1"
   },
@@ -14,8 +15,5 @@ here{
         "buildType": "apk"
       }
     }
-  },
-  "submit": {
-    "production": {}
   }
 }
