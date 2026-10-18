@@ -23,6 +23,15 @@ jobs:
       - name: Install deps
         run: npm install --legacy-peer-deps
 
+      - name: Fix missing icon
+        run: |
+          mkdir -p assets
+          echo "[STRIPPED 96 bytes]" | base64 -d > assets/icon.png
+          cp assets/icon.png assets/adaptive-icon.png || true
+          cp assets/icon.png assets/splash-icon.png || true
+          cp assets/icon.png assets/splash.png || true
+          ls -la assets/
+
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
 
