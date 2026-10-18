@@ -26,7 +26,16 @@ jobs:
       - name: Fix missing icon
         run: |
           mkdir -p assets
-          python3 -c "import base64; data=base64.b64decode('[STRIPPED 92 bytes]'); open('assets/icon.png','wb').write(data); open('assets/adaptive-icon.png','wb').write(data); open('assets/splash.png','wb').write(data); open('assets/splash-icon.png','wb').write(data)"
+          pip install Pillow
+          python3 -c "
+          from PIL import Image
+          img = Image.new('RGB', (1024, 1024), color='#4F46E5')
+          img.save('assets/icon.png')
+          img.save('assets/adaptive-icon.png')
+          img.save('assets/splash.png')
+          img.save('assets/splash-icon.png')
+          print('icons created')
+          "
           ls -lh assets/
 
       - name: Prebuild Android
