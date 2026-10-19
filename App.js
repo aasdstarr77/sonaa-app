@@ -39,6 +39,7 @@ export default function App() {
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [] });
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
+  const [adminReload, setAdminReload] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -85,7 +86,7 @@ export default function App() {
     }
     loadAdminData();
     return () => { mounted = false; };
-  }, [session, screen, adminTab]);
+  }, [session, screen, adminTab, adminReload]);
 
   async function handleLogin() {
     const raw = username.trim();
@@ -186,7 +187,7 @@ export default function App() {
           {tabItems.map(item => <TouchableOpacity key={item.key} onPress={() => setAdminTab(item.key)} style={[styles.tab, adminTab === item.key && styles.tabActive]}><Text style={[styles.tabText, adminTab === item.key && styles.tabTextActive]}>{item.label} ({item.count})</Text></TouchableOpacity>)}
         </View>
         {adminLoading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : adminError ? (
-          <View style={styles.center}><Text style={styles.errorTitle}>تعذر تحميل البيانات</Text><Text style={styles.errorText}>{adminError}</Text><TouchableOpacity onPress={() => setAdminTab(current => current)} style={styles.primaryButton}><Text style={styles.primaryButtonText}>إعادة المحاولة</Text></TouchableOpacity></View>
+          <View style={styles.center}><Text style={styles.errorTitle}>تعذر تحميل البيانات</Text><Text style={styles.errorText}>{adminError}</Text><TouchableOpacity onPress={() => setAdminReload(value => value + 1)} style={styles.primaryButton}><Text style={styles.primaryButtonText}>إعادة المحاولة</Text></TouchableOpacity></View>
         ) : (
           <FlatList
             data={items}
