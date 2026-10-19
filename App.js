@@ -70,6 +70,7 @@ export default function App() {
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'available' });
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '' });
+  const [offerDraft, setOfferDraft] = useState(null);
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -231,16 +232,27 @@ export default function App() {
     finally { setLoginLoading(false); }
   }
 
-  async function sendOffer(order) {
-    Alert.prompt ? Alert.prompt('تقديم عرض', 'اكتب السعر بالأرقام', async price => {
-      const amount = Number(price);
-      if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('سعر غير صحيح', 'اكتب سعرًا صحيحًا أكبر من صفر.');
-      try {
-        await api(`/orders/${encodeURIComponent(order.sn)}/offer`, { method: 'POST', token: session.token, body: { price: amount, message: 'أستطيع تنفيذ الخدمة المطلوبة.' } });
-        Alert.alert('تم إرسال العرض', 'تم إرسال عرضك بنجاح.');
-        setReloadKey(value => value + 1);
-      } catch (err) { Alert.alert('تعذر إرسال العرض', err.message || 'حاول مرة أخرى.'); }
-    }, 'plain-text') : Alert.alert('تقديم عرض', 'إرسال العروض متاح من هذه النسخة على أندرويد عبر شاشة السعر في التحديث القادم.');
+  function sendOffer(order) {
+    setOfferDraft({ order, price: '', message: 'أستطيع تنفيذ الخدمة المطلوبة.' });
+  }
+
+  async function submitOffer() {
+    const amount = Number(offerDraft?.price);
+    const message = String(offerDraft?.message || '').trim();
+    if (!Number.isFinite(amount) || amount <= 0 || message.length < 5) {
+      Alert.alert('بيانات العرض غير صحيحة', 'اكتب سعرًا أكبر من صفر ورسالة لا تقل عن 5 أحرف.');
+      return;
+    }
+    try {
+      await api(`/orders/${encodeURIComponent(offerDraft.order.sn)}/offer`, {
+        method: 'POST', token: session.token, body: { price: amount, message }
+      });
+      setOfferDraft(null);
+      Alert.alert('تم إرسال العرض', 'تم إرسال عرضك بنجاح.');
+      setReloadKey(value => value + 1);
+    } catch (err) {
+      Alert.alert('تعذر إرسال العرض', err.message || 'حاول مرة أخرى.');
+    }
   }
 
   async function submitTopup() {
@@ -333,6 +345,13 @@ export default function App() {
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
+      {offerDraft ? <View style={styles.dataCard}>
+        <Text style={styles.cardTitle}>تقديم عرض على {offerDraft.order.service || 'الخدمة'} — {offerDraft.order.sn}</Text>
+        <Field label="السعر بالجنيه" value={offerDraft.price} onChangeText={value => setOfferDraft(current => ({ ...current, price: value }))} keyboardType="numeric" />
+        <Field label="رسالة للعميل" value={offerDraft.message} onChangeText={value => setOfferDraft(current => ({ ...current, message: value }))} multiline />
+        <Button title="إرسال العرض" onPress={submitOffer} />
+        <Button title="إلغاء" secondary onPress={() => setOfferDraft(null)} />
+      </View> : null}
       {techData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الفني من الخادم...</Text></View> : <>
         {techData.error ? <Text style={styles.errorText}>{techData.error}</Text> : null}
         {tab === 'available' && <FlatList data={techData.orders} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'طلب خدمة'} — {item.sn || ''}</Text><Text style={styles.detail}>{item.area || ''} • {item.status || ''}</Text><Text style={styles.detail}>{item.description || item.desc || 'تفاصيل الطلب تظهر حسب صلاحيات الخادم.'}</Text><Button title="تقديم عرض" onPress={() => sendOffer(item)} /></View>} />}
