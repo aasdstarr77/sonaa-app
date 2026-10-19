@@ -29,7 +29,7 @@ jobs:
           pip install Pillow
           python3 -c "
           from PIL import Image
-          img = Image.new('RGB', (1024, 1024), color='#4F46E5')
+          img = Image.new('RGB', (1024, 1024), color='#0F172A')
           img.save('assets/icon.png')
           img.save('assets/adaptive-icon.png')
           img.save('assets/splash.png')
@@ -42,7 +42,7 @@ jobs:
 
       - name: Fix splashscreen color
         run: |
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="splashscreen_background">#4F46E5</color></resources>' > android/app/src/main/res/values/splashscreen.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="splashscreen_background">#0F172A</color></resources>' > android/app/src/main/res/values/splashscreen.xml
           cat android/app/src/main/res/values/splashscreen.xml
           ls android/app/src/main/res/values/
 
