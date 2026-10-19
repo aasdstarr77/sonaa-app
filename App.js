@@ -223,7 +223,15 @@ export default function App() {
     if (!form.service || !form.area || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة والمنطقة واكتب العنوان بالتفصيل.'); return; }
     setLoginLoading(true);
     try {
-      const result = await api('/orders', { method: 'POST', token: session.token, body: { service: form.service, area: form.area, address: form.address.trim(), description: form.description.trim(), budget: form.budget.trim() } });
+      const description = form.description.trim();
+      if (description && description.length < 10) {
+        Alert.alert('وصف قصير', 'اكتب 10 أحرف على الأقل أو اترك الوصف فارغًا.');
+        setLoginLoading(false);
+        return;
+      }
+      const orderBody = { service: form.service, area: form.area, address: form.address.trim(), budget: form.budget.trim() };
+      if (description) orderBody.description = description;
+      const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setForm(current => ({ ...current, address: '', description: '', budget: '' }));
       setReloadKey(value => value + 1);
