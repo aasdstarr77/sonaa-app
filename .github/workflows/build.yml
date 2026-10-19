@@ -26,31 +26,54 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install deps
+      - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Fix missing icons
+      - name: Align Expo SDK dependencies
+        run: |
+          npx expo install --fix
+          npm install --legacy-peer-deps
+
+      - name: Generate branded app icons and splash assets
         run: |
           mkdir -p assets
-          pip install Pillow
-          python3 -c "
-          from PIL import Image
-          img = Image.new('RGB', (1024, 1024), color='#0F172A')
-          img.save('assets/icon.png')
-          img.save('assets/adaptive-icon.png')
-          img.save('assets/splash.png')
-          img.save('assets/splash-icon.png')
-          print('icons created')
-          "
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw, ImageFont
+          from pathlib import Path
+
+          out = Path("assets")
+          size = 1024
+          navy = "#0F172A"
+          teal = "#14B8A6"
+          white = "#FFFFFF"
+          font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+          font = ImageFont.truetype(font_path, 500)
+
+          # Standard launcher icon: navy background, teal ring, white Arabic initial.
+          icon = Image.new("RGB", (size, size), navy)
+          draw = ImageDraw.Draw(icon)
+          draw.ellipse((140, 140, 884, 884), outline=teal, width=34)
+          draw.text((512, 480), "ص", font=font, fill=white, anchor="mm", direction="rtl")
+          icon.save(out / "icon.png")
+
+          # Android adaptive foreground uses transparency; the background is set in app.json.
+          foreground = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+          fd = ImageDraw.Draw(foreground)
+          fd.ellipse((165, 165, 859, 859), outline=teal, width=34)
+          fd.text((512, 480), "ص", font=font, fill=white, anchor="mm", direction="rtl")
+          foreground.save(out / "adaptive-icon.png")
+          foreground.save(out / "splash-icon.png")
+
+          Image.new("RGB", (size, size), navy).save(out / "splash.png")
+          print("Generated app icon and splash assets.")
+          PY
+
+      - name: Check Expo project configuration
+        run: npx expo config --type public
 
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
-
-      - name: Fix splashscreen color
-        run: |
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="splashscreen_background">#0F172A</color></resources>' > android/app/src/main/res/values/splashscreen.xml
-          cat android/app/src/main/res/values/splashscreen.xml
-          ls android/app/src/main/res/values/
 
       - name: Build APK
         run: |
