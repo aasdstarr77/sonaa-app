@@ -84,6 +84,7 @@ function AppContent() {
   const [notifications, setNotifications] = useState({ items: [], unread: 0, loading: false, error: '' });
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
+  const [broadcast, setBroadcast] = useState({ title: '', message: '', audience: 'all' });
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -367,6 +368,43 @@ function AppContent() {
     }
   }
 
+  async function acceptClientOffer(order, offer) {
+    const sn = order?.sn || order?.orderSn;
+    const offerId = offer?._id || offer?.id;
+    if (!sn || !offerId) { Alert.alert('تعذر قبول العرض', 'بيانات الطلب أو العرض غير مكتملة.'); return; }
+    Alert.alert('تأكيد العرض', `قبول عرض ${offer.fanniName || offer.technicianName || 'الفني'} بسعر ${offer.price ?? '—'} جنيه؟`, [
+      { text: 'رجوع', style: 'cancel' },
+      { text: 'قبول العرض', onPress: async () => {
+        try { await api(`/orders/${encodeURIComponent(sn)}/accept`, { method: 'POST', token: session.token, body: { offerId } }); Alert.alert('تم قبول العرض', 'تم إرسال تأكيدك إلى النظام.'); setReloadKey(v => v + 1); }
+        catch (err) { Alert.alert('تعذر قبول العرض', err.message || 'حاول مرة أخرى.'); }
+      } },
+    ]);
+  }
+
+  async function completeTechnicianOrder(item) {
+    const sn = item?.orderSn || item?.sn || item?.order?.sn;
+    if (!sn) { Alert.alert('تعذر إنهاء الخدمة', 'لم يتم العثور على كود الطلب.'); return; }
+    Alert.alert('تأكيد إنهاء الخدمة', `هل انتهيت من تنفيذ الطلب ${sn}؟`, [
+      { text: 'رجوع', style: 'cancel' },
+      { text: 'إنهاء الخدمة', onPress: async () => {
+        try { await api(`/orders/${encodeURIComponent(sn)}/complete`, { method: 'POST', token: session.token, body: {} }); Alert.alert('تم', 'تم تسجيل إنهاء الخدمة.'); setReloadKey(v => v + 1); }
+        catch (err) { Alert.alert('تعذر إنهاء الخدمة', err.message || 'حاول مرة أخرى.'); }
+      } },
+    ]);
+  }
+
+  async function sendAdminBroadcast() {
+    const title = broadcast.title.trim(), message = broadcast.message.trim();
+    if (title.length < 2 || title.length > 100 || message.length < 2 || message.length > 300) { Alert.alert('راجع الإشعار', 'العنوان من حرفين إلى 100 حرف، والرسالة من حرفين إلى 300 حرف.'); return; }
+    Alert.alert('تأكيد إرسال الإشعار', `إرسال الإشعار إلى: ${broadcast.audience === 'all' ? 'الجميع' : broadcast.audience === 'clients' ? 'العملاء' : broadcast.audience === 'fannis' ? 'الفنيين' : 'فنيي القاهرة'}؟`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'إرسال', onPress: async () => {
+        try { const result = await api('/admin/notifications/broadcast', { method: 'POST', token: session.token, body: { title, message, audience: broadcast.audience } }); Alert.alert('تم إرسال الإشعار', `${result.message || 'تم الإرسال'} — العدد: ${Number(result.sent || 0)}`); setBroadcast(current => ({ ...current, title: '', message: '' })); }
+        catch (err) { Alert.alert('تعذر إرسال الإشعار', err.message || 'راجع صلاحيات حساب الإدارة.'); }
+      } },
+    ]);
+  }
+
   async function submitTopup() {
     const amount = Number(topup.amount);
     if (!Number.isInteger(amount) || amount < 10 || !topup.fromPhone.trim()) { Alert.alert('بيانات غير صحيحة', 'اكتب مبلغًا صحيحًا (10 جنيهات على الأقل) ورقم المحوّل.'); return; }
@@ -417,13 +455,11 @@ function AppContent() {
       {!isClient && <>
         <Text style={styles.sectionTitle}>اختار الخدمات اللي بتقدمها</Text>
         {categories.map(category => <View key={category.label} style={styles.selectionGroup}>
-          <Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label}</Text>
-          {(category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}>
-            <Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text>
-          </TouchableOpacity>)}
+          <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} خدمة {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
+          {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
         </View>)}
         <Text style={styles.sectionTitle}>مناطق العمل</Text>
-        {areas.map(area => <TouchableOpacity key={area} onPress={() => toggleArray('areas', area)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.areas.includes(area) ? '☑' : '□'} {area}</Text></TouchableOpacity>)}
+        <View style={styles.selectionGroup}><ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>{areas.map(area => <TouchableOpacity key={area} onPress={() => toggleArray('areas', area)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.areas.includes(area) ? '☑' : '□'} {area}</Text></TouchableOpacity>)}</ScrollView></View>
       </>}
       <Button title={loginLoading ? 'جاري التسجيل...' : isClient ? 'إنشاء حساب' : 'إرسال طلب التسجيل'} onPress={isClient ? registerClient : registerTechnician} disabled={loginLoading} />
     </ScrollView></SafeAreaView>;
@@ -435,7 +471,10 @@ function AppContent() {
       <Text style={styles.sectionTitle}>اطلب خدمة</Text>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
         <Text style={styles.fieldLabel}>الخدمة</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>{services.map(item => <TouchableOpacity key={item.service} onPress={() => updateForm('service', item.service)} style={[styles.pill, form.service === item.service && styles.pillActive]}><Text style={[styles.pillText, form.service === item.service && styles.pillTextActive]}>{item.service}</Text></TouchableOpacity>)}</ScrollView>
+        <Text style={styles.fieldLabel}>الفئة</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>{categories.map(category => <TouchableOpacity key={category.label} onPress={() => setSelected(category)} style={[styles.pill, selected?.label === category.label && styles.pillActive]}><Text style={[styles.pillText, selected?.label === category.label && styles.pillTextActive]}>{category.emoji || '🛠️'} {category.label}</Text></TouchableOpacity>)}</ScrollView>
+        <Text style={styles.fieldLabel}>الخدمة</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>{(selected?.services || []).map(service => <TouchableOpacity key={service} onPress={() => updateForm('service', service)} style={[styles.pill, form.service === service && styles.pillActive]}><Text style={[styles.pillText, form.service === service && styles.pillTextActive]}>{service}</Text></TouchableOpacity>)}</ScrollView>
         <Text style={styles.fieldLabel}>المنطقة</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>{areas.map(area => <TouchableOpacity key={area} onPress={() => updateForm('area', area)} style={[styles.pill, form.area === area && styles.pillActive]}><Text style={[styles.pillText, form.area === area && styles.pillTextActive]}>{area}</Text></TouchableOpacity>)}</ScrollView>
         <Field label="العنوان بالتفصيل" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع والعلامة المميزة" />
@@ -445,7 +484,7 @@ function AppContent() {
       </>}
       {clientData.sn ? <Text style={styles.successText}>آخر كود طلب: {clientData.sn}</Text> : null}
       <Text style={styles.sectionTitle}>طلباتي السابقة</Text>
-      {clientData.loading ? <ActivityIndicator color={COLORS.teal} /> : clientData.error ? <Text style={styles.errorText}>{clientData.error}</Text> : clientData.orders.map((order, i) => <View key={String(order._id || order.sn || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{order.sn || 'طلب خدمة'} — {order.service || ''}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text><Text style={styles.detail}>{order.acceptedOfferPrice ? `السعر المتفق عليه: ${order.acceptedOfferPrice} جنيه` : ''}</Text></View>)}
+      {clientData.loading ? <ActivityIndicator color={COLORS.teal} /> : clientData.error ? <Text style={styles.errorText}>{clientData.error}</Text> : clientData.orders.map((order, i) => <View key={String(order._id || order.sn || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{order.sn || 'طلب خدمة'} — {order.service || ''}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text><Text style={styles.detail}>{order.acceptedOfferPrice ? `السعر المتفق عليه: ${order.acceptedOfferPrice} جنيه` : ''}</Text>{Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitle}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer, j) => <View key={String(offer._id || offer.id || j)} style={styles.offerCard}><Text style={styles.cardTitle}>{offer.fanniName || offer.technicianName || 'فني'} — {offer.price ?? '—'} جنيه</Text><Text style={styles.detail}>{offer.message || ''}</Text>{order.status !== 'تم اختيار فني' && order.status !== 'تم الانتهاء' && <Button title="قبول العرض" onPress={() => acceptClientOffer(order, offer)} />}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}</View>)}
       <View style={styles.dataCard}>
         <View style={styles.headerRow}><Text style={styles.sectionTitle}>الإشعارات {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>
         {notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitle}>{item.title || 'إشعار من صُنّاع'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}
@@ -472,7 +511,7 @@ function AppContent() {
         {techData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الفني من الخادم...</Text></View> : <>
           {techData.error ? <Text style={styles.errorText}>{techData.error}</Text> : null}
           {tab === 'available' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'طلب خدمة'} — {item.sn || ''}</Text><Text style={styles.detail}>{item.area || ''} • {item.status || ''}</Text><Text style={styles.detail}>{item.description || item.desc || 'تفاصيل الطلب تظهر حسب صلاحيات الخادم.'}</Text><Button title="تقديم عرض" onPress={() => sendOffer(item)} /></View>} />}
-          {tab === 'offers' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.offers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لسه ماقدمتش عروض.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'خدمة'} — {item.orderSn || ''}</Text><Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه • {item.orderStatus || ''}</Text><Text style={styles.detail}>{item.message || ''}</Text>{item.client ? <Text style={styles.detail}>العميل: {item.client.name || ''} — {item.client.phone || ''} — {item.client.address || ''}</Text> : null}</View>} />}
+          {tab === 'offers' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.offers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لسه ماقدمتش عروض.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'خدمة'} — {item.orderSn || item.sn || ''}</Text><Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه • {item.orderStatus || ''}</Text><Text style={styles.detail}>{item.message || ''}</Text>{item.client ? <Text style={styles.detail}>العميل: {item.client.name || ''} — {item.client.phone || ''} — {item.client.address || ''}</Text> : null}{item.orderStatus === 'تم اختيار فني' && <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} />}</View>} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
           {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /></ScrollView>}
           {tab === 'notifications' && <ScrollView contentContainerStyle={styles.page}><View style={styles.headerRow}><Text style={styles.sectionTitle}>إشعارات الفني</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>{notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.title || 'إشعار'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</ScrollView>}
@@ -484,13 +523,13 @@ function AppContent() {
   if (screen === 'admin' && session?.role === 'admin') {
     const tab = adminData.tab;
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
-    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'roles', label: 'المناصب الإدارية' }] : [])];
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
-      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setAdminData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label} ({adminData[item.key].length})</Text></TouchableOpacity>)}</View>
+      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setAdminData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label} ({item.key === 'levels' || item.key === 'roles' || item.key === 'notifications' ? adminData.fannis.length : (adminData[item.key] || []).length})</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
-        {tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+        {tab === 'notifications' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>إرسال إشعار داخل التطبيق</Text><Text style={styles.detail}>الإشعار يظهر للحسابات المستهدفة داخل تطبيق صُنّاع.</Text><Field label="عنوان الإشعار" value={broadcast.title} onChangeText={value => setBroadcast(current => ({ ...current, title: value }))} placeholder="مثال: تحديث مهم" /><Field label="نص الإشعار" value={broadcast.message} onChangeText={value => setBroadcast(current => ({ ...current, message: value }))} multiline placeholder="اكتب الرسالة هنا" /><Text style={styles.fieldLabel}>المستلمون</Text><View style={styles.roleActions}>{[{key:'all',label:'الجميع'},{key:'clients',label:'العملاء'},{key:'fannis',label:'الفنيون'},{key:'cairo_fannis',label:'فنيّو القاهرة'}].map(option => <Button key={option.key} title={option.label} secondary={broadcast.audience !== option.key} onPress={() => setBroadcast(current => ({ ...current, audience: option.key }))} />)}</View><Button title="إرسال الإشعار" onPress={sendAdminBroadcast} /></ScrollView> : tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.sectionTitle}>التسلسل الإداري والصلاحيات</Text>
           <Text style={styles.detail}>المدير العام فقط يستطيع تعيين المناصب أو سحبها. الخادم هو الذي يفرض الصلاحيات فعليًا.</Text>
           {adminUsersLoading ? <ActivityIndicator color={COLORS.teal} /> : adminUsers.map((u, i) => <View key={String(u.id || u._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{u.name || 'حساب إداري'}</Text><Text style={styles.detail}>{u.phone || ''} • {u.adminRole || (u.role === 'admin' ? 'مدير عام' : 'فني')}</Text>{u.role !== 'admin' ? <Button title="سحب المنصب الإداري" secondary onPress={() => revokeAdminRoleForUser(u)} /> : <Text style={styles.detail}>حساب المدير العام الأساسي.</Text>}</View>)}
@@ -582,6 +621,8 @@ const styles = StyleSheet.create({
   pillTextActive: { color: COLORS.white },
   sectionTitle: { color: COLORS.navy, fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 12, marginBottom: 5 },
   selectionGroup: { backgroundColor: COLORS.white, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 5 },
+  categoryToggle: { paddingVertical: 5 },
+  offerCard: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 10, marginTop: 8 },
   groupTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginBottom: 5 },
   choiceRow: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   choiceText: { color: COLORS.text, textAlign: 'right' },
