@@ -46,28 +46,28 @@ jobs:
 
           out = Path("assets")
           size = 1024
-          navy = "#0F172A"
+          navy = "#0F172A"\n          light = "#F8FAFC"
           teal = "#14B8A6"
           white = "#FFFFFF"
           font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
           font = ImageFont.truetype(font_path, 500)
 
           # Standard launcher icon: navy background, teal ring, white Arabic initial.
-          icon = Image.new("RGB", (size, size), navy)
+          icon = Image.new("RGB", (size, size), light)
           draw = ImageDraw.Draw(icon)
           draw.ellipse((140, 140, 884, 884), outline=teal, width=34)
-          draw.text((512, 480), "ص", font=font, fill=white, anchor="mm", direction="rtl")
+          draw.text((512, 480), "ص", font=font, fill=navy, anchor="mm", direction="rtl")
           icon.save(out / "icon.png")
 
           # Android adaptive foreground uses transparency; the background is set in app.json.
           foreground = Image.new("RGBA", (size, size), (0, 0, 0, 0))
           fd = ImageDraw.Draw(foreground)
           fd.ellipse((165, 165, 859, 859), outline=teal, width=34)
-          fd.text((512, 480), "ص", font=font, fill=white, anchor="mm", direction="rtl")
+          fd.text((512, 480), "ص", font=font, fill=navy, anchor="mm", direction="rtl")
           foreground.save(out / "adaptive-icon.png")
           foreground.save(out / "splash-icon.png")
 
-          Image.new("RGB", (size, size), navy).save(out / "splash.png")
+          Image.new("RGB", (size, size), light).save(out / "splash.png")
           print("Generated app icon and splash assets.")
           PY
 
