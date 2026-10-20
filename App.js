@@ -296,18 +296,16 @@ function AppContent() {
 
   if (screen === 'login') return <SafeAreaView style={styles.safe}>
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Button title="رجوع" secondary onPress={() => setScreen('home')} />
-      <Text style={styles.title}>تسجيل الدخول</Text>
-      <Text style={styles.subtitle}>الفني والعميل من نفس الشاشة، والإدارة بعلامة #.</Text>
-      <View style={styles.tabRow}>
-        <Button title="دخول فني" secondary={authMode !== 'fanni'} onPress={() => setAuthMode('fanni')} />
-        <Button title="دخول عميل" secondary={authMode !== 'client'} onPress={() => setAuthMode('client')} />
+      <Button title="رجوع للرئيسية" secondary onPress={() => setScreen('home')} />
+      <View style={styles.loginHeading}>
+        <Text style={styles.title}>{authMode === 'client' ? 'دخول العميل' : 'دخول الفني'}</Text>
+        <Text style={styles.subtitle}>{authMode === 'client' ? 'سجّل دخولك لمتابعة طلباتك وخدماتك.' : 'سجّل دخولك لمتابعة فرص العمل وحسابك.'}</Text>
       </View>
-      <Field label={authMode === 'client' ? 'رقم هاتف العميل' : 'رقم هاتف الفني أو # ثم حساب الإدارة'} value={username} onChangeText={setUsername} placeholder={authMode === 'client' ? '01xxxxxxxxx' : '#admin@email.com أو رقم الفني'} keyboardType="default" />
-      <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="كلمة السر" />
-      <Button title={loginLoading ? 'جاري الدخول...' : 'دخول'} onPress={handleLogin} disabled={loginLoading} />
+      <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
+      <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" />
+      <Button title={loginLoading ? 'جاري الدخول...' : authMode === 'client' ? 'دخول العميل' : 'دخول الفني'} onPress={handleLogin} disabled={loginLoading} />
       {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
-      <Text style={styles.note}>علامة # توجه الطلب لمسار الإدارة فقط، ولا تمنح صلاحيات. الخادم هو المسؤول عن التحقق.</Text>
+      {authMode === 'fanni' && <Button title="تسجيل فني جديد" secondary onPress={() => setScreen('technicianRegister')} />}
     </KeyboardAvoidingView>
   </SafeAreaView>;
 
@@ -405,11 +403,27 @@ function AppContent() {
   }
 
   return <SafeAreaView style={styles.safe}>
-    <View style={styles.homeHeader}><View style={styles.flex}><Text style={styles.title}>صُنّاع</Text><Text style={styles.subtitle}>خدماتك اليومية في مكان واحد</Text></View><Text style={styles.brand}>ص</Text></View>
-    <ScrollView contentContainerStyle={styles.page}>
-      <Text style={styles.hero}>خدمات الصيانة في مكان واحد</Text>
-      <Text style={styles.subtitle}>التطبيق متصل بواجهة صُنّاع على الخادم.</Text>
-      <View style={styles.homeButtons}><Button title="طلب خدمة / دخول عميل" onPress={() => goLogin('client')} /><Button title="دخول الفني" secondary onPress={() => goLogin('fanni')} /><Button title="تسجيل فني جديد" secondary onPress={() => setScreen('technicianRegister')} /><Button title="إنشاء حساب عميل" secondary onPress={() => setScreen('clientRegister')} /></View>
+    <ScrollView contentContainerStyle={styles.homePage}>
+      <View style={styles.welcomeHero}>
+        <View style={styles.logoGlow}>
+          <View style={styles.logoRing}><Text style={styles.logoLetter}>ص</Text></View>
+        </View>
+        <Text style={styles.homeBrandTitle}>صُنّاع</Text>
+        <Text style={styles.homeTagline}>خدماتك في إيدك.. وفنيك أقرب مما تتخيل</Text>
+        <Text style={styles.homeIntro}>سواء كنت عميلًا بتدور على فني موثوق، أو فني عايز توصل لعملاء جدد، صُنّاع بيسهّل عليك البداية.</Text>
+      </View>
+      <View style={styles.roleCards}>
+        <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('client')} style={styles.roleCard}>
+          <View style={styles.clientIconCircle}><Text style={styles.roleIcon}>👤</Text></View>
+          <Text style={styles.roleTitle}>الدخول كعميل</Text>
+          <Text style={styles.roleDescription}>اطلب الخدمة اللي محتاجها وتابع طلبك بسهولة.</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('fanni')} style={styles.roleCard}>
+          <View style={styles.technicianIconCircle}><Text style={styles.roleIcon}>🛠️</Text></View>
+          <Text style={styles.roleTitle}>الدخول كفني</Text>
+          <Text style={styles.roleDescription}>تابع فرص الشغل وطلبات الخدمات من حسابك.</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.sectionTitle}>الأقسام والخدمات</Text>
       {servicesLoading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل الخدمات من الخادم...</Text></View> : servicesError ? <View style={styles.dataCard}><Text style={styles.errorText}>{servicesError}</Text><Button title="إعادة المحاولة" onPress={() => setReloadKey(v => v + 1)} /></View> : <>
         <View style={styles.grid}>{categories.map(item => <TouchableOpacity key={item.label} onPress={() => setSelected(item)} style={[styles.categoryCard, selected?.label === item.label && styles.categoryActive]}><Text style={styles.emoji}>{item.emoji || '🛠️'}</Text><Text style={[styles.categoryTitle, selected?.label === item.label && styles.categoryTitleActive]}>{item.label}</Text><Text style={[styles.detail, selected?.label === item.label && styles.categoryTitleActive]}>{(item.services || []).length} خدمة</Text></TouchableOpacity>)}</View>
@@ -422,7 +436,23 @@ function AppContent() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   page: { padding: 16, paddingBottom: 34, gap: 10 },
+  homePage: { padding: 16, paddingBottom: 34, gap: 14 },
   flex: { flex: 1 },
+  welcomeHero: { alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 24, padding: 20, shadowColor: COLORS.teal, shadowOpacity: 0.16, shadowRadius: 16, elevation: 4 },
+  logoGlow: { width: 104, height: 104, borderRadius: 52, borderWidth: 2, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, shadowColor: COLORS.teal, shadowOpacity: 0.65, shadowRadius: 18, elevation: 12, marginBottom: 12 },
+  logoRing: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.navy, borderWidth: 2, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center' },
+  logoLetter: { color: COLORS.white, fontSize: 48, fontWeight: 'bold' },
+  homeBrandTitle: { color: COLORS.navy, fontSize: 32, fontWeight: 'bold', textAlign: 'center' },
+  homeTagline: { color: COLORS.teal, fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: 5, lineHeight: 24 },
+  homeIntro: { color: COLORS.muted, fontSize: 14, textAlign: 'center', lineHeight: 23, marginTop: 8 },
+  roleCards: { flexDirection: 'row-reverse', gap: 10 },
+  roleCard: { flex: 1, minWidth: 140, alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 16, shadowColor: COLORS.navy, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  clientIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  technicianIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#CCFBF1', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  roleIcon: { fontSize: 30 },
+  roleTitle: { color: COLORS.navy, fontSize: 15, fontWeight: 'bold', textAlign: 'center' },
+  roleDescription: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 18, marginTop: 6 },
+  loginHeading: { alignItems: 'flex-end', gap: 3, marginVertical: 8 },
   title: { fontSize: 25, fontWeight: 'bold', color: COLORS.navy, textAlign: 'right' },
   subtitle: { color: COLORS.muted, marginTop: 5, textAlign: 'right', lineHeight: 21 },
   hero: { color: COLORS.navy, fontSize: 22, fontWeight: 'bold', textAlign: 'right', marginTop: 12 },
