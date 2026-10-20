@@ -514,6 +514,18 @@ function AppContent() {
       }}]);
   }
 
+  function setOrderRatingStars(order, stars) {
+    const sn = getOrderSN(order);
+    setRatingDrafts(current => ({
+      ...current,
+      [sn]: {
+        ...current[sn],
+        stars: String(stars),
+        blockFuture: stars === 1 ? current[sn]?.blockFuture : false,
+      },
+    }));
+  }
+
   async function submitOrderRating(order) {
     const sn = getOrderSN(order), draft = ratingDrafts[getOrderSN(order)] || {};
     const stars = Number(draft.stars || 5), comment = String(draft.comment || '').trim(), blockFuture = Boolean(draft.blockFuture);
@@ -667,7 +679,31 @@ function AppContent() {
           {tab === 'available' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'طلب خدمة'} — {item.sn || ''}</Text><Text style={styles.detail}>{item.area || ''} • {item.status || ''}</Text><Text style={styles.detail}>{item.description || item.desc || 'تفاصيل الطلب تظهر حسب صلاحيات الخادم.'}</Text><Button title="تقديم عرض" onPress={() => sendOffer(item)} /></View>} />}
           {(tab === 'offers' || tab === 'completed') && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={displayedOffers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{tab === 'completed' ? 'لا توجد طلبات مكتملة في السجل حتى الآن.' : 'لسه ماقدمتش عروض نشطة.'}</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'خدمة'} — {item.orderSn || item.sn || ''}</Text><Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه • {item.orderStatus || ''}</Text><Text style={styles.detail}>{item.message || ''}</Text>{item.client ? <Text style={styles.detail}>العميل: {item.client.name || ''} — {item.client.phone || ''} — {item.client.address || ''}</Text> : null}<View style={styles.roleActions}><Button title={orderChats[getOrderSN(item)]?.open ? 'إخفاء المحادثة' : 'محادثة الطلب'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
           {item.orderStatus === 'تم اختيار فني' ? <View style={styles.offerCard}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Field label="السعر الجديد بالجنيه" value={priceDrafts[getOrderSN(item)]?.price || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], price: value } }))} keyboardType="numeric" /><Field label="سبب التعديل" value={priceDrafts[getOrderSN(item)]?.reason || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], reason: value } }))} multiline /><Button title="إرسال طلب تعديل السعر" onPress={() => requestOrderPriceChange(item)} /></View> : null}
-          {item.orderStatus === 'تم الانتهاء' && !ratingDrafts[getOrderSN(item)]?.submitted ? <View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم العميل</Text><View style={styles.roleActions}>{[1,2,3,4,5].map(stars => <Button key={stars} title={'★'.repeat(stars)} secondary={Number(ratingDrafts[getOrderSN(item)]?.stars || 5) !== stars} onPress={() => setRatingDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], stars: String(stars), blockFuture: stars === 1 ? current[getOrderSN(item)]?.blockFuture : false } }))} /></View><Field label="تعليق (اختياري)" value={ratingDrafts[getOrderSN(item)]?.comment || ''} onChangeText={value => setRatingDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], comment: value } }))} multiline /><Button title="حفظ تقييم العميل" onPress={() => submitOrderRating(item)} /></View> : null}
+          {item.orderStatus === 'تم الانتهاء' && !ratingDrafts[getOrderSN(item)]?.submitted ? (
+            <View style={styles.offerCard}>
+              <Text style={styles.cardTitle}>تقييم العميل</Text>
+              <View style={styles.roleActions}>
+                {[1, 2, 3, 4, 5].map(stars => (
+                  <Button
+                    key={stars}
+                    title={'★'.repeat(stars)}
+                    secondary={Number(ratingDrafts[getOrderSN(item)]?.stars || 5) !== stars}
+                    onPress={() => setOrderRatingStars(item, stars)}
+                  />
+                ))}
+              </View>
+              <Field
+                label="تعليق (اختياري)"
+                value={ratingDrafts[getOrderSN(item)]?.comment || ''}
+                onChangeText={value => setRatingDrafts(current => ({
+                  ...current,
+                  [getOrderSN(item)]: { ...current[getOrderSN(item)], comment: value },
+                }))}
+                multiline
+              />
+              <Button title="حفظ تقييم العميل" onPress={() => submitOrderRating(item)} />
+            </View>
+          ) : null}
           {orderChats[getOrderSN(item)]?.open ? <View style={styles.chatPanel}>{orderChats[getOrderSN(item)]?.loading ? <ActivityIndicator color={COLORS.teal} /> : <>{orderChats[getOrderSN(item)]?.error ? <Text style={styles.errorText}>{orderChats[getOrderSN(item)].error}</Text> : null}{(orderChats[getOrderSN(item)]?.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}><Text style={styles.detail}>{message.senderRole === 'client' ? 'العميل' : 'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}{(orderChats[getOrderSN(item)]?.priceChangeRequests || []).filter(request => request.status === 'قيد الموافقة').map(request => <View key={String(request._id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه • {request.status}</Text><Text style={styles.detail}>{request.reason}</Text></View>)}<Field label="ردك داخل المنصة" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value => setChatDrafts(current => ({ ...current, [getOrderSN(item)]: value }))} multiline /><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={() => sendOrderChat(item)} /><Button title="تحديث المحادثة" secondary onPress={() => refreshOrderChat(item, 'fanni')} /></View></>}</View> : null}</View>} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
           {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /></ScrollView>}
