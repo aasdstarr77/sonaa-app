@@ -1,4 +1,3 @@
-import 'react-native-gesture-handler';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView,
