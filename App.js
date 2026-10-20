@@ -52,7 +52,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
   </View>;
 }
 
-export default function App() {
+function AppContent() {
   const [screen, setScreen] = useState('home');
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -455,3 +455,25 @@ const styles = StyleSheet.create({
   categoryTitleActive: { color: COLORS.white },
   serviceLine: { color: COLORS.text, textAlign: 'right', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
 });
+
+
+// Show JavaScript render errors on screen instead of leaving users with a blank launch.
+class StartupErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Sonaa startup render error:', error, info?.componentStack); }
+  render() {
+    if (this.state.error) {
+      return <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 24, justifyContent: 'center' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0F172A', textAlign: 'right', marginBottom: 12 }}>تعذر تشغيل شاشة صُنّاع</Text>
+        <Text selectable style={{ color: '#B91C1C', textAlign: 'left', marginBottom: 20 }}>{String(this.state.error?.message || this.state.error)}</Text>
+        <TouchableOpacity onPress={() => this.setState({ error: null })} style={{ backgroundColor: '#14B8A6', padding: 14, borderRadius: 12, alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>إعادة المحاولة</Text></TouchableOpacity>
+      </SafeAreaView>;
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  return <StartupErrorBoundary><AppContent /></StartupErrorBoundary>;
+}
