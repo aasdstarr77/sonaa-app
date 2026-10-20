@@ -46,7 +46,8 @@ jobs:
 
           out = Path("assets")
           size = 1024
-          navy = "#0F172A"\n          light = "#F8FAFC"
+          navy = "#0F172A"
+          light = "#F8FAFC"
           teal = "#14B8A6"
           white = "#FFFFFF"
           font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
