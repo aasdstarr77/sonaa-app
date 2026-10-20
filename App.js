@@ -591,7 +591,7 @@ function AppContent() {
             : tab === 'fannis' ? [item.phone, item.status || item.actualStatus, Array.isArray(item.specialties) ? item.specialties.join('، ') : item.skill].filter(Boolean).join(' • ')
             : [item.phone, item.orderCount ? `عدد الطلبات: ${item.orderCount}` : '', item.lastOrder ? `آخر طلب: ${item.lastOrder}` : ''].filter(Boolean).join(' • ');
           return <View style={styles.dataCard}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.detail}>{detail || 'لا توجد تفاصيل إضافية'}</Text>{tab === 'orders' && session.user?.role === 'admin' && item.status === 'قيد المراجعة' ? <Button title="نشر الطلب للفنيين" onPress={() => publishOrder(item)} /> : null}{tab === 'fannis' && !item.isApproved && !item.isDisabled ? <View style={styles.roleActions}><Button title="اعتماد الفني" onPress={() => moderateTechnician(item, 'approve')} /><Button title="رفض" secondary onPress={() => moderateTechnician(item, 'reject')} /></View> : tab === 'fannis' && item.isApproved ? <Button title="تعليق الفني" secondary onPress={() => moderateTechnician(item, 'disable')} /> : tab === 'fannis' && item.isDisabled ? <Button title="إعادة تفعيل الفني" onPress={() => moderateTechnician(item, 'enable')} /> : null}</View>;
-        }} />
+        }} />}
         <Button title="إعادة تحميل بيانات الإدارة" secondary onPress={() => setReloadKey(v => v + 1)} />
       </View>}
       <Text style={styles.note}>هذه نسخة ربط أولية للعرض والقراءة. أوامر الإدارة الحساسة تحتاج واجهات منفصلة واختبارات صلاحيات قبل تفعيلها.</Text>
