@@ -81,11 +81,15 @@ function AppContent() {
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '' });
   const [offerDraft, setOfferDraft] = useState(null);
+  const [notifications, setNotifications] = useState({ items: [], unread: 0, loading: false, error: '' });
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminUsersLoading, setAdminUsersLoading] = useState(false);
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
   useEffect(() => {
+    if (!['client', 'clientRegister', 'technicianRegister'].includes(screen)) return;
     let mounted = true;
     async function loadPublicData() {
       setServicesLoading(true); setServicesError('');
@@ -104,7 +108,23 @@ function AppContent() {
     }
     loadPublicData();
     return () => { mounted = false; };
-  }, [reloadKey]);
+  }, [reloadKey, screen]);
+
+  useEffect(() => {
+    if (!session || screen !== 'admin' || session.role !== 'admin' || session.user?.role !== 'admin') return;
+    let mounted = true;
+    async function loadAdminUsers() {
+      setAdminUsersLoading(true);
+      try {
+        const result = await api('/admin/admin-users', { token: session.token });
+        if (mounted) setAdminUsers(toList(result, ['users', 'items']));
+      } catch (err) {
+        if (mounted) setAdminUsers([]);
+      } finally { if (mounted) setAdminUsersLoading(false); }
+    }
+    loadAdminUsers();
+    return () => { mounted = false; };
+  }, [session, screen, reloadKey]);
 
   useEffect(() => {
     if (!session || screen !== 'admin' || session.role !== 'admin') return;
@@ -159,6 +179,23 @@ function AppContent() {
   }, [session, screen, reloadKey]);
 
   useEffect(() => {
+    if (!session || !['client', 'technician'].includes(screen)) return;
+    let mounted = true;
+    async function loadRoleNotifications() {
+      setNotifications(current => ({ ...current, loading: true, error: '' }));
+      try {
+        const role = screen === 'client' ? 'client' : 'fanni';
+        const result = await api(`/notifications/${role}`, { token: session.token });
+        if (mounted) setNotifications({ items: toList(result, ['notifications']), unread: Number(result.unreadCount || 0), loading: false, error: '' });
+      } catch (err) {
+        if (mounted) setNotifications(current => ({ ...current, loading: false, error: err.message || 'تعذر تحميل الإشعارات' }));
+      }
+    }
+    loadRoleNotifications();
+    return () => { mounted = false; };
+  }, [session, screen, reloadKey]);
+
+  useEffect(() => {
     if (!session || screen !== 'client' || session.role !== 'client') return;
     let mounted = true;
     async function loadClientOrders() {
@@ -173,6 +210,63 @@ function AppContent() {
     loadClientOrders();
     return () => { mounted = false; };
   }, [session, screen, reloadKey]);
+
+  async function markNotificationRead(item) {
+    const id = item?._id || item?.id;
+    if (!id || item.read || item.readAt) return;
+    const role = session?.role === 'client' ? 'client' : 'fanni';
+    try {
+      await api(`/notifications/${role}/${encodeURIComponent(id)}/read`, { method: 'PATCH', token: session.token });
+      setNotifications(current => ({ ...current, items: current.items.map(n => (n._id || n.id) === id ? { ...n, read: true, readAt: new Date().toISOString() } : n), unread: Math.max(0, current.unread - 1) }));
+    } catch (err) { Alert.alert('الإشعارات', err.message || 'تعذر تحديث الإشعار.'); }
+  }
+
+  async function markAllNotificationsRead() {
+    const role = session?.role === 'client' ? 'client' : 'fanni';
+    try {
+      await api(`/notifications/${role}/read-all`, { method: 'PATCH', token: session.token });
+      setNotifications(current => ({ ...current, items: current.items.map(n => ({ ...n, read: true, readAt: n.readAt || new Date().toISOString() })), unread: 0 }));
+    } catch (err) { Alert.alert('الإشعارات', err.message || 'تعذر تحديث الإشعارات.'); }
+  }
+
+  async function updateProfessionalLevel(fanni) {
+    const levels = ['مبتدئ', 'ممارس', 'محترف', 'خبير مبتدئ', 'خبير', 'خبير أول', 'استشاري فني', 'نخبة', 'أسطوري'];
+    const current = fanni.level || 'مبتدئ';
+    const index = levels.indexOf(current);
+    const next = levels[Math.min((index < 0 ? 0 : index) + 1, levels.length - 1)];
+    if (next === current) { Alert.alert('المستوى المهني', 'الفني وصل إلى أعلى مستوى.'); return; }
+    Alert.alert('تأكيد الترقية', `ترقية ${fanni.name || 'الفني'} من ${current} إلى ${next}؟`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'ترقية', onPress: async () => {
+        try {
+          await api(`/admin/fannis/${encodeURIComponent(fanni._id || fanni.id)}/level`, { method: 'PATCH', token: session.token, body: { level: next, reason: 'ترقية من تطبيق صُنّاع' } });
+          setReloadKey(v => v + 1);
+          Alert.alert('تمت الترقية', `المستوى الجديد: ${next}`);
+        } catch (err) { Alert.alert('تعذر الترقية', err.message || 'راجع صلاحيات الحساب.'); }
+      } },
+    ]);
+  }
+
+  async function changeAdminRoleForFanni(fanni, role) {
+    try {
+      await api('/admin/admin-users', { method: 'POST', token: session.token, body: { fanniId: fanni._id || fanni.id, role } });
+      setReloadKey(v => v + 1);
+      Alert.alert('تم تحديث المنصب', `المنصب الإداري: ${role}`);
+    } catch (err) { Alert.alert('تعذر تحديث المنصب', err.message || 'قد لا يمتلك حسابك صلاحية المدير العام.'); }
+  }
+
+  async function revokeAdminRoleForUser(user) {
+    Alert.alert('سحب المنصب الإداري', `هل تريد سحب صلاحية ${user.name || 'هذا المستخدم'}؟`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'سحب الصلاحية', style: 'destructive', onPress: async () => {
+        try {
+          await api(`/admin/admin-users/${encodeURIComponent(user.id || user._id)}`, { method: 'DELETE', token: session.token });
+          setReloadKey(v => v + 1);
+          Alert.alert('تم', 'تم سحب الصلاحية الإدارية مع الاحتفاظ بحساب الفني.');
+        } catch (err) { Alert.alert('تعذر سحب الصلاحية', err.message || 'راجع صلاحيات الحساب.'); }
+      } },
+    ]);
+  }
 
   async function handleLogin() {
     const raw = username.trim();
@@ -289,6 +383,8 @@ function AppContent() {
     setClientData({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
     setTechData({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'available' });
     setAdminData({ orders: [], fannis: [], clients: [], loading: false, error: '', tab: 'orders' });
+    setNotifications({ items: [], unread: 0, loading: false, error: '' });
+    setAdminUsers([]);
     setScreen('home');
   }
   const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
@@ -349,7 +445,11 @@ function AppContent() {
       </>}
       {clientData.sn ? <Text style={styles.successText}>آخر كود طلب: {clientData.sn}</Text> : null}
       <Text style={styles.sectionTitle}>طلباتي السابقة</Text>
-      {clientData.loading ? <ActivityIndicator color={COLORS.teal} /> : clientData.error ? <Text style={styles.errorText}>{clientData.error}</Text> : clientData.orders.map((order, i) => <View key={String(order._id || order.sn || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{order.sn || 'طلب خدمة'} — {order.service || ''}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text></View>)}
+      {clientData.loading ? <ActivityIndicator color={COLORS.teal} /> : clientData.error ? <Text style={styles.errorText}>{clientData.error}</Text> : clientData.orders.map((order, i) => <View key={String(order._id || order.sn || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{order.sn || 'طلب خدمة'} — {order.service || ''}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text><Text style={styles.detail}>{order.acceptedOfferPrice ? `السعر المتفق عليه: ${order.acceptedOfferPrice} جنيه` : ''}</Text></View>)}
+      <View style={styles.dataCard}>
+        <View style={styles.headerRow}><Text style={styles.sectionTitle}>الإشعارات {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>
+        {notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitle}>{item.title || 'إشعار من صُنّاع'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}
+      </View>
       <Button title="تحديث البيانات" secondary onPress={() => setReloadKey(v => v + 1)} />
     </ScrollView>
   </SafeAreaView>;
@@ -357,7 +457,7 @@ function AppContent() {
   if (screen === 'technician' && session?.role === 'fanni') {
     const user = techData.profile || session.user || {};
     const tab = techData.tab;
-    const tabs = [{ key: 'available', label: 'الفرص' }, { key: 'offers', label: 'عروضي' }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }];
+    const tabs = [{ key: 'available', label: 'الفرص' }, { key: 'offers', label: 'عروضي' }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }, { key: 'notifications', label: `الإشعارات${notifications.unread ? ` (${notifications.unread})` : ''}` }];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
@@ -374,7 +474,8 @@ function AppContent() {
           {tab === 'available' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'طلب خدمة'} — {item.sn || ''}</Text><Text style={styles.detail}>{item.area || ''} • {item.status || ''}</Text><Text style={styles.detail}>{item.description || item.desc || 'تفاصيل الطلب تظهر حسب صلاحيات الخادم.'}</Text><Button title="تقديم عرض" onPress={() => sendOffer(item)} /></View>} />}
           {tab === 'offers' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.offers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لسه ماقدمتش عروض.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.service || 'خدمة'} — {item.orderSn || ''}</Text><Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه • {item.orderStatus || ''}</Text><Text style={styles.detail}>{item.message || ''}</Text>{item.client ? <Text style={styles.detail}>العميل: {item.client.name || ''} — {item.client.phone || ''} — {item.client.address || ''}</Text> : null}</View>} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
-          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text></View><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /></ScrollView>}
+          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /></ScrollView>}
+          {tab === 'notifications' && <ScrollView contentContainerStyle={styles.page}><View style={styles.headerRow}><Text style={styles.sectionTitle}>إشعارات الفني</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>{notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.title || 'إشعار'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</ScrollView>}
         </>}
       </View>
     </SafeAreaView>;
@@ -382,14 +483,20 @@ function AppContent() {
 
   if (screen === 'admin' && session?.role === 'admin') {
     const tab = adminData.tab;
-    const items = adminData[tab] || [];
-    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }];
+    const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'roles', label: 'المناصب الإدارية' }] : [])];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setAdminData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label} ({adminData[item.key].length})</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
-        <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || item.sn || item.phone || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>مفيش بيانات لعرضها حاليًا.</Text>} renderItem={({ item }) => {
+        {tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>التسلسل الإداري والصلاحيات</Text>
+          <Text style={styles.detail}>المدير العام فقط يستطيع تعيين المناصب أو سحبها. الخادم هو الذي يفرض الصلاحيات فعليًا.</Text>
+          {adminUsersLoading ? <ActivityIndicator color={COLORS.teal} /> : adminUsers.map((u, i) => <View key={String(u.id || u._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{u.name || 'حساب إداري'}</Text><Text style={styles.detail}>{u.phone || ''} • {u.adminRole || (u.role === 'admin' ? 'مدير عام' : 'فني')}</Text>{u.role !== 'admin' ? <Button title="سحب المنصب الإداري" secondary onPress={() => revokeAdminRoleForUser(u)} /> : <Text style={styles.detail}>حساب المدير العام الأساسي.</Text>}</View>)}
+          <Text style={styles.sectionTitle}>ترقية فني معتمد إلى منصب إداري</Text>
+          {adminData.fannis.filter(f => (f.status === 'معتمد' || f.status === 'approved') && !f.adminRole).map((f, i) => <View key={String(f._id || f.id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{f.name || 'فني'} — {f.phone || ''}</Text><View style={styles.roleActions}>{['قراءة فقط', 'مشرف', 'مشرف أول', 'مدير'].map(role => <Button key={role} title={role} secondary onPress={() => changeAdminRoleForFanni(f, role)} />)}</View></View>)}
+        </ScrollView> : tab === 'levels' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا يوجد فنّيون لعرض مستوياتهم.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.name || 'فني'} — {item.level || 'مبتدئ'}</Text><Text style={styles.detail}>{item.phone || ''} • {item.status || item.actualStatus || ''}</Text><Text style={styles.detail}>الشارات: {(item.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات'}</Text><Button title="ترقية للمستوى التالي" onPress={() => updateProfessionalLevel(item)} /></View>} /> : <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || item.sn || item.phone || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>مفيش بيانات لعرضها حاليًا.</Text>} renderItem={({ item }) => {
           const title = tab === 'orders' ? (item.sn || item.service || 'طلب خدمة') : (item.name || item.phone || (tab === 'fannis' ? 'فني' : 'عميل'));
           const detail = tab === 'orders' ? [item.status, item.service, item.area, item.createdAt ? dateLabel(item.createdAt) : ''].filter(Boolean).join(' • ')
             : tab === 'fannis' ? [item.phone, item.status || item.actualStatus, Array.isArray(item.specialties) ? item.specialties.join('، ') : item.skill].filter(Boolean).join(' • ')
@@ -424,11 +531,7 @@ function AppContent() {
           <Text style={styles.roleDescription}>تابع فرص الشغل وطلبات الخدمات من حسابك.</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.sectionTitle}>الأقسام والخدمات</Text>
-      {servicesLoading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل الخدمات من الخادم...</Text></View> : servicesError ? <View style={styles.dataCard}><Text style={styles.errorText}>{servicesError}</Text><Button title="إعادة المحاولة" onPress={() => setReloadKey(v => v + 1)} /></View> : <>
-        <View style={styles.grid}>{categories.map(item => <TouchableOpacity key={item.label} onPress={() => setSelected(item)} style={[styles.categoryCard, selected?.label === item.label && styles.categoryActive]}><Text style={styles.emoji}>{item.emoji || '🛠️'}</Text><Text style={[styles.categoryTitle, selected?.label === item.label && styles.categoryTitleActive]}>{item.label}</Text><Text style={[styles.detail, selected?.label === item.label && styles.categoryTitleActive]}>{(item.services || []).length} خدمة</Text></TouchableOpacity>)}</View>
-        {selected ? <View style={styles.dataCard}><Text style={styles.cardTitle}>{selected.emoji || '🛠️'} {selected.label}</Text>{(selected.services || []).map(service => <Text key={service} style={styles.serviceLine}>• {service}</Text>)}</View> : null}
-      </>}
+      <View style={styles.dataCard}><Text style={styles.sectionTitle}>خدمات متنوعة في مكان واحد</Text><Text style={styles.detail}>اختار إنك عميل لطلب خدمة، أو فني لمتابعة فرص العمل. هتلاقي قائمة المهن والخدمات كاملة داخل الحساب عند الحاجة.</Text><View style={styles.homeSummary}><Text style={styles.emoji}>🛠️</Text><Text style={styles.cardTitle}>مهن وخدمات متعددة</Text></View></View>
     </ScrollView>
   </SafeAreaView>;
 }
@@ -469,6 +572,9 @@ const styles = StyleSheet.create({
   input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: COLORS.text, fontSize: 16 },
   multiline: { minHeight: 86, textAlignVertical: 'top' },
   note: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 19, marginVertical: 8 },
+  notificationRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 4 },
+  homeSummary: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0FDFA', borderRadius: 12, padding: 12 },
+  roleActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   tabRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7, marginVertical: 8, paddingHorizontal: 12 },
   pill: { borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 9, marginRight: 4, marginVertical: 3 },
   pillActive: { backgroundColor: COLORS.navy, borderColor: COLORS.teal },
