@@ -125,6 +125,7 @@ function AppContent() {
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminExtras, setAdminExtras] = useState({ services: [], regions: [], pricing: { check: 0, commission: 0, minOffer: 1, maxOffer: 1000000 }, pricingHistory: [], settings: { siteName: 'صُنّاع', maintenance: false, maintenanceMessage: '', maxFanniSignupAttempts: 5 }, content: { announcement: '', faqs: [] }, auditLogs: [], report: null, loading: false, error: '' });
   const [adminServiceDraft, setAdminServiceDraft] = useState({ name: '', category: 'خدمات أخرى', emoji: '🔧' });
+  const [adminServiceEdit, setAdminServiceEdit] = useState({ category: '', oldName: '', name: '' });
   const [adminRegionDraft, setAdminRegionDraft] = useState('');
   const [adminAnnouncementDraft, setAdminAnnouncementDraft] = useState('');
   const [adminFaqDraft, setAdminFaqDraft] = useState({ question: '', answer: '' });
@@ -883,10 +884,32 @@ function AppContent() {
     try { const result = await api('/admin/services', { method: 'POST', token: session.token, body: { name, category, emoji: adminServiceDraft.emoji || '🔧' } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة الخدمة.'); setAdminServiceDraft(v => ({ ...v, name: '' })); setReloadKey(v => v + 1); }
     catch (err) { Alert.alert('تعذر إضافة الخدمة', err.message || 'حاول مرة أخرى.'); }
   }
-  async function adminRenameService(category, service) {
-    const name = String(service || '').trim();
-    if (!category || !name) return;
-    Alert.prompt ? Alert.prompt('تعديل اسم الخدمة', 'أدخل الاسم الجديد', value => { const next = String(value || '').trim(); if (next.length < 2 || next.length > 100) return; void api('/admin/services/' + encodeURIComponent(name) + '?category=' + encodeURIComponent(category), { method: 'PATCH', token: session.token, body: { name: next, category } }).then(() => setReloadKey(v => v + 1)).catch(err => Alert.alert('تعذر التعديل', err.message || 'حاول مرة أخرى.')); }, 'plain-text', name) : Alert.alert('تعديل الخدمة', 'التعديل السريع غير مدعوم على هذا الجهاز؛ استخدم لوحة المتصفح.');
+  function adminBeginServiceEdit(category, service) { setAdminServiceEdit({ category, oldName: service, name: service }); }
+  async function adminSaveServiceEdit() {
+    const { category, oldName, name } = adminServiceEdit, next = String(name || '').trim();
+    if (!category || !oldName || next.length < 2 || next.length > 100) { Alert.alert('تعديل الخدمة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
+    try { const result = await api('/admin/services/' + encodeURIComponent(oldName) + '?category=' + encodeURIComponent(category), { method: 'PATCH', token: session.token, body: { name: next, category } }); Alert.alert('تم التعديل', result.message || 'تم تحديث اسم الخدمة.'); setAdminServiceEdit({ category: '', oldName: '', name: '' }); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر التعديل', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminMoveCategory(index, direction) {
+    const list = adminExtras.services.slice(), next = index + direction;
+    if (next < 0 || next >= list.length) return;
+    [list[index], list[next]] = [list[next], list[index]];
+    try { await api('/admin/services/categories/order', { method: 'PATCH', token: session.token, body: { categories: list.map(item => String(item.label || item.name)) } }); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر ترتيب الأقسام', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminMoveService(category, serviceName, direction) {
+    const categoryItem = adminExtras.services.find(item => String(item.label || item.name) === category);
+    const list = (categoryItem?._detailed || (categoryItem?.services || []).map(name => ({ name }))).map(item => ({ name: item.name, sortOrder: 0, emoji: item.emoji || categoryItem?.emoji || '🔧', isActive: item.isActive !== false }));
+    const index = list.findIndex(item => item.name === serviceName), next = index + direction;
+    if (index < 0 || next < 0 || next >= list.length) return;
+    [list[index], list[next]] = [list[next], list[index]]; list.forEach((item, i) => { item.sortOrder = (i + 1) * 10; });
+    try { await api('/admin/services/order', { method: 'PATCH', token: session.token, body: { category, items: list } }); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر ترتيب الخدمات', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminToggleService(category, service, active) {
+    const action = active ? 'إظهار' : 'إخفاء';
+    Alert.alert(action + ' الخدمة', 'هل تريد ' + action + ' «' + service + '»؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'تأكيد', onPress: async () => { try { await api('/admin/services/' + encodeURIComponent(service) + '/' + (active ? 'show' : 'hide') + '?category=' + encodeURIComponent(category), { method: 'POST', token: session.token, body: { category } }); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر ' + action + ' الخدمة', err.message || 'حاول مرة أخرى.'); } } }]);
   }
   async function adminDeleteService(category, service) {
     Alert.alert('حذف الخدمة', 'حذف «' + service + '» من قسم «' + category + '»؟ الطلبات القديمة تظل محفوظة.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { try { await api('/admin/services/' + encodeURIComponent(service) + '?category=' + encodeURIComponent(category), { method: 'DELETE', token: session.token }); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر الحذف', err.message || 'حاول مرة أخرى.'); } } }]);
@@ -1262,7 +1285,7 @@ function AppContent() {
           <Field label="اسم القسم" value={adminServiceDraft.category} onChangeText={v => setAdminServiceDraft(c => ({ ...c, category: v }))} />
           <Field label="رمز الخدمة" value={adminServiceDraft.emoji} onChangeText={v => setAdminServiceDraft(c => ({ ...c, emoji: v }))} />
           <Button title="إضافة الخدمة" onPress={adminAddService} />
-          {adminExtras.services.map((category, index) => <View key={String(category.label || category.name || index)} style={styles.dataCard}><Text style={styles.cardTitle}>{category.emoji || '🔧'} {category.label || category.name}</Text><Text style={styles.detail}>الخدمات: {(category.services || []).length} • النشطة: {category.activeCount ?? category.activeCount}</Text>{(category._detailed || (category.services || []).map(name => ({name}))).map((item, i) => <View key={String(item._id || item.name || i)} style={styles.rowLine}><View style={styles.flex}><Text style={styles.detail}>{item.name} {item.isActive === false ? '• مخفية' : ''}</Text></View><Button title="تعديل" secondary onPress={() => adminRenameService(category.label || category.name, item.name)} /><Button title="حذف" secondary onPress={() => adminDeleteService(category.label || category.name, item.name)} /></View>)}</View>)}
+          {adminExtras.services.map((category, index) => <View key={String(category.label || category.name || index)} style={styles.dataCard}><View style={styles.headerRow}><Text style={styles.cardTitle}>{category.emoji || '🔧'} {category.label || category.name}</Text><View style={styles.roleActions}><Button title="↑ قسم" secondary onPress={() => adminMoveCategory(index, -1)} disabled={index===0}/><Button title="↓ قسم" secondary onPress={() => adminMoveCategory(index, 1)} disabled={index===adminExtras.services.length-1}/></View></View><Text style={styles.detail}>الخدمات: {(category.services || []).length} • النشطة: {category.activeCount ?? '—'}</Text>{adminServiceEdit.category === (category.label || category.name) && (category._detailed || []).some(item => item.name === adminServiceEdit.oldName) ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تعديل: {adminServiceEdit.oldName}</Text><Field label="الاسم الجديد" value={adminServiceEdit.name} onChangeText={v => setAdminServiceEdit(c => ({ ...c, name: v }))} /><View style={styles.roleActions}><Button title="حفظ الاسم" onPress={adminSaveServiceEdit} /><Button title="إلغاء" secondary onPress={() => setAdminServiceEdit({ category: '', oldName: '', name: '' })} /></View></View> : null}{(category._detailed || (category.services || []).map(name => ({name}))).map((item, i, arr) => <View key={String(item._id || item.name || i)} style={styles.dataCard}><Text style={styles.detail}>{item.name} {item.isActive === false ? '• مخفية' : ''}</Text><View style={styles.roleActions}><Button title="↑" secondary onPress={() => adminMoveService(category.label || category.name, item.name, -1)} disabled={i===0}/><Button title="↓" secondary onPress={() => adminMoveService(category.label || category.name, item.name, 1)} disabled={i===arr.length-1}/><Button title="تعديل" secondary onPress={() => adminBeginServiceEdit(category.label || category.name, item.name)} /><Button title={item.isActive === false ? 'إظهار' : 'إخفاء'} secondary onPress={() => adminToggleService(category.label || category.name, item.name, item.isActive === false)} /><Button title="حذف" secondary onPress={() => adminDeleteService(category.label || category.name, item.name)} /></View></View>)}</View>)}
           <Button title="تحديث قائمة الخدمات" secondary onPress={() => setReloadKey(v => v + 1)} />
         </ScrollView> : tab === 'pricing' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.sectionTitle}>الأسعار والعمولات</Text>
