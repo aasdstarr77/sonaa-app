@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Sonaa - صنعة",
-    "slug": "sonaa-app",
+    "slug": "sonaa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,12 +16,19 @@
       }
     },
     "extra": {
-      "apiUrl": "https://sonaa-backend-v2.vercel.app/api"
+      "apiUrl": "https://sonaa-backend-v2.vercel.app/api",
+      "eas": {
+        "projectId": "01cd6ee6-73a2-4404-8381-d60446befcc5"
+      }
     },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#F8FAFC"
-    }
+    },
+    "owner": "sonaa2030",
+    "plugins": [
+      "expo-notifications"
+    ]
   }
 }
