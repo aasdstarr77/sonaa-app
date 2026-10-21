@@ -766,7 +766,7 @@ function AppContent() {
   async function loadAdminSupportCases() {
     if (!session || session.role !== 'admin') return;
     try {
-      const result = await api('/support/admin?needsHuman=true', { token: session.token });
+      const result = await api('/support/admin', { token: session.token });
       setAdminSupportCases(toList(result, ['supportCases', 'items']));
     } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
   }
@@ -1058,7 +1058,7 @@ function AppContent() {
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}>
         <View style={styles.flex}><Text style={styles.title}>دعم صُنّاع</Text><Text style={styles.subtitle}>محادثة خاصة داخل التطبيق</Text></View>
-        <Button title="رجوع" secondary onPress={() => { setSupportCase(null); setScreen(rolePath === 'client' ? 'client' : 'technician'); }} />
+        <Button title="رجوع" secondary onPress={() => { screenHistoryRef.current.pop(); const target = rolePath === 'client' ? 'client' : 'technician'; screenRef.current = target; setScreenState(target); setSupportCase(null); }} />
       </View>
       <ScrollView contentContainerStyle={styles.page}>
         <View style={styles.dataCard}>
