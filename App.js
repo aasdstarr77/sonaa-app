@@ -130,6 +130,7 @@ function AppContent() {
   const [adminAnnouncementDraft, setAdminAnnouncementDraft] = useState('');
   const [adminFaqDraft, setAdminFaqDraft] = useState({ question: '', answer: '' });
   const [adminReportFilters, setAdminReportFilters] = useState({ startDate: '', endDate: '', service: '', area: '' });
+  const [adminWallet, setAdminWallet] = useState({ fanniId: '', transactions: [], loading: false, amount: '', reason: '' });
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [broadcast, setBroadcast] = useState({ title: '', message: '', audience: 'all' });
   const [supportCases, setSupportCases] = useState([]);
@@ -967,6 +968,22 @@ function AppContent() {
     catch (err) { Alert.alert('تعذر تحديث المستوى', err.message || 'حاول مرة أخرى.'); }
   }
 
+  async function adminLoadWalletTransactions() {
+    if (!adminWallet.fanniId) { Alert.alert('كشف المحفظة', 'اختار الفني أولًا.'); return; }
+    setAdminWallet(c => ({ ...c, loading: true, transactions: [] }));
+    try { const result = await api('/admin/wallet/transactions/' + encodeURIComponent(adminWallet.fanniId), { token: session.token }); setAdminWallet(c => ({ ...c, loading: false, transactions: toList(result, ['transactions','items','data']) })); }
+    catch (err) { setAdminWallet(c => ({ ...c, loading: false })); Alert.alert('تعذر تحميل كشف المحفظة', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminWalletAction(action) {
+    const id = adminWallet.fanniId, fanni = adminData.fannis.find(item => String(item._id || item.id) === String(id));
+    if (!id || !fanni) { Alert.alert('محفظة الفني', 'اختار الفني أولًا.'); return; }
+    const reason = adminWallet.reason.trim();
+    if (reason.length < 2) { Alert.alert('سبب الإجراء', 'اكتب سببًا واضحًا من حرفين على الأقل.'); return; }
+    const amount = Number(adminWallet.amount);
+    if (action === 'balance' && (adminWallet.amount.trim() === '' || !Number.isFinite(amount) || amount < 0)) { Alert.alert('الرصيد', 'اكتب رصيدًا صحيحًا غير سالب.'); return; }
+    Alert.alert('تأكيد إجراء المحفظة', action === 'balance' ? 'تعيين الرصيد إلى ' + amount + ' جنيه؟' : action === 'freeze' ? 'تجميد محفظة الفني؟' : 'إلغاء تجميد محفظة الفني؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { let result; if (action === 'balance') result = await api('/admin/fannis/' + encodeURIComponent(id) + '/set-balance', { method: 'POST', token: session.token, body: { amount, reason } }); else result = await api('/admin/wallet/freeze/' + encodeURIComponent(id), { method: 'POST', token: session.token, body: { action, reason } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث المحفظة.'); setAdminWallet(c => ({ ...c, reason: '' })); setReloadKey(v => v + 1); await adminLoadWalletTransactions(); } catch (err) { Alert.alert('تعذر إجراء المحفظة', err.message || 'حاول مرة أخرى.'); } } }]);
+  }
+
   async function adminLoadAuditLogs() {
     try { const result = await api('/admin/audit-logs', { token: session.token }); setAdminExtras(c => ({ ...c, auditLogs: toList(result, ['logs','items']) })); }
     catch (err) { Alert.alert('تعذر تحميل سجل التدقيق', err.message || 'حاول مرة أخرى.'); }
@@ -1290,13 +1307,21 @@ function AppContent() {
   if (screen === 'admin' && session?.role === 'admin') {
     const tab = adminData.tab;
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
-    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'wallets', label: 'محافظ الفنيين' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : item.key === 'support' ? ` (${adminSupportCases.length})` : ''}</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
-        {tab === 'services' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+        {tab === 'wallets' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إدارة محافظ الفنيين</Text><Text style={styles.detail}>اختر فنيًا لعرض الحركات المالية، أو تجميد المحفظة، أو تسجيل تسوية موثقة.</Text>
+          {adminData.fannis.map((fanni,i)=><TouchableOpacity key={String(fanni._id||fanni.id||i)} onPress={()=>setAdminWallet(c=>({...c,fanniId:String(fanni._id||fanni.id),amount:String(fanni.walletBalance??fanni.balance??''),transactions:[]}))} style={[styles.dataCard,String(fanni._id||fanni.id)===adminWallet.fanniId&&{borderColor:COLORS.teal}]}><Text style={styles.cardTitle}>{fanni.name||'فني'} — {fanni.phone||''}</Text><Text style={styles.detail}>الرصيد: {Number(fanni.walletBalance??fanni.balance??0)} جنيه • المحفظة {fanni.isFrozen?'مجمّدة':'نشطة'}</Text></TouchableOpacity>)}
+          {adminWallet.fanniId ? <View style={styles.dataCard}><Text style={styles.sectionTitle}>إجراءات المحفظة</Text><Field label="الرصيد الجديد بعد التسوية (جنيه)" value={adminWallet.amount} onChangeText={v=>setAdminWallet(c=>({...c,amount:v}))} keyboardType="numeric" /><Field label="سبب الإجراء (مطلوب)" value={adminWallet.reason} onChangeText={v=>setAdminWallet(c=>({...c,reason:v}))} multiline />
+            <View style={styles.roleActions}><Button title="تسوية الرصيد" onPress={()=>adminWalletAction('balance')} /><Button title="تجميد المحفظة" secondary onPress={()=>adminWalletAction('freeze')} /><Button title="إلغاء التجميد" secondary onPress={()=>adminWalletAction('unfreeze')} /></View>
+            <Button title={adminWallet.loading?'جاري التحميل...':'عرض كشف الحركات المالية'} secondary onPress={adminLoadWalletTransactions} disabled={adminWallet.loading}/>
+            {adminWallet.loading?<ActivityIndicator color={COLORS.teal}/>:adminWallet.transactions.length?adminWallet.transactions.map((item,i)=><View key={String(item._id||item.id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type||item.action||item.status||'حركة مالية'} • {Number(item.amount||0)} جنيه</Text><Text style={styles.detail}>{item.reason||item.description||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt||item.date)}</Text></View>):<Text style={styles.emptyText}>حمّل كشف الحساب لعرض الحركات.</Text>}
+          </View> : null}
+        </ScrollView> : tab === 'services' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.sectionTitle}>إدارة الخدمات والأقسام</Text><Text style={styles.detail}>هذه القائمة متصلة مباشرة بقائمة الخدمات الموجودة على الخادم.</Text>
           <Field label="اسم الخدمة الجديدة" value={adminServiceDraft.name} onChangeText={v => setAdminServiceDraft(c => ({ ...c, name: v }))} />
           <Field label="اسم القسم" value={adminServiceDraft.category} onChangeText={v => setAdminServiceDraft(c => ({ ...c, category: v }))} />
