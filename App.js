@@ -123,6 +123,12 @@ function AppContent() {
   const [priceDrafts, setPriceDrafts] = useState({});
   const [ratingDrafts, setRatingDrafts] = useState({});
   const [adminUsers, setAdminUsers] = useState([]);
+  const [adminExtras, setAdminExtras] = useState({ services: [], regions: [], pricing: { check: 0, commission: 0, minOffer: 1, maxOffer: 1000000 }, pricingHistory: [], settings: { siteName: 'صُنّاع', maintenance: false, maintenanceMessage: '', maxFanniSignupAttempts: 5 }, content: { announcement: '', faqs: [] }, auditLogs: [], report: null, loading: false, error: '' });
+  const [adminServiceDraft, setAdminServiceDraft] = useState({ name: '', category: 'خدمات أخرى', emoji: '🔧' });
+  const [adminRegionDraft, setAdminRegionDraft] = useState('');
+  const [adminAnnouncementDraft, setAdminAnnouncementDraft] = useState('');
+  const [adminFaqDraft, setAdminFaqDraft] = useState({ question: '', answer: '' });
+  const [adminReportFilters, setAdminReportFilters] = useState({ startDate: '', endDate: '', service: '', area: '' });
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [broadcast, setBroadcast] = useState({ title: '', message: '', audience: 'all' });
   const [supportCases, setSupportCases] = useState([]);
@@ -804,6 +810,49 @@ function AppContent() {
     finally { setSupportLoading(false); }
   }
 
+  useEffect(() => {
+    if (!session || screen !== 'admin' || session.role !== 'admin') return;
+    let active = true;
+    async function loadAdminExtras() {
+      setAdminExtras(current => ({ ...current, loading: true, error: '' }));
+      const results = await Promise.allSettled([
+        api('/admin/services', { token: session.token }),
+        api('/admin/regions', { token: session.token }),
+        api('/admin/pricing', { token: session.token }),
+        api('/admin/settings', { token: session.token }),
+        api('/admin/content', { token: session.token }),
+        api('/admin/audit-logs', { token: session.token }),
+      ]);
+      if (!active) return;
+      const pick = (i, keys) => results[i].status === 'fulfilled' ? results[i].value : null;
+      const serviceData = pick(0, []);
+      const regionData = pick(1, []);
+      const pricingData = pick(2, []);
+      const settingsData = pick(3, []);
+      const contentData = pick(4, []);
+      const auditData = pick(5, []);
+      const failed = results.some(item => item.status === 'rejected');
+      const pricing = pricingData?.pricing || {};
+      const settings = settingsData?.settings || {};
+      const content = contentData?.content || {};
+      setAdminExtras(current => ({
+        ...current,
+        services: toList(serviceData, ['categories', 'items']),
+        regions: toList(regionData, ['regions', 'items']),
+        pricing: { check: Number(pricing.check ?? current.pricing.check), commission: Number(pricing.commission ?? current.pricing.commission), minOffer: Number(pricing.minOffer ?? current.pricing.minOffer), maxOffer: Number(pricing.maxOffer ?? current.pricing.maxOffer) },
+        pricingHistory: toList(pricingData, ['history']),
+        settings: { siteName: settings.siteName || current.settings.siteName, maintenance: Boolean(settings.maintenance), maintenanceMessage: settings.maintenanceMessage || '', maxFanniSignupAttempts: Number(settings.maxFanniSignupAttempts || current.settings.maxFanniSignupAttempts) },
+        content: { announcement: content.announcement || '', faqs: Array.isArray(content.faqs) ? content.faqs : [] },
+        auditLogs: toList(auditData, ['logs', 'items']),
+        loading: false,
+        error: failed ? 'تعذر تحميل بعض أقسام الإدارة؛ راجع صلاحيات الحساب واتصال الخادم.' : ''
+      }));
+      if (contentData?.content) setAdminAnnouncementDraft(contentData.content.announcement || '');
+    }
+    loadAdminExtras();
+    return () => { active = false; };
+  }, [session, screen, reloadKey]);
+
   async function loadAdminSupportCases() {
     if (!session || session.role !== 'admin') return;
     try {
@@ -825,6 +874,62 @@ function AppContent() {
       setAdminSupportDraft('');
       Alert.alert('تم إرسال الرد', 'تم حفظ ردك داخل محادثة الدعم.');
     } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
+  }
+
+  async function adminRefreshExtras() { setReloadKey(v => v + 1); }
+  async function adminAddService() {
+    const name = adminServiceDraft.name.trim(), category = adminServiceDraft.category.trim();
+    if (name.length < 2 || name.length > 100 || category.length < 2 || category.length > 100) { Alert.alert('بيانات الخدمة', 'اكتب اسم الخدمة والقسم بشكل صحيح.'); return; }
+    try { const result = await api('/admin/services', { method: 'POST', token: session.token, body: { name, category, emoji: adminServiceDraft.emoji || '🔧' } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة الخدمة.'); setAdminServiceDraft(v => ({ ...v, name: '' })); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر إضافة الخدمة', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminRenameService(category, service) {
+    const name = String(service || '').trim();
+    if (!category || !name) return;
+    Alert.prompt ? Alert.prompt('تعديل اسم الخدمة', 'أدخل الاسم الجديد', value => { const next = String(value || '').trim(); if (next.length < 2 || next.length > 100) return; void api('/admin/services/' + encodeURIComponent(name) + '?category=' + encodeURIComponent(category), { method: 'PATCH', token: session.token, body: { name: next, category } }).then(() => setReloadKey(v => v + 1)).catch(err => Alert.alert('تعذر التعديل', err.message || 'حاول مرة أخرى.')); }, 'plain-text', name) : Alert.alert('تعديل الخدمة', 'التعديل السريع غير مدعوم على هذا الجهاز؛ استخدم لوحة المتصفح.');
+  }
+  async function adminDeleteService(category, service) {
+    Alert.alert('حذف الخدمة', 'حذف «' + service + '» من قسم «' + category + '»؟ الطلبات القديمة تظل محفوظة.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { try { await api('/admin/services/' + encodeURIComponent(service) + '?category=' + encodeURIComponent(category), { method: 'DELETE', token: session.token }); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر الحذف', err.message || 'حاول مرة أخرى.'); } } }]);
+  }
+  async function adminSavePricing() {
+    const p = adminExtras.pricing;
+    if (![p.check,p.commission,p.minOffer,p.maxOffer].every(v => Number.isFinite(Number(v))) || p.check < 0 || p.commission < 0 || p.commission > 100 || p.minOffer < 1 || p.maxOffer < p.minOffer) { Alert.alert('راجع الأسعار', 'تأكد من الرسوم والعمولة والحدود السعرية.'); return; }
+    try { const result = await api('/admin/pricing', { method: 'PUT', token: session.token, body: { check: Number(p.check), commission: Number(p.commission), minOffer: Number(p.minOffer), maxOffer: Number(p.maxOffer) } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ الأسعار والعمولات.'); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر حفظ الأسعار', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminAddRegion() {
+    const name = adminRegionDraft.trim().replace(/\\s+/g, ' ');
+    if (name.length < 2 || name.length > 100) { Alert.alert('اسم المنطقة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
+    try { const result = await api('/admin/regions', { method: 'POST', token: session.token, body: { name } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة المنطقة.'); setAdminRegionDraft(''); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر إضافة المنطقة', err.message || 'قد تكون المنطقة موجودة بالفعل.'); }
+  }
+  async function adminSaveSettings() {
+    const value = adminExtras.settings;
+    if (value.siteName.trim().length < 2 || !Number.isInteger(Number(value.maxFanniSignupAttempts)) || value.maxFanniSignupAttempts < 1 || value.maxFanniSignupAttempts > 100) { Alert.alert('راجع الإعدادات', 'اسم المنصة مطلوب وحد المحاولات من 1 إلى 100.'); return; }
+    try { const result = await api('/admin/settings', { method: 'PUT', token: session.token, body: { ...value, maxFanniSignupAttempts: Number(value.maxFanniSignupAttempts) } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ الإعدادات.'); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر حفظ الإعدادات', err.message || 'حاول مرة أخرى.'); }
+  }
+  function adminAddFaqDraft() {
+    const question = adminFaqDraft.question.trim(), answer = adminFaqDraft.answer.trim();
+    if (question.length < 2 || question.length > 250 || answer.length < 2 || answer.length > 1000) { Alert.alert('الأسئلة الشائعة', 'السؤال من 2 إلى 250 حرفًا والإجابة من 2 إلى 1000 حرف.'); return; }
+    setAdminExtras(c => ({ ...c, content: { ...c.content, faqs: [...c.content.faqs, { question, answer, active: true }] } }));
+    setAdminFaqDraft({ question: '', answer: '' });
+  }
+  async function adminSaveContent() {
+    const announcement = String(adminAnnouncementDraft || '').trim(), faqs = adminExtras.content.faqs;
+    if (announcement.length > 1000 || faqs.length > 100) { Alert.alert('محتوى المنصة', 'الإعلان حتى 1000 حرف والأسئلة حتى 100 سؤال.'); return; }
+    try { const result = await api('/admin/content', { method: 'PUT', token: session.token, body: { announcement, faqs } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ محتوى المنصة.'); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر حفظ المحتوى', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminGenerateReport() {
+    const filters = adminReportFilters;
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) { Alert.alert('فلاتر التقرير', 'تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.'); return; }
+    try { const result = await api('/admin/reports', { method: 'POST', token: session.token, body: filters }); setAdminExtras(c => ({ ...c, report: result })); }
+    catch (err) { Alert.alert('تعذر إنشاء التقرير', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminLoadAuditLogs() {
+    try { const result = await api('/admin/audit-logs', { token: session.token }); setAdminExtras(c => ({ ...c, auditLogs: toList(result, ['logs','items']) })); }
+    catch (err) { Alert.alert('تعذر تحميل سجل التدقيق', err.message || 'حاول مرة أخرى.'); }
   }
 
   async function copyOrderCode(code) {
@@ -1145,13 +1250,53 @@ function AppContent() {
   if (screen === 'admin' && session?.role === 'admin') {
     const tab = adminData.tab;
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
-    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : item.key === 'support' ? ` (${adminSupportCases.length})` : ''}</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
-        {tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'support' ? <ScrollView contentContainerStyle={styles.page}>
+        {tab === 'services' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إدارة الخدمات والأقسام</Text><Text style={styles.detail}>هذه القائمة متصلة مباشرة بقائمة الخدمات الموجودة على الخادم.</Text>
+          <Field label="اسم الخدمة الجديدة" value={adminServiceDraft.name} onChangeText={v => setAdminServiceDraft(c => ({ ...c, name: v }))} />
+          <Field label="اسم القسم" value={adminServiceDraft.category} onChangeText={v => setAdminServiceDraft(c => ({ ...c, category: v }))} />
+          <Field label="رمز الخدمة" value={adminServiceDraft.emoji} onChangeText={v => setAdminServiceDraft(c => ({ ...c, emoji: v }))} />
+          <Button title="إضافة الخدمة" onPress={adminAddService} />
+          {adminExtras.services.map((category, index) => <View key={String(category.label || category.name || index)} style={styles.dataCard}><Text style={styles.cardTitle}>{category.emoji || '🔧'} {category.label || category.name}</Text><Text style={styles.detail}>الخدمات: {(category.services || []).length} • النشطة: {category.activeCount ?? category.activeCount}</Text>{(category._detailed || (category.services || []).map(name => ({name}))).map((item, i) => <View key={String(item._id || item.name || i)} style={styles.rowLine}><View style={styles.flex}><Text style={styles.detail}>{item.name} {item.isActive === false ? '• مخفية' : ''}</Text></View><Button title="تعديل" secondary onPress={() => adminRenameService(category.label || category.name, item.name)} /><Button title="حذف" secondary onPress={() => adminDeleteService(category.label || category.name, item.name)} /></View>)}</View>)}
+          <Button title="تحديث قائمة الخدمات" secondary onPress={() => setReloadKey(v => v + 1)} />
+        </ScrollView> : tab === 'pricing' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>الأسعار والعمولات</Text>
+          <Field label="رسوم الفرصة / الكشف (جنيه)" value={String(adminExtras.pricing.check)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, check: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Field label="العمولة (%)" value={String(adminExtras.pricing.commission)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, commission: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Field label="أقل عرض (جنيه)" value={String(adminExtras.pricing.minOffer)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, minOffer: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Field label="أعلى عرض (جنيه)" value={String(adminExtras.pricing.maxOffer)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, maxOffer: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Button title="حفظ الأسعار والعمولات" onPress={adminSavePricing} />
+          <Text style={styles.sectionTitle}>آخر تغييرات الأسعار</Text>{adminExtras.pricingHistory.slice(0,20).map((item,i)=><View key={String(item._id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.reason || item.key || 'تغيير أسعار'}</Text><Text style={styles.detail}>{item.by || 'الإدارة'} • {dateLabel(item.createdAt)}</Text></View>)}
+        </ScrollView> : tab === 'regions' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إدارة المناطق</Text><Field label="اسم المنطقة الجديدة" value={adminRegionDraft} onChangeText={setAdminRegionDraft} /><Button title="إضافة المنطقة" onPress={adminAddRegion} />
+          {adminExtras.regions.map((region,i)=><View key={String(region._id||region.name||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{region.name}</Text><Text style={styles.detail}>{region.isActive === false ? 'غير نشطة' : 'نشطة'} • {dateLabel(region.createdAt)}</Text></View>)}
+        </ScrollView> : tab === 'content' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>محتوى المنصة والإعلان</Text><Field label="الإعلان الظاهر للعملاء والفنيين" value={adminAnnouncementDraft} onChangeText={setAdminAnnouncementDraft} multiline /><Text style={styles.detail}>{adminAnnouncementDraft.length}/1000</Text>
+          <Text style={styles.sectionTitle}>إضافة سؤال شائع</Text><Field label="السؤال" value={adminFaqDraft.question} onChangeText={v => setAdminFaqDraft(c => ({ ...c, question: v }))} /><Field label="الإجابة" value={adminFaqDraft.answer} onChangeText={v => setAdminFaqDraft(c => ({ ...c, answer: v }))} multiline /><Button title="إضافة السؤال للقائمة" onPress={adminAddFaqDraft} />
+          {adminExtras.content.faqs.map((faq,i)=><View key={String(i)} style={styles.dataCard}><Text style={styles.cardTitle}>{faq.question}</Text><Text style={styles.detail}>{faq.answer}</Text><Button title="حذف السؤال من القائمة" secondary onPress={()=>setAdminExtras(c=>({...c,content:{...c.content,faqs:c.content.faqs.filter((_,j)=>j!==i)}}))}/></View>)}
+          <Button title="حفظ محتوى المنصة" onPress={adminSaveContent} />
+        </ScrollView> : tab === 'settings' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إعدادات النظام</Text><Field label="اسم المنصة" value={adminExtras.settings.siteName} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,siteName:v}}))} />
+          <View style={styles.dataCard}><Text style={styles.cardTitle}>وضع الصيانة</Text><Text style={styles.detail}>{adminExtras.settings.maintenance ? 'مفعل' : 'غير مفعل'}</Text><View style={styles.roleActions}><Button title="تفعيل" secondary={!adminExtras.settings.maintenance} onPress={()=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenance:true}}))}/><Button title="إيقاف" secondary={adminExtras.settings.maintenance} onPress={()=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenance:false}}))}/></View></View>
+          <Field label="رسالة الصيانة" value={adminExtras.settings.maintenanceMessage} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenanceMessage:v}}))} multiline />
+          <Field label="حد محاولات تسجيل الفني لكل IP" value={String(adminExtras.settings.maxFanniSignupAttempts)} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,maxFanniSignupAttempts:Number(v)}}))} keyboardType="numeric" />
+          <Button title="حفظ الإعدادات" onPress={adminSaveSettings} />
+        </ScrollView> : tab === 'reports' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>تقارير الإدارة</Text><Text style={styles.detail}>التواريخ بصيغة YYYY-MM-DD. اترك الحقول فارغة لإحصاء كل الفترات.</Text>
+          <Field label="من تاريخ (YYYY-MM-DD)" value={adminReportFilters.startDate} onChangeText={v=>setAdminReportFilters(c=>({...c,startDate:v}))} />
+          <Field label="إلى تاريخ (YYYY-MM-DD)" value={adminReportFilters.endDate} onChangeText={v=>setAdminReportFilters(c=>({...c,endDate:v}))} />
+          <Field label="تصفية حسب الخدمة (اختياري)" value={adminReportFilters.service} onChangeText={v=>setAdminReportFilters(c=>({...c,service:v}))} />
+          <Field label="تصفية حسب المنطقة (اختياري)" value={adminReportFilters.area} onChangeText={v=>setAdminReportFilters(c=>({...c,area:v}))} />
+          <Button title="إنشاء التقرير" onPress={adminGenerateReport} />
+          {adminExtras.report?.summary ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ملخص التقرير</Text>{[['إجمالي الطلبات',adminExtras.report.summary.totalOrders],['طلبات مكتملة',adminExtras.report.summary.completedOrders],['طلبات ملغاة',adminExtras.report.summary.cancelledOrders],['قيد المراجعة',adminExtras.report.summary.pendingOrders],['تستقبل عروضًا',adminExtras.report.summary.publishedOrders],['الفنيون المعتمدون',adminExtras.report.summary.approvedTechnicians],['العملاء النشطون',adminExtras.report.summary.activeClients]].map(([label,value])=><Text key={label} style={styles.detail}>{label}: {Number(value||0)}</Text>)}<Text style={styles.sectionTitle}>أكثر الخدمات طلبًا</Text>{(adminExtras.report.topServices||[]).map((item,i)=><Text key={String(i)} style={styles.detail}>{item.service}: {item.count}</Text>)}</View> : <Text style={styles.emptyText}>أنشئ تقريرًا لعرض الإحصائيات.</Text>}
+        </ScrollView> : tab === 'audit' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>سجل التدقيق الإداري</Text><Button title="تحديث السجل" secondary onPress={adminLoadAuditLogs} />{adminExtras.auditLogs.map((item,i)=><View key={String(item._id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.action || item.event || 'إجراء إداري'}</Text><Text style={styles.detail}>{item.adminName || item.by || item.actorName || 'الإدارة'} • {dateLabel(item.createdAt)}</Text><Text style={styles.detail}>{item.targetType || item.entityType || ''} {item.targetId || item.entityId || ''}</Text><Text style={styles.detail}>{item.reason || item.details || item.summary || ''}</Text></View>)}
+        </ScrollView> : tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'support' ? <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.sectionTitle}>حالات دعم صُنّاع</Text>
           <Text style={styles.detail}>الحالات التي تحتاج تدخلًا بشريًا تظهر أولًا. افتح الحالة لقراءة الرسائل والرد من داخل التطبيق.</Text>
           {adminSupportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => setAdminSupportSelected(item)} style={[styles.dataCard, adminSupportSelected?._id === item._id && { borderColor: COLORS.teal }]}>
