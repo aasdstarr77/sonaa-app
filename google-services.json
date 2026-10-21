@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "228718138416",
+    "project_id": "sonaa-app-notifications",
+    "storage_bucket": "sonaa-app-notifications.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:228718138416:android:307ecc41c39fc66ab809f5",
+        "android_client_info": {
+          "package_name": "com.sonaa.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOBGJCHuevDX1utn0M9VqDknmB15XJdj4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
