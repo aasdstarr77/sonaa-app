@@ -950,6 +950,23 @@ function AppContent() {
     try { const result = await api('/admin/reports', { method: 'POST', token: session.token, body: filters }); setAdminExtras(c => ({ ...c, report: result })); }
     catch (err) { Alert.alert('تعذر إنشاء التقرير', err.message || 'حاول مرة أخرى.'); }
   }
+  async function adminOrderAction(order, action) {
+    const sn = String(order?.sn || order?.orderSn || '').trim().toUpperCase();
+    if (!/^SN\\d{6}$/.test(sn)) { Alert.alert('كود الطلب', 'كود الطلب غير صالح.'); return; }
+    const label = action === 'cancel' ? 'إلغاء' : 'أرشفة';
+    Alert.alert(label + ' الطلب ' + sn, 'هل تؤكد ' + label + ' الطلب؟ سيتم تسجيل الإجراء في سجل الإدارة.', [{ text: 'رجوع', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { const result = await api('/admin/orders/' + encodeURIComponent(sn) + '/' + action, { method: 'POST', token: session.token, body: { reason: 'إجراء إداري من تطبيق صُنّاع' } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث الطلب.'); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر ' + label + ' الطلب', err.message || 'راجع حالة الطلب.'); } } }]);
+  }
+  async function adminClientAction(phone, action) {
+    if (!phone) return Alert.alert('بيانات العميل', 'رقم الهاتف غير متاح.');
+    const labels = { block: 'تعليق الحساب', unblock: 'إعادة تفعيل الحساب', account: 'حذف الحساب' };
+    Alert.alert(labels[action], 'هل تريد ' + labels[action] + ' للعميل ' + phone + '؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { const method = action === 'account' ? 'DELETE' : 'POST'; const result = await api('/admin/clients/' + encodeURIComponent(phone) + (action === 'account' ? '/account' : '/' + action), { method, token: session.token, body: {} }); Alert.alert('تم الإجراء', result.message || 'تم تحديث حساب العميل.'); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر تنفيذ الإجراء', err.message || 'راجع حالة حساب العميل والطلبات النشطة.'); } } }]);
+  }
+  async function adminSetTechnicianLevel(fanni, level) {
+    const id = fanni?._id || fanni?.id; if (!id) return;
+    try { const result = await api('/admin/fannis/' + encodeURIComponent(id) + '/level', { method: 'PATCH', token: session.token, body: { level, reason: 'تحديث المستوى من تطبيق الإدارة' } }); Alert.alert('تم تحديث المستوى', result.message || level); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر تحديث المستوى', err.message || 'حاول مرة أخرى.'); }
+  }
+
   async function adminLoadAuditLogs() {
     try { const result = await api('/admin/audit-logs', { token: session.token }); setAdminExtras(c => ({ ...c, auditLogs: toList(result, ['logs','items']) })); }
     catch (err) { Alert.alert('تعذر تحميل سجل التدقيق', err.message || 'حاول مرة أخرى.'); }
@@ -1350,7 +1367,7 @@ function AppContent() {
           const detail = tab === 'orders' ? [item.status, item.service, item.area, item.createdAt ? dateLabel(item.createdAt) : ''].filter(Boolean).join(' • ')
             : tab === 'fannis' ? [item.phone, item.status || item.actualStatus, Array.isArray(item.specialties) ? item.specialties.join('، ') : item.skill].filter(Boolean).join(' • ')
             : [item.phone, item.orderCount ? `عدد الطلبات: ${item.orderCount}` : '', item.lastOrder ? `آخر طلب: ${item.lastOrder}` : ''].filter(Boolean).join(' • ');
-          return <View style={styles.dataCard}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.detail}>{detail || 'لا توجد تفاصيل إضافية'}</Text>{tab === 'orders' && session.user?.role === 'admin' && item.status === 'قيد المراجعة' ? <Button title="نشر الطلب للفنيين" onPress={() => publishOrder(item)} /> : null}{tab === 'fannis' && !item.isApproved && !item.isDisabled ? <View style={styles.roleActions}><Button title="اعتماد الفني" onPress={() => moderateTechnician(item, 'approve')} /><Button title="رفض" secondary onPress={() => moderateTechnician(item, 'reject')} /></View> : tab === 'fannis' && item.isApproved ? <Button title="تعليق الفني" secondary onPress={() => moderateTechnician(item, 'disable')} /> : tab === 'fannis' && item.isDisabled ? <Button title="إعادة تفعيل الفني" onPress={() => moderateTechnician(item, 'enable')} /> : null}</View>;
+          return <View style={styles.dataCard}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.detail}>{detail || 'لا توجد تفاصيل إضافية'}</Text>{tab === 'orders' && session.user?.role === 'admin' && item.status === 'قيد المراجعة' ? <Button title="نشر الطلب للفنيين" onPress={() => publishOrder(item)} /> : null}{tab === 'orders' && session.user?.role === 'admin' && !['تم الانتهاء','منتهي','تم اختيار فني','مؤرشف','ملغي'].includes(item.status) ? <Button title="إلغاء الطلب" secondary onPress={() => adminOrderAction(item, 'cancel')} /> : null}{tab === 'orders' && session.user?.role === 'admin' && !['قيد المراجعة','تم النشر','وصلتك عروض','تم اختيار فني','مؤرشف'].includes(item.status) ? <Button title="أرشفة الطلب" secondary onPress={() => adminOrderAction(item, 'archive')} /> : null}{tab === 'fannis' && !item.isApproved && !item.isDisabled ? <View style={styles.roleActions}><Button title="اعتماد الفني" onPress={() => moderateTechnician(item, 'approve')} /><Button title="رفض" secondary onPress={() => moderateTechnician(item, 'reject')} /></View> : tab === 'fannis' && item.isApproved ? <Button title="تعليق الفني" secondary onPress={() => moderateTechnician(item, 'disable')} /> : tab === 'fannis' && item.isDisabled ? <Button title="إعادة تفعيل الفني" onPress={() => moderateTechnician(item, 'enable')} /> : null}{tab === 'fannis' && session.user?.role === 'admin' ? <View style={styles.dataCard}><Text style={styles.detail}>تعيين المستوى المهني</Text><View style={styles.roleActions}>{['مبتدئ','ممارس','محترف','خبير'].map(level => <Button key={level} title={level} secondary onPress={() => adminSetTechnicianLevel(item, level)} />)}</View></View> : null}{tab === 'clients' && session.user?.role === 'admin' ? <View style={styles.roleActions}><Button title="تعليق العميل" secondary onPress={() => adminClientAction(item.phone, 'block')} /><Button title="إعادة التفعيل" onPress={() => adminClientAction(item.phone, 'unblock')} /><Button title="حذف الحساب" secondary onPress={() => adminClientAction(item.phone, 'account')} /></View> : null}</View>;
         }} />}
         <Button title="إعادة تحميل بيانات الإدارة" secondary onPress={() => setReloadKey(v => v + 1)} />
       </View>}
