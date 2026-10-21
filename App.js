@@ -704,15 +704,75 @@ function AppContent() {
     Linking.openURL('https://wa.me/201152822263').catch(() => Alert.alert('تعذر فتح واتساب', 'تأكد من تثبيت واتساب أو جرّب مرة أخرى.'));
   }
 
-  function logout() {
+  async function performLogout() {
+    const activeSession = session;
+    const pushToken = pushTokenRef.current;
+    if (activeSession && pushToken && ['client', 'fanni'].includes(activeSession.role)) {
+      try {
+        await api('/notifications/' + activeSession.role + '/push-token', {
+          method: 'DELETE', token: activeSession.token, body: { token: pushToken }
+        });
+      } catch (_) {}
+    }
+    pushTokenRef.current = null;
+    screenHistoryRef.current = [];
+    screenRef.current = 'home';
+    setScreenState('home');
     setSession(null); setUsername(''); setPassword('');
     setClientData({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
     setTechData({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'available' });
     setAdminData({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
     setNotifications({ items: [], unread: 0, loading: false, error: '' });
     setAdminUsers([]);
-    setScreen('home');
   }
+
+  function logout() {
+    Alert.alert('تأكيد تسجيل الخروج', 'هل تريد تسجيل الخروج من حسابك؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'تسجيل الخروج', style: 'destructive', onPress: () => { void performLogout(); } }
+    ]);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function registerPushToken() {
+      if (!session || !['client', 'fanni'].includes(session.role) || !Device.isDevice) return;
+      try {
+        const permission = await Notifications.getPermissionsAsync();
+        let status = permission.status;
+        if (status !== 'granted') {
+          const requested = await Notifications.requestPermissionsAsync();
+          status = requested.status;
+        }
+        if (status !== 'granted') return;
+        const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+        if (!projectId) {
+          console.warn('Expo push registration skipped: missing projectId');
+          return;
+        }
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'إشعارات صُنّاع',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#14B8A6',
+          });
+        }
+        const result = await Notifications.getExpoPushTokenAsync({ projectId });
+        if (cancelled || !result?.data) return;
+        pushTokenRef.current = result.data;
+        await api('/notifications/' + session.role + '/push-token', {
+          method: 'POST',
+          token: session.token,
+          body: { token: result.data, platform: Platform.OS }
+        });
+      } catch (error) {
+        console.warn('Expo push registration failed:', error?.message || error);
+      }
+    }
+    void registerPushToken();
+    return () => { cancelled = true; };
+  }, [session]);
   const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
   const toggleArray = (key, value) => updateForm(key, form[key].includes(value) ? form[key].filter(item => item !== value) : [...form[key], value]);
 
