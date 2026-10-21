@@ -183,6 +183,10 @@ function AppContent() {
   }, [reloadKey, screen]);
 
   useEffect(() => {
+    if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) loadSupportCases();
+  }, [screen, session?.token]);
+
+  useEffect(() => {
     if (!session || screen !== 'admin' || session.role !== 'admin' || session.user?.role !== 'admin') return;
     let mounted = true;
     async function loadAdminUsers() {
@@ -742,7 +746,7 @@ function AppContent() {
   }
 
   async function sendSupportMessage(needsHuman = false) {
-    const text = supportDraft.trim();
+    const text = supportDraft.trim() || (needsHuman ? 'أحتاج تدخل موظف الدعم.' : '');
     if (!supportCase?._id) return startSupportCase();
     if (!text) { Alert.alert('رسالة فارغة', 'اكتب رسالتك أولًا.'); return; }
     setSupportLoading(true); setSupportError('');
