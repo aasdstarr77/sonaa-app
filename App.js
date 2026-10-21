@@ -103,6 +103,12 @@ function AppContent() {
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
   const [clientTab, setClientTab] = useState('new');
+  const [clientTrackSN, setClientTrackSN] = useState('');
+  const [clientTrackedOrder, setClientTrackedOrder] = useState(null);
+  const [clientTrackError, setClientTrackError] = useState('');
+  const [clientTrackLoading, setClientTrackLoading] = useState(false);
+  const [clientComplaint, setClientComplaint] = useState({ sn: '', name: '', text: '', loading: false, error: '' });
+  const [clientComplaintTrack, setClientComplaintTrack] = useState({ sn: '', name: '', loading: false, error: '', result: null });
   const [expandedClientOrders, setExpandedClientOrders] = useState({});
   const [expandedTechnicianOrders, setExpandedTechnicianOrders] = useState({});
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -470,7 +476,7 @@ function AppContent() {
         setLoginLoading(false);
         return;
       }
-      const orderBody = { service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
+      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setForm(current => ({ ...current, address: '', description: '', budget: '' }));
@@ -478,6 +484,28 @@ function AppContent() {
       Alert.alert('تم استلام الطلب', `كود المتابعة: ${result.sn || result.order?.sn || '—'}\nسيتم مراجعته من الإدارة.`);
     } catch (err) { Alert.alert('تعذر إنشاء الطلب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
     finally { setLoginLoading(false); }
+  }
+
+  async function trackClientOrder() {
+    const sn = String(clientTrackSN || '').trim().toUpperCase();
+    if (!/^SN[A-Z0-9]{4,18}$/.test(sn)) { setClientTrackError('اكتب كود طلب صحيح يبدأ بـ SN.'); return; }
+    setClientTrackLoading(true); setClientTrackError(''); setClientTrackedOrder(null);
+    try { const result = await api(`/orders/${encodeURIComponent(sn)}`, { token: session?.token }); setClientTrackedOrder(result.order || result.data || result); setClientTrackSN(sn); }
+    catch (err) { setClientTrackError(err.message || 'تعذر العثور على الطلب أو التحقق من ملكيته.'); } finally { setClientTrackLoading(false); }
+  }
+  async function submitClientComplaint() {
+    const sn = String(clientComplaint.sn || '').trim().toUpperCase(), name = String(clientComplaint.name || '').trim(), text = String(clientComplaint.text || '').trim();
+    if (!/^SN[A-Z0-9]{4,18}$/.test(sn) || name.length < 2 || name.length > 50 || text.length < 10 || text.length > 1000) { setClientComplaint(c => ({ ...c, error: 'راجع كود الطلب والاسم، واكتب تفاصيل الشكوى من 10 إلى 1000 حرف.' })); return; }
+    setClientComplaint(c => ({ ...c, loading: true, error: '' }));
+    try { const result = await api('/complaints', { method: 'POST', body: { sn, clientName: name, text } }); Alert.alert('تم إرسال الشكوى', result.message || 'وصلت شكواك للإدارة.'); setClientComplaint({ sn: '', name: '', text: '', loading: false, error: '' }); }
+    catch (err) { setClientComplaint(c => ({ ...c, loading: false, error: err.message || 'تعذر إرسال الشكوى.' })); }
+  }
+  async function trackClientComplaints() {
+    const sn = String(clientComplaintTrack.sn || '').trim().toUpperCase(), name = String(clientComplaintTrack.name || '').trim();
+    if (!sn || name.length < 2) { setClientComplaintTrack(c => ({ ...c, error: 'اكتب كود الطلب والاسم المسجل.' })); return; }
+    setClientComplaintTrack(c => ({ ...c, loading: true, error: '', result: null }));
+    try { const result = await api('/complaints/track?sn=' + encodeURIComponent(sn) + '&clientName=' + encodeURIComponent(name)); setClientComplaintTrack(c => ({ ...c, loading: false, result })); }
+    catch (err) { setClientComplaintTrack(c => ({ ...c, loading: false, error: err.message || 'تعذر متابعة الشكوى.' })); }
   }
 
   function sendOffer(order) {
@@ -922,7 +950,7 @@ function AppContent() {
   if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}>
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
-      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
+      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
         <Text style={styles.fieldLabel}>الخدمة</Text>
         <Text style={styles.fieldLabel}>الفئة</Text>
@@ -939,8 +967,8 @@ function AppContent() {
       </>}</> : null}
       {clientData.sn ? <View style={styles.codeRow}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ الكود" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
       <Text style={styles.sectionTitle}>طلبات العميل</Text>
-      <View style={styles.tabRow}>{[{key:'new',label:'طلب جديد',count:0},{key:'current',label:'طلبات جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'طلبات سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pill, clientTab===t.key && styles.pillActive]}><Text style={[styles.pillText,clientTab===t.key && styles.pillTextActive]}>{t.label}{t.key!=='new' ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
-      {clientTab !== 'new' ? (clientData.loading ? <ActivityIndicator color={COLORS.teal} /> : clientData.error ? <Text style={styles.errorText}>{clientData.error}</Text> : clientData.orders.filter(o => clientTab==='previous' ? ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status) : !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).map((order, i) => {
+      <View style={styles.tabRow}>{[{key:'new',label:'طلب جديد',count:0},{key:'current',label:'طلبات جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'طلبات سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع طلب',count:0},{key:'complaint',label:'شكوى',count:0}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pill, clientTab===t.key && styles.pillActive]}><Text style={[styles.pillText,clientTab===t.key && styles.pillTextActive]}>{t.label}{t.key!=='new' ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
+      {['current','previous'].includes(clientTab) ? (clientData.loading ? <ActivityIndicator color={COLORS.teal} /> : clientData.error ? <Text style={styles.errorText}>{clientData.error}</Text> : clientData.orders.filter(o => clientTab==='previous' ? ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status) : !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).map((order, i) => {
         const sn = getOrderSN(order), expanded = Boolean(expandedClientOrders[sn]), rating = ratingDrafts[sn];
         return <View key={String(order._id || sn || i)} style={styles.dataCard}>
           <TouchableOpacity onPress={() => setExpandedClientOrders(current => ({ ...current, [sn]: !current[sn] }))}><Text style={styles.cardTitle}>{order.service || 'طلب خدمة'} — {sn}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض تفاصيل الطلب'}</Text></TouchableOpacity>
@@ -952,6 +980,8 @@ function AppContent() {
           </> : null}
         </View>;
       })) : null}
+      {clientTab === 'track' ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تتبع طلبك</Text><Field label="كود الطلب" value={clientTrackSN} onChangeText={setClientTrackSN} placeholder="SN123456" autoCapitalize="characters"/><Button title={clientTrackLoading ? 'جاري البحث...' : 'تتبع الطلب'} onPress={trackClientOrder} disabled={clientTrackLoading}/>{clientTrackError ? <Text style={styles.errorText}>{clientTrackError}</Text> : null}{clientTrackedOrder ? <View style={styles.offerCard}><Text style={styles.cardTitle}>{clientTrackedOrder.service || 'طلب خدمة'} — {getOrderSN(clientTrackedOrder)}</Text><Text style={styles.detail}>الحالة: {clientTrackedOrder.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المنطقة: {clientTrackedOrder.area || '—'}</Text><Text style={styles.detail}>{clientTrackedOrder.description || clientTrackedOrder.details || ''}</Text><Text style={styles.detail}>السعر المتفق عليه: {clientTrackedOrder.acceptedOfferPrice ?? 'غير محدد'} جنيه</Text>{(clientTrackedOrder.offers || []).map((offer, i) => <View key={String(offer._id || offer.id || i)} style={styles.priceRequest}><Text style={styles.cardTitle}>{offer.fanniName || offer.technicianName || 'فني'} — {offer.price ?? '—'} جنيه</Text><Text style={styles.detail}>{offer.message || ''}</Text>{!clientTrackedOrder.acceptedOfferId && !['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف'].includes(clientTrackedOrder.status) ? <Button title="قبول العرض" onPress={() => acceptClientOffer(clientTrackedOrder, offer)} /> : null}</View>)}</View> : null}</View> : null}
+      {clientTab === 'complaint' ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تقديم شكوى للإدارة</Text><Text style={styles.detail}>استخدم كود الطلب والاسم المسجل، ولا تكتب أرقام تليفونات داخل تفاصيل الشكوى.</Text><Field label="كود الطلب" value={clientComplaint.sn} onChangeText={v => setClientComplaint(c => ({ ...c, sn: v.toUpperCase(), error: '' }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل مع الطلب" value={clientComplaint.name} onChangeText={v => setClientComplaint(c => ({ ...c, name: v, error: '' }))} autoCapitalize="words"/><Field label="تفاصيل الشكوى (10 أحرف على الأقل)" value={clientComplaint.text} onChangeText={v => setClientComplaint(c => ({ ...c, text: v, error: '' }))} multiline/><Text style={styles.detail}>{clientComplaint.text.length}/1000</Text>{clientComplaint.error ? <Text style={styles.errorText}>{clientComplaint.error}</Text> : null}<Button title={clientComplaint.loading ? 'جاري الإرسال...' : 'إرسال الشكوى'} onPress={submitClientComplaint} disabled={clientComplaint.loading}/><View style={styles.offerCard}><Text style={styles.cardTitle}>متابعة شكوى سابقة</Text><Field label="كود الطلب" value={clientComplaintTrack.sn} onChangeText={v => setClientComplaintTrack(c => ({ ...c, sn: v.toUpperCase(), error: '', result: null }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل" value={clientComplaintTrack.name} onChangeText={v => setClientComplaintTrack(c => ({ ...c, name: v, error: '', result: null }))} autoCapitalize="words"/><Button title={clientComplaintTrack.loading ? 'جاري البحث...' : 'متابعة الشكوى'} onPress={trackClientComplaints} disabled={clientComplaintTrack.loading}/>{clientComplaintTrack.error ? <Text style={styles.errorText}>{clientComplaintTrack.error}</Text> : null}{clientComplaintTrack.result ? <Text style={styles.detail}>{JSON.stringify(clientComplaintTrack.result)}</Text> : null}</View></View> : null}
       {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>الإشعارات {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitle}>{item.title||'إشعار من صُنّاع'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>):<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}</ScrollView>
     <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
   </SafeAreaView>;
