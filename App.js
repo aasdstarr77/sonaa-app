@@ -115,6 +115,15 @@ function AppContent() {
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [broadcast, setBroadcast] = useState({ title: '', message: '', audience: 'all' });
+  const [supportCases, setSupportCases] = useState([]);
+  const [supportCase, setSupportCase] = useState(null);
+  const [supportDraft, setSupportDraft] = useState('');
+  const [supportSubject, setSupportSubject] = useState('استفسار عام');
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportError, setSupportError] = useState('');
+  const [adminSupportCases, setAdminSupportCases] = useState([]);
+  const [adminSupportSelected, setAdminSupportSelected] = useState(null);
+  const [adminSupportDraft, setAdminSupportDraft] = useState('');
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -200,9 +209,11 @@ function AppContent() {
         api('/admin/clients?limit=100', { token: session.token }),
         api('/admin/topup-requests?limit=100', { token: session.token }),
         api('/admin/complaints?limit=100', { token: session.token }),
+        api('/support/admin?needsHuman=true', { token: session.token }),
       ]);
       if (!mounted) return;
       const failed = results.find(item => item.status === 'rejected');
+      setAdminSupportCases(results[5]?.status === 'fulfilled' ? toList(results[5].value, ['supportCases', 'items']) : []);
       setAdminData({
         orders: results[0].status === 'fulfilled' ? toList(results[0].value, ['orders', 'items']) : [],
         fannis: results[1].status === 'fulfilled' ? toList(results[1].value, ['fannis', 'items']) : [],
@@ -695,13 +706,92 @@ function AppContent() {
     } catch (err) { Alert.alert('تعذر إرسال الشحن', err.message || 'حاول مرة أخرى.'); }
   }
 
+  async function loadSupportCases() {
+    if (!session || !['client', 'fanni'].includes(session.role)) return;
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role, { token: session.token });
+      setSupportCases(toList(result, ['supportCases', 'items']));
+    } catch (err) { setSupportError(err.message || 'تعذر تحميل محادثات الدعم'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function startSupportCase() {
+    const text = supportDraft.trim();
+    if (!text) { Alert.alert('رسالة فارغة', 'اكتب المشكلة أو الاستفسار الأول.'); return; }
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role, { method: 'POST', token: session.token, body: { subject: supportSubject.trim() || 'استفسار عام', text } });
+      const item = result.supportCase;
+      setSupportDraft('');
+      setSupportCase(item);
+      setSupportCases(current => [item, ...current.filter(x => String(x._id) !== String(item._id))]);
+      Alert.alert('تم فتح محادثة الدعم', 'رسالتك محفوظة داخل صُنّاع. لو احتاجت تدخلًا بشريًا، اضغط «طلب تدخل الدعم».');
+    } catch (err) { setSupportError(err.message || 'تعذر إرسال الرسالة'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function openSupportCase(item) {
+    setSupportCase(item);
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role + '/' + encodeURIComponent(item._id), { token: session.token });
+      setSupportCase(result.supportCase || item);
+    } catch (err) { setSupportError(err.message || 'تعذر فتح المحادثة'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function sendSupportMessage(needsHuman = false) {
+    const text = supportDraft.trim();
+    if (!supportCase?._id) return startSupportCase();
+    if (!text) { Alert.alert('رسالة فارغة', 'اكتب رسالتك أولًا.'); return; }
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role + '/' + encodeURIComponent(supportCase._id) + '/messages', {
+        method: 'POST', token: session.token, body: { text, needsHuman }
+      });
+      const item = result.supportCase;
+      setSupportCase(item);
+      setSupportCases(current => [item, ...current.filter(x => String(x._id) !== String(item._id))]);
+      setSupportDraft('');
+      if (needsHuman) Alert.alert('تم طلب تدخل الدعم', 'تم وضع المحادثة في قائمة الحالات التي تحتاج تدخل الإدارة.');
+    } catch (err) { setSupportError(err.message || 'تعذر إرسال الرسالة'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function loadAdminSupportCases() {
+    if (!session || session.role !== 'admin') return;
+    try {
+      const result = await api('/support/admin?needsHuman=true', { token: session.token });
+      setAdminSupportCases(toList(result, ['supportCases', 'items']));
+    } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
+  }
+
+  async function replyAdminSupport(item) {
+    const text = adminSupportDraft.trim();
+    if (!item?._id || !text) { Alert.alert('رد الدعم', 'اكتب الرد الأول.'); return; }
+    try {
+      const result = await api('/support/admin/' + encodeURIComponent(item._id) + '/reply', {
+        method: 'POST', token: session.token, body: { text }
+      });
+      const updated = result.supportCase;
+      setAdminSupportSelected(updated);
+      setAdminSupportCases(current => [updated, ...current.filter(x => String(x._id) !== String(updated._id))]);
+      setAdminSupportDraft('');
+      Alert.alert('تم إرسال الرد', 'تم حفظ ردك داخل محادثة الدعم.');
+    } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
+  }
+
   async function copyOrderCode(code) {
     try { await Clipboard.setStringAsync(String(code || '')); Alert.alert('تم النسخ', 'تم نسخ كود الطلب.'); }
     catch { Alert.alert('تعذر النسخ', 'اضغط مطولًا على الكود لنسخه يدويًا.'); }
   }
 
   function openWhatsAppSupport() {
-    Linking.openURL('https://wa.me/201152822263').catch(() => Alert.alert('تعذر فتح واتساب', 'تأكد من تثبيت واتساب أو جرّب مرة أخرى.'));
+    setSupportCase(null);
+    setSupportDraft('');
+    setSupportError('');
+    setScreen('support');
   }
 
   async function performLogout() {
@@ -846,7 +936,7 @@ function AppContent() {
         </View>;
       })) : null}
       {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>الإشعارات {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitle}>{item.title||'إشعار من صُنّاع'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>):<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}</ScrollView>
-    <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>☎</Text></TouchableOpacity></View>
+    <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
   </SafeAreaView>;
 
   if (screen === 'technician' && session?.role === 'fanni') {
@@ -955,20 +1045,84 @@ function AppContent() {
         </>}
       </View>
       {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>إشعارات الفني {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitle}>{item.title||'إشعار'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>):<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}
-      <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>☎</Text></TouchableOpacity></View>
+      <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
+    </SafeAreaView>;
+  }
+
+  if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) {
+    const rolePath = session.role;
+    return <SafeAreaView style={styles.safe}>
+      <View style={styles.headerRow}>
+        <View style={styles.flex}><Text style={styles.title}>دعم صُنّاع</Text><Text style={styles.subtitle}>محادثة خاصة داخل التطبيق</Text></View>
+        <Button title="رجوع" secondary onPress={() => { setSupportCase(null); setScreen(rolePath === 'client' ? 'client' : 'technician'); }} />
+      </View>
+      <ScrollView contentContainerStyle={styles.page}>
+        <View style={styles.dataCard}>
+          <Text style={styles.cardTitle}>محادثة جديدة</Text>
+          <Text style={styles.detail}>اكتب مشكلتك هنا. رقمك الشخصي لا يظهر في هذه المحادثة.</Text>
+          <Field label="عنوان المشكلة (اختياري)" value={supportSubject} onChangeText={setSupportSubject} placeholder="مثال: مشكلة في الطلب" />
+          {!supportCase ? <>
+            <Field label="رسالتك" value={supportDraft} onChangeText={setSupportDraft} multiline placeholder="اشرح المشكلة أو الاستفسار..." />
+            <Button title="إرسال وفتح محادثة الدعم" onPress={startSupportCase} disabled={supportLoading} />
+          </> : null}
+        </View>
+        <Text style={styles.sectionTitle}>محادثاتي السابقة</Text>
+        {supportLoading ? <ActivityIndicator color={COLORS.teal} /> : null}
+        {supportError ? <Text style={styles.errorText}>{supportError}</Text> : null}
+        {supportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => openSupportCase(item)} style={[styles.dataCard, supportCase?._id === item._id && { borderColor: COLORS.teal }]}>
+          <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'}</Text>
+          <Text style={styles.detail}>الحالة: {item.status || 'جديدة'}{item.needsHuman ? ' • تحتاج تدخل الدعم' : ''}</Text>
+          <Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text>
+        </TouchableOpacity>)}
+        {supportCase ? <View style={styles.chatPanel}>
+          <Text style={styles.sectionTitle}>{supportCase.subject || 'محادثة الدعم'}</Text>
+          {(supportCase.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}>
+            <Text style={styles.detail}>{message.senderRole === 'admin' ? 'دعم صُنّاع' : message.senderRole === 'assistant' ? 'المساعد' : 'أنت'} • {dateLabel(message.createdAt)}</Text>
+            <Text style={styles.chatMessageText}>{message.text}</Text>
+          </View>)}
+          {['تم الحل', 'مغلقة'].includes(supportCase.status) ? <Text style={styles.detail}>تم إغلاق هذه الحالة. افتح محادثة جديدة إذا احتجت مساعدة أخرى.</Text> : <>
+            <Field label="اكتب ردك" value={supportDraft} onChangeText={setSupportDraft} multiline placeholder="اكتب رسالتك للدعم..." />
+            <View style={styles.roleActions}>
+              <Button title="إرسال" onPress={() => sendSupportMessage(false)} disabled={supportLoading} />
+              <Button title="طلب تدخل الدعم" secondary onPress={() => sendSupportMessage(true)} disabled={supportLoading} />
+            </View>
+          </>}
+        </View> : null}
+        <Button title="تحديث المحادثات" secondary onPress={loadSupportCases} disabled={supportLoading} />
+      </ScrollView>
     </SafeAreaView>;
   }
 
   if (screen === 'admin' && session?.role === 'admin') {
     const tab = adminData.tab;
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
-    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
-      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setAdminData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : ''}</Text></TouchableOpacity>)}</View>
+      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : item.key === 'support' ? ` (${adminSupportCases.length})` : ''}</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
-        {tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'notifications' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>إرسال إشعار داخل التطبيق</Text><Text style={styles.detail}>الإشعار يظهر للحسابات المستهدفة داخل تطبيق صُنّاع.</Text><Field label="عنوان الإشعار" value={broadcast.title} onChangeText={value => setBroadcast(current => ({ ...current, title: value }))} placeholder="مثال: تحديث مهم" /><Field label="نص الإشعار" value={broadcast.message} onChangeText={value => setBroadcast(current => ({ ...current, message: value }))} multiline placeholder="اكتب الرسالة هنا" /><Text style={styles.fieldLabel}>المستلمون</Text><View style={styles.roleActions}>{[{key:'all',label:'الجميع'},{key:'clients',label:'العملاء'},{key:'fannis',label:'الفنيون'},{key:'cairo_fannis',label:'فنيّو القاهرة'}].map(option => <Button key={option.key} title={option.label} secondary={broadcast.audience !== option.key} onPress={() => setBroadcast(current => ({ ...current, audience: option.key }))} />)}</View><Button title="إرسال الإشعار" onPress={sendAdminBroadcast} /></ScrollView> : tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+        {tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'support' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>حالات دعم صُنّاع</Text>
+          <Text style={styles.detail}>الحالات التي تحتاج تدخلًا بشريًا تظهر أولًا. افتح الحالة لقراءة الرسائل والرد من داخل التطبيق.</Text>
+          {adminSupportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => setAdminSupportSelected(item)} style={[styles.dataCard, adminSupportSelected?._id === item._id && { borderColor: COLORS.teal }]}>
+            <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'} — {item.ownerName || (item.ownerRole === 'fanni' ? 'فني' : 'عميل')}</Text>
+            <Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.ownerRole === 'fanni' ? 'فني' : 'عميل'}{item.needsHuman ? ' • يحتاج تدخلًا' : ''}</Text>
+            <Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text>
+          </TouchableOpacity>)}
+          {adminSupportSelected ? <View style={styles.chatPanel}>
+            <Text style={styles.cardTitle}>{adminSupportSelected.subject || 'محادثة الدعم'}</Text>
+            {(adminSupportSelected.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}>
+              <Text style={styles.detail}>{message.senderRole === 'admin' ? 'الإدارة' : message.senderRole === 'assistant' ? 'المساعد' : message.senderRole === 'fanni' ? 'الفني' : 'العميل'} • {dateLabel(message.createdAt)}</Text>
+              <Text style={styles.chatMessageText}>{message.text}</Text>
+            </View>)}
+            {!['تم الحل','مغلقة'].includes(adminSupportSelected.status) ? <>
+              <Field label="رد الإدارة" value={adminSupportDraft} onChangeText={setAdminSupportDraft} multiline placeholder="اكتب ردك هنا..." />
+              <View style={styles.roleActions}><Button title="إرسال الرد" onPress={() => replyAdminSupport(adminSupportSelected)} /><Button title="تحديث القائمة" secondary onPress={loadAdminSupportCases} /></View>
+            </> : <Text style={styles.detail}>الحالة مغلقة.</Text>}
+          </View> : null}
+          <Button title="تحديث حالات الدعم" secondary onPress={loadAdminSupportCases} />
+        </ScrollView> : tab === 'notifications' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>إرسال إشعار داخل التطبيق</Text><Text style={styles.detail}>الإشعار يظهر للحسابات المستهدفة داخل تطبيق صُنّاع.</Text><Field label="عنوان الإشعار" value={broadcast.title} onChangeText={value => setBroadcast(current => ({ ...current, title: value }))} placeholder="مثال: تحديث مهم" /><Field label="نص الإشعار" value={broadcast.message} onChangeText={value => setBroadcast(current => ({ ...current, message: value }))} multiline placeholder="اكتب الرسالة هنا" /><Text style={styles.fieldLabel}>المستلمون</Text><View style={styles.roleActions}>{[{key:'all',label:'الجميع'},{key:'clients',label:'العملاء'},{key:'fannis',label:'الفنيون'},{key:'cairo_fannis',label:'فنيّو القاهرة'}].map(option => <Button key={option.key} title={option.label} secondary={broadcast.audience !== option.key} onPress={() => setBroadcast(current => ({ ...current, audience: option.key }))} />)}</View><Button title="إرسال الإشعار" onPress={sendAdminBroadcast} /></ScrollView> : tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.sectionTitle}>التسلسل الإداري والصلاحيات</Text>
           <Text style={styles.detail}>المدير العام فقط يستطيع تعيين المناصب أو سحبها. الخادم هو الذي يفرض الصلاحيات فعليًا.</Text>
           {adminUsersLoading ? <ActivityIndicator color={COLORS.teal} /> : adminUsers.map((u, i) => <View key={String(u.id || u._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{u.name || 'حساب إداري'}</Text><Text style={styles.detail}>{u.phone || ''} • {u.adminRole || (u.role === 'admin' ? 'مدير عام' : 'فني')}</Text>{u.role !== 'admin' ? <Button title="سحب المنصب الإداري" secondary onPress={() => revokeAdminRoleForUser(u)} /> : <Text style={styles.detail}>حساب المدير العام الأساسي.</Text>}</View>)}
