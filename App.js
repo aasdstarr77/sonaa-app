@@ -103,6 +103,7 @@ function AppContent() {
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
   const [clientTab, setClientTab] = useState('new');
+  const [clientServiceSearch, setClientServiceSearch] = useState('');
   const [clientTrackSN, setClientTrackSN] = useState('');
   const [clientTrackedOrder, setClientTrackedOrder] = useState(null);
   const [clientTrackError, setClientTrackError] = useState('');
@@ -950,7 +951,7 @@ function AppContent() {
   if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}>
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
-      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
+      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
         <Text style={styles.fieldLabel}>الخدمة</Text>
         <Text style={styles.fieldLabel}>الفئة</Text>
