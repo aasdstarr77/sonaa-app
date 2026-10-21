@@ -821,13 +821,17 @@ function AppContent() {
       <View style={styles.roleCards}>
         <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('client')} style={styles.roleCard}>
           <View style={styles.clientIconCircle}><Text style={styles.roleIcon}>👤</Text></View>
-          <Text style={styles.roleTitle}>الدخول كعميل</Text>
-          <Text style={styles.roleDescription}>اطلب الخدمة اللي محتاجها وتابع طلبك بسهولة.</Text>
+          <View style={styles.roleCardCopy}>
+            <Text style={styles.roleTitle}>الدخول كعميل</Text>
+            <Text style={styles.roleDescription}>اطلب الخدمة اللي محتاجها وتابع طلبك بسهولة.</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('fanni')} style={styles.roleCard}>
           <View style={styles.technicianIconCircle}><Text style={styles.roleIcon}>🛠️</Text></View>
-          <Text style={styles.roleTitle}>الدخول كفني</Text>
-          <Text style={styles.roleDescription}>تابع فرص الشغل وطلبات الخدمات من حسابك.</Text>
+          <View style={styles.roleCardCopy}>
+            <Text style={styles.roleTitle}>الدخول كفني</Text>
+            <Text style={styles.roleDescription}>تابع فرص الشغل وطلبات الخدمات من حسابك.</Text>
+          </View>
         </TouchableOpacity>
       </View>
       <View style={styles.dataCard}><Text style={styles.sectionTitle}>خدمات متنوعة في مكان واحد</Text><Text style={styles.detail}>اختار إنك عميل لطلب خدمة، أو فني لمتابعة فرص العمل. هتلاقي قائمة المهن والخدمات كاملة داخل الحساب عند الحاجة.</Text><View style={styles.homeSummary}><Text style={styles.emoji}>🛠️</Text><Text style={styles.cardTitle}>مهن وخدمات متعددة</Text></View></View>
@@ -852,6 +856,7 @@ const styles = StyleSheet.create({
   clientIconCircle: { width: 62, height: 62, borderRadius: 22, backgroundColor: '#E8F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: 0, borderWidth: 1, borderColor: '#C7DAF8', shadowColor: '#2563EB', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3 },
   technicianIconCircle: { width: 62, height: 62, borderRadius: 22, backgroundColor: '#FFF2CC', alignItems: 'center', justifyContent: 'center', marginBottom: 0, borderWidth: 1, borderColor: '#F2D88C', shadowColor: '#F5B928', shadowOpacity: 0.16, shadowRadius: 8, elevation: 3 },
   roleIcon: { fontSize: 30 },
+  roleCardCopy: { flex: 1, gap: 3, justifyContent: 'center' },
   roleTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', textAlign: 'right' },
   roleDescription: { color: COLORS.muted, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 5, flexShrink: 1 },
   loginHeading: { alignItems: 'flex-end', gap: 3, marginVertical: 8 },
