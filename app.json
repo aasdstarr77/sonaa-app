@@ -10,6 +10,7 @@
     ],
     "android": {
       "package": "com.sonaa.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8FAFC"
