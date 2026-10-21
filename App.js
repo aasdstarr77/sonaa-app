@@ -5,6 +5,13 @@ import {
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
+});
 
 const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
 const COLORS = { navy: '#0B1B3A', navy2: '#173C6C', blue: '#2563EB', gold: '#F5B928', teal: '#14B8A6', bg: '#F4F7FB', text: '#152544', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
