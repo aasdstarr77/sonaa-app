@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView,
   TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert, BackHandler
@@ -83,6 +83,8 @@ function AppContent() {
   const [offerDraft, setOfferDraft] = useState(null);
   const [notifications, setNotifications] = useState({ items: [], unread: 0, loading: false, error: '' });
   const [orderChats, setOrderChats] = useState({});
+  const orderChatsRef = useRef(orderChats);
+  useEffect(() => { orderChatsRef.current = orderChats; }, [orderChats]);
   const [chatDrafts, setChatDrafts] = useState({});
   const [priceDrafts, setPriceDrafts] = useState({});
   const [ratingDrafts, setRatingDrafts] = useState({});
@@ -557,14 +559,9 @@ function AppContent() {
       if (inFlight) return;
       inFlight = true;
       try {
-        const openChats = [];
-        setOrderChats(current => {
-          for (const order of sourceOrders) {
-            const sn = getOrderSN(order);
-            if (sn && current[sn]?.open) openChats.push(sn);
-          }
-          return current;
-        });
+        const openChats = sourceOrders
+          .map(order => getOrderSN(order))
+          .filter(sn => sn && orderChatsRef.current[sn]?.open);
         await Promise.all(openChats.map(async sn => {
           try {
             const result = await api(`/orders/${encodeURIComponent(sn)}/chat`, { token: session.token });
