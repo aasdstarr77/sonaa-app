@@ -97,6 +97,9 @@ function AppContent() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', budget: '', specialties: [], areas: [] });
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'available' });
+  const [technicianSearch, setTechnicianSearch] = useState('');
+  const [technicianServiceFilter, setTechnicianServiceFilter] = useState('الكل');
+  const [guidelinesChecked, setGuidelinesChecked] = useState(false);
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
   const [clientTab, setClientTab] = useState('new');
@@ -484,8 +487,13 @@ function AppContent() {
   async function submitOffer() {
     const amount = Number(offerDraft?.price);
     const message = String(offerDraft?.message || '').trim();
-    if (!Number.isFinite(amount) || amount <= 0 || message.length < 5) {
-      Alert.alert('بيانات العرض غير صحيحة', 'اكتب سعرًا أكبر من صفر ورسالة لا تقل عن 5 أحرف.');
+    const hasActiveAcceptedJob = techData.offers.some(item => item.accepted === true && item.orderStatus === 'تم اختيار فني');
+    if (hasActiveAcceptedJob) {
+      Alert.alert('لديك مهمة جارية', 'لا يمكنك تقديم عرض جديد قبل إنهاء المهمة الحالية.');
+      return;
+    }
+    if (!Number.isInteger(amount) || amount < 10 || amount > 1000000 || message.length < 5 || message.length > 500) {
+      Alert.alert('بيانات العرض غير صحيحة', 'اكتب سعرًا صحيحًا من 10 إلى مليون جنيه ورسالة من 5 إلى 500 حرف.');
       return;
     }
     try {
@@ -950,7 +958,7 @@ function AppContent() {
     const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => o.orderStatus !== 'تم الانتهاء').length})` }, { key: 'completed', label: `المكتملة (${techData.offers.filter(o => o.orderStatus === 'تم الانتهاء').length})` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }, { key: 'notifications', label: `الإشعارات${notifications.unread ? ` (${notifications.unread})` : ''}` }];
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
-      {user.status === 'معتمد' && (!user.technicianGuidelinesAcceptedAt || !user.technicianGuidelinesVersion) ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ميثاق التعامل المهني</Text><Text style={styles.detail}>يلزم قراءة الميثاق والموافقة عليه قبل استخدام فرص العمل والمحادثات. بالموافقة تلتزم بعدم مشاركة أرقام التواصل أو الروابط داخل المنصة، واحترام العميل والسعر المتفق عليه، وعدم تنفيذ أي زيادة قبل موافقة العميل.</Text><Button title="أوافق على ميثاق صُنّاع" onPress={acceptTechnicianGuidelines} /></View> : null}
+      {user.status === 'معتمد' && (!user.technicianGuidelinesAcceptedAt || user.technicianGuidelinesVersion !== '2026-10-20-v1') ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ميثاق التعامل المهني مع العملاء</Text><Text style={styles.detail}>اقرأ التعليمات التالية ووافق عليها قبل استخدام لوحة الفني:</Text><Text style={styles.detail}>١. التزم بسعر العرض الذي وافق عليه العميل. أي زيادة تحتاج موافقة صريحة مسجلة داخل المنصة قبل التنفيذ.</Text><Text style={styles.detail}>٢. تعامل باحترام وصدق، دون ضغط أو تهديد أو تضليل.</Text><Text style={styles.detail}>٣. قبل قبول العرض، استخدم الردود المسموحة فقط: «نعم»، «لا»، «حسب الاتفاق». ممنوع تبادل بيانات الاتصال أو التحايل على المنصة قبل القبول.</Text><Text style={styles.detail}>٤. لا تضغط إنهاء المهمة إلا بعد إنجازها فعلًا.</Text><Text style={styles.detail}>٥. احمِ بيانات العميل ولا تستخدمها خارج الطلب.</Text><Text style={styles.detail}>٦. يحق للطرفين التقييم بعد الإكمال؛ ممنوع الإكراه على تقييم إيجابي أو التلاعب بالتقييمات.</Text><Text style={styles.detail}>٧. المخالفات قد تؤدي إلى مراجعة الطلب أو تعليق الحساب أو إيقافه.</Text><TouchableOpacity onPress={() => setGuidelinesChecked(value => !value)} style={styles.roleActions}><Text style={styles.detail}>{guidelinesChecked ? '☑' : '□'} قرأت التعليمات وأوافق على الالتزام بها.</Text></TouchableOpacity><Button title="موافق ثم تأكيد" onPress={() => guidelinesChecked ? acceptTechnicianGuidelines() : Alert.alert('الموافقة مطلوبة', 'لازم تقرأ الميثاق وتحدد الموافقة أولًا.')} /></View> : null}
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
       {offerDraft ? <View style={styles.dataCard}>
         <Text style={styles.cardTitle}>تقديم عرض على {offerDraft.order.service || 'الخدمة'} — {offerDraft.order.sn}</Text>
@@ -962,7 +970,7 @@ function AppContent() {
       <View style={{ flex: 1 }}>
         {techData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الفني من الخادم...</Text></View> : <>
           {techData.error ? <Text style={styles.errorText}>{techData.error}</Text> : null}
-          {tab === 'available' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.</Text>} renderItem={({ item }) => {
+          {tab === 'available' && <><View style={styles.dataCard}><Text style={styles.cardTitle}>البحث وتصفية فرص العمل</Text><Field label="ابحث بالخدمة أو المنطقة أو كود الطلب" value={technicianSearch} onChangeText={setTechnicianSearch} placeholder="مثال: سباكة أو مدينة نصر أو SN123456" /><Text style={styles.fieldLabel}>تصفية حسب الخدمة</Text><View style={styles.roleActions}><Button title="كل الخدمات" secondary={technicianServiceFilter !== 'الكل'} onPress={() => setTechnicianServiceFilter('الكل')} />{(user.specialties || []).map(service => <Button key={String(service)} title={String(service)} secondary={technicianServiceFilter !== service} onPress={() => setTechnicianServiceFilter(service)} />)}</View><Text style={styles.detail}>النتائج: {techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)) && (technicianServiceFilter === 'الكل' || String(item.service || item.specialty || '') === technicianServiceFilter); }).length} من {techData.orders.length}</Text></View><FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)) && (technicianServiceFilter === 'الكل' || String(item.service || item.specialty || '') === technicianServiceFilter); })} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{techData.orders.length ? 'مفيش فرص مطابقة للبحث أو التصفية.' : 'لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.'}</Text>} renderItem={({ item }) => {
              const sn = getOrderSN(item);
              const expanded = Boolean(expandedTechnicianOrders[sn]);
              return <View style={styles.dataCard}>
@@ -976,7 +984,7 @@ function AppContent() {
                  <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
                </> : null}
              </View>;
-           }} />}
+           }} /></>}
           {(tab === 'offers' || tab === 'completed') && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={displayedOffers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{tab === 'completed' ? 'لا توجد طلبات مكتملة في السجل حتى الآن.' : 'لسه ماقدمتش عروض نشطة.'}</Text>} renderItem={({ item }) => {
              const sn = getOrderSN(item);
              const expanded = Boolean(expandedTechnicianOrders[sn]);
