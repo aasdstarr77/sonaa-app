@@ -505,6 +505,11 @@ function AppContent() {
 
   function orderToken(role) { return role === 'client' ? (session?.token || clientData.clientToken || '') : (session?.token || ''); }
 
+  // Refresh the currently visible screen by rerunning its existing data-loading effects.
+  function refreshVisibleData() {
+    setReloadKey(value => value + 1);
+  }
+
   async function refreshOrderChat(order, role) {
     const sn = getOrderSN(order);
     if (!sn) return;
