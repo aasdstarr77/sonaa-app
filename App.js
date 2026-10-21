@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView,
-  TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert
+  TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert, BackHandler
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 
 const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
-const COLORS = { navy: '#0F172A', teal: '#14B8A6', bg: '#F8FAFC', text: '#1E293B', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
+const COLORS = { navy: '#0B1B3A', navy2: '#173C6C', blue: '#2563EB', gold: '#F5B928', teal: '#14B8A6', bg: '#F4F7FB', text: '#152544', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
 
 async function api(path, options = {}) {
   const { token, body, headers, ...fetchOptions } = options;
@@ -92,6 +92,32 @@ function AppContent() {
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
+
+  // Keep Android's system Back button inside the app and return to the previous major screen.
+  useEffect(() => {
+    const onHardwareBack = () => {
+      if (offerDraft) {
+        setOfferDraft(null);
+        return true;
+      }
+      if (screen === 'login' || screen === 'clientRegister' || screen === 'technicianRegister') {
+        setScreen('home');
+        return true;
+      }
+      if (screen === 'client' || screen === 'technician' || screen === 'admin') {
+        setScreen('home');
+        return true;
+      }
+      if (screen === 'home') {
+        Alert.alert('صُنّاع', 'أنت بالفعل في الصفحة الرئيسية.');
+        return true;
+      }
+      setScreen('home');
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => subscription.remove();
+  }, [screen, offerDraft]);
 
   useEffect(() => {
     if (!['client', 'clientRegister', 'technicianRegister'].includes(screen)) return;
@@ -190,18 +216,24 @@ function AppContent() {
   useEffect(() => {
     if (!session || !['client', 'technician'].includes(screen)) return;
     let mounted = true;
-    async function loadRoleNotifications() {
-      setNotifications(current => ({ ...current, loading: true, error: '' }));
+    let inFlight = false;
+    const role = screen === 'client' ? 'client' : 'fanni';
+    async function loadRoleNotifications(showLoading = false) {
+      if (inFlight) return;
+      inFlight = true;
+      if (showLoading) setNotifications(current => ({ ...current, loading: true, error: '' }));
       try {
-        const role = screen === 'client' ? 'client' : 'fanni';
         const result = await api(`/notifications/${role}`, { token: session.token });
         if (mounted) setNotifications({ items: toList(result, ['notifications']), unread: Number(result.unreadCount || 0), loading: false, error: '' });
       } catch (err) {
-        if (mounted) setNotifications(current => ({ ...current, loading: false, error: err.message || 'تعذر تحميل الإشعارات' }));
+        if (mounted && showLoading) setNotifications(current => ({ ...current, loading: false, error: err.message || 'تعذر تحميل الإشعارات' }));
+      } finally {
+        inFlight = false;
       }
     }
-    loadRoleNotifications();
-    return () => { mounted = false; };
+    loadRoleNotifications(true);
+    const timer = setInterval(() => loadRoleNotifications(false), 5000);
+    return () => { mounted = false; clearInterval(timer); };
   }, [session, screen, reloadKey]);
 
   useEffect(() => {
@@ -514,6 +546,44 @@ function AppContent() {
       }}]);
   }
 
+  // Poll only conversations the user has explicitly opened; never interrupt typing or flash a loader.
+  useEffect(() => {
+    if (!session || !['client', 'technician'].includes(screen)) return;
+    const role = screen === 'client' ? 'client' : 'fanni';
+    const sourceOrders = role === 'client' ? clientData.orders : techData.offers;
+    let mounted = true;
+    let inFlight = false;
+    const pollOpenChats = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const openChats = [];
+        setOrderChats(current => {
+          for (const order of sourceOrders) {
+            const sn = getOrderSN(order);
+            if (sn && current[sn]?.open) openChats.push(sn);
+          }
+          return current;
+        });
+        await Promise.all(openChats.map(async sn => {
+          try {
+            const result = await api(`/orders/${encodeURIComponent(sn)}/chat`, { token: session.token });
+            if (!mounted) return;
+            setOrderChats(current => current[sn]?.open
+              ? { ...current, [sn]: { ...current[sn], loading: false, error: '', messages: toList(result, ['messages']), priceChangeRequests: toList(result, ['priceChangeRequests']) } }
+              : current);
+          } catch {
+            // A transient polling failure should not close the chat or show repeated alerts.
+          }
+        }));
+      } finally {
+        inFlight = false;
+      }
+    };
+    const timer = setInterval(pollOpenChats, 5000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [screen, session, clientData.orders, techData.offers]);
+
   function setOrderRatingStars(order, stars) {
     const sn = getOrderSN(order);
     setRatingDrafts(current => ({
@@ -773,20 +843,20 @@ const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 34, gap: 10 },
   homePage: { padding: 16, paddingBottom: 34, gap: 14 },
   flex: { flex: 1 },
-  welcomeHero: { alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 24, padding: 20, shadowColor: COLORS.teal, shadowOpacity: 0.16, shadowRadius: 16, elevation: 4 },
-  logoGlow: { width: 104, height: 104, borderRadius: 52, borderWidth: 2, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, shadowColor: COLORS.teal, shadowOpacity: 0.65, shadowRadius: 18, elevation: 12, marginBottom: 12 },
-  logoRing: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.navy, borderWidth: 2, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center' },
-  logoLetter: { color: COLORS.white, fontSize: 48, fontWeight: 'bold' },
-  homeBrandTitle: { color: COLORS.navy, fontSize: 32, fontWeight: 'bold', textAlign: 'center' },
-  homeTagline: { color: COLORS.teal, fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: 5, lineHeight: 24 },
-  homeIntro: { color: COLORS.muted, fontSize: 14, textAlign: 'center', lineHeight: 23, marginTop: 8 },
-  roleCards: { flexDirection: 'row-reverse', gap: 10 },
-  roleCard: { flex: 1, minWidth: 140, alignItems: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 16, shadowColor: COLORS.navy, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  clientIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  technicianIconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#CCFBF1', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  welcomeHero: { alignItems: 'center', backgroundColor: COLORS.navy, borderWidth: 1, borderColor: '#29466E', borderRadius: 28, padding: 24, shadowColor: COLORS.navy, shadowOpacity: 0.34, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 12, overflow: 'hidden' },
+  logoGlow: { width: 112, height: 112, borderRadius: 56, borderWidth: 2, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', shadowColor: COLORS.teal, shadowOpacity: 0.85, shadowRadius: 22, shadowOffset: { width: 0, height: 8 }, elevation: 16, marginBottom: 14 },
+  logoRing: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.navy, shadowOpacity: 0.16, shadowRadius: 7, elevation: 5 },
+  logoLetter: { color: COLORS.navy, fontSize: 48, fontWeight: '900' },
+  homeBrandTitle: { color: COLORS.white, fontSize: 34, fontWeight: '900', textAlign: 'center', letterSpacing: 0.4 },
+  homeTagline: { color: COLORS.gold, fontSize: 16, fontWeight: '800', textAlign: 'center', marginTop: 7, lineHeight: 25 },
+  homeIntro: { color: '#D9E5F6', fontSize: 14, textAlign: 'center', lineHeight: 24, marginTop: 10 },
+  roleCards: { flexDirection: 'column', gap: 13 },
+  roleCard: { width: '100%', minHeight: 118, flexDirection: 'row-reverse', alignItems: 'center', gap: 13, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DCE5F1', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 18, shadowColor: COLORS.navy, shadowOpacity: 0.14, shadowRadius: 14, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
+  clientIconCircle: { width: 62, height: 62, borderRadius: 22, backgroundColor: '#E8F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: 0, borderWidth: 1, borderColor: '#C7DAF8', shadowColor: '#2563EB', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3 },
+  technicianIconCircle: { width: 62, height: 62, borderRadius: 22, backgroundColor: '#FFF2CC', alignItems: 'center', justifyContent: 'center', marginBottom: 0, borderWidth: 1, borderColor: '#F2D88C', shadowColor: '#F5B928', shadowOpacity: 0.16, shadowRadius: 8, elevation: 3 },
   roleIcon: { fontSize: 30 },
-  roleTitle: { color: COLORS.navy, fontSize: 15, fontWeight: 'bold', textAlign: 'center' },
-  roleDescription: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 18, marginTop: 6 },
+  roleTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  roleDescription: { color: COLORS.muted, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 5, flexShrink: 1 },
   loginHeading: { alignItems: 'flex-end', gap: 3, marginVertical: 8 },
   title: { fontSize: 25, fontWeight: 'bold', color: COLORS.navy, textAlign: 'right' },
   subtitle: { color: COLORS.muted, marginTop: 5, textAlign: 'right', lineHeight: 21 },
@@ -794,45 +864,45 @@ const styles = StyleSheet.create({
   brand: { backgroundColor: COLORS.navy, color: COLORS.white, fontSize: 30, fontWeight: 'bold', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, overflow: 'hidden' },
   homeHeader: { padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
   homeButtons: { gap: 8, marginVertical: 12 },
-  button: { backgroundColor: COLORS.teal, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginVertical: 3 },
-  buttonText: { color: COLORS.navy, fontWeight: 'bold', fontSize: 14 },
-  buttonSecondary: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border },
+  button: { backgroundColor: COLORS.navy, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 46, maxWidth: '100%', flexShrink: 1, borderWidth: 1, borderColor: '#29466E', shadowColor: COLORS.navy, shadowOpacity: 0.16, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  buttonText: { color: COLORS.white, fontWeight: '800', fontSize: 13, textAlign: 'center', flexShrink: 1 },
+  buttonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D5DFEC', shadowOpacity: 0.04, elevation: 1 },
   buttonSecondaryText: { color: COLORS.navy },
   disabledButton: { opacity: 0.55 },
   fieldWrap: { marginVertical: 5 },
   fieldLabel: { color: COLORS.navy, fontWeight: 'bold', marginTop: 7, marginBottom: 6, textAlign: 'right' },
-  input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: COLORS.text, fontSize: 16 },
+  input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#D5DFEC', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: COLORS.text, fontSize: 16, minHeight: 48 },
   multiline: { minHeight: 86, textAlignVertical: 'top' },
   note: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 19, marginVertical: 8 },
-  notificationRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 4 },
+  notificationRow: { paddingVertical: 13, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 4, backgroundColor: '#FFFFFF', borderRadius: 12, marginTop: 5 },
   homeSummary: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0FDFA', borderRadius: 12, padding: 12 },
-  roleActions: { flexDirection: 'row-reverse', flexWrap: 'nowrap', alignItems: 'center', gap: 6, marginTop: 8 },
-  chatPanel: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 10, marginTop: 10 },
+  roleActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: 7, marginTop: 8 },
+  chatPanel: { backgroundColor: '#F3F7FD', borderWidth: 1, borderColor: '#D8E4F3', borderRadius: 18, padding: 12, marginTop: 11, shadowColor: COLORS.navy, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   chatMessage: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 8, marginVertical: 4 },
   chatMessageText: { color: COLORS.text, textAlign: 'right', lineHeight: 21, marginTop: 4 },
   priceRequest: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 10, marginVertical: 6 },
   inlineCheck: { paddingVertical: 8 },
-  tabRow: { flexDirection: 'row-reverse', flexWrap: 'nowrap', alignItems: 'center', gap: 7, marginVertical: 8, paddingHorizontal: 12 },
-  tabPill: { flexShrink: 0 },
-  pill: { borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 9, marginRight: 4, marginVertical: 3 },
-  pillActive: { backgroundColor: COLORS.navy, borderColor: COLORS.teal },
+  tabRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 7, marginVertical: 8, paddingHorizontal: 12 },
+  tabPill: { flexShrink: 1, maxWidth: '100%' },
+  pill: { borderRadius: 18, borderWidth: 1, borderColor: '#D9E3F0', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 9, marginRight: 4, marginVertical: 3, maxWidth: '100%' },
+  pillActive: { backgroundColor: COLORS.navy, borderColor: COLORS.gold, shadowColor: COLORS.navy, shadowOpacity: 0.14, shadowRadius: 5, elevation: 2 },
   pillText: { color: COLORS.text, fontSize: 12, fontWeight: '600' },
   pillTextActive: { color: COLORS.white },
   sectionTitle: { color: COLORS.navy, fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 12, marginBottom: 5 },
   selectionGroup: { backgroundColor: COLORS.white, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 5 },
   categoryToggle: { paddingVertical: 5 },
-  offerCard: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 10, marginTop: 8 },
+  offerCard: { backgroundColor: '#F4F8FE', borderWidth: 1, borderColor: '#DCE6F3', borderRadius: 16, padding: 12, marginTop: 9, shadowColor: COLORS.navy, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
   groupTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginBottom: 5 },
   choiceRow: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   choiceText: { color: COLORS.text, textAlign: 'right' },
   headerRow: { padding: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   statusText: { marginTop: 12, color: '#64748B', textAlign: 'center' },
-  dataCard: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, padding: 14, marginVertical: 6 },
+  dataCard: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E0E8F2', borderRadius: 19, padding: 15, marginVertical: 7, shadowColor: COLORS.navy, shadowOpacity: 0.065, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
   cardTitle: { color: COLORS.navy, fontSize: 16, fontWeight: 'bold', textAlign: 'right' },
   detail: { color: COLORS.muted, marginTop: 6, textAlign: 'right', lineHeight: 20 },
   errorText: { color: COLORS.red, textAlign: 'right', marginVertical: 8, lineHeight: 21, paddingHorizontal: 12 },
-  successText: { color: '#047857', fontWeight: 'bold', textAlign: 'right', marginVertical: 10 },
+  successText: { color: '#047857', fontWeight: '800', textAlign: 'right', marginVertical: 10, flexWrap: 'wrap' },
   emptyText: { textAlign: 'center', color: COLORS.muted, padding: 28 },
   list: { paddingHorizontal: 12, paddingBottom: 18 },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between' },
