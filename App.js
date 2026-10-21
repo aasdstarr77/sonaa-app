@@ -1024,6 +1024,7 @@ function AppContent() {
                 }))}
                 multiline
               />
+              {Number(ratingDrafts[getOrderSN(item)]?.stars || 5) === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], blockFuture: !current[getOrderSN(item)]?.blockFuture } }))} style={styles.roleActions}><Text style={styles.detail}>{ratingDrafts[getOrderSN(item)]?.blockFuture ? '☑' : '□'} منع التعامل مستقبلًا مع هذا العميل (اختياري)</Text></TouchableOpacity> : null}
               <Button title="حفظ تقييم العميل" onPress={() => submitOrderRating(item)} />
             </View>
           ) : null}
