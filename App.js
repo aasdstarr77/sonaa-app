@@ -858,8 +858,8 @@ function AppContent() {
           <View style={styles.logoRing}><Text style={styles.logoLetter}>ص</Text></View>
         </View>
         <Text style={styles.homeBrandTitle}>صُنّاع</Text>
-        <Text style={styles.homeTagline}>خدماتك في إيدك.. وفنيك أقرب مما تتخيل</Text>
-        <Text style={styles.homeIntro}>سواء كنت عميلًا بتدور على فني موثوق، أو فني عايز توصل لعملاء جدد، صُنّاع بيسهّل عليك البداية.</Text>
+        <Text style={styles.homeTagline}>صُنّاع.. بوابتك للخدمات وفرص العمل</Text>
+        <Text style={styles.homeIntro}>لو محتاج خدمة، هتقدر تطلبها وتتابعها بسهولة. ولو فني، هتقدر تتابع فرص الشغل المناسبة لمهنتك.</Text>
       </View>
       <View style={styles.roleCards}>
         <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('client')} style={styles.roleCard}>
