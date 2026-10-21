@@ -71,7 +71,18 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
 }
 
 function AppContent() {
-  const [screen, setScreen] = useState('home');
+  const [screen, setScreenState] = useState('home');
+  const screenHistoryRef = useRef([]);
+  const screenRef = useRef('home');
+  const pushTokenRef = useRef(null);
+  const setScreen = next => {
+    const target = typeof next === 'function' ? next(screenRef.current) : next;
+    if (target === screenRef.current) return;
+    screenHistoryRef.current.push(screenRef.current);
+    if (screenHistoryRef.current.length > 40) screenHistoryRef.current.shift();
+    screenRef.current = target;
+    setScreenState(target);
+  };
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(null);
   const [areas, setAreas] = useState([]);
@@ -108,31 +119,37 @@ function AppContent() {
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
 
-  // Keep Android's system Back button inside the app and return to the previous major screen.
+  // Hardware Back returns one screen at a time and never logs a user out.
   useEffect(() => {
     const onHardwareBack = () => {
       if (offerDraft) {
         setOfferDraft(null);
         return true;
       }
-      if (screen === 'login' || screen === 'clientRegister' || screen === 'technicianRegister') {
-        setScreen('home');
+      if (notificationsOpen) {
+        setNotificationsOpen(false);
         return true;
       }
-      if (screen === 'client' || screen === 'technician' || screen === 'admin') {
-        setScreen('home');
+      let previous = screenHistoryRef.current.pop();
+      while (previous && ['login', 'clientRegister', 'technicianRegister'].includes(previous) && session) {
+        previous = screenHistoryRef.current.pop();
+      }
+      if (previous) {
+        screenRef.current = previous;
+        setScreenState(previous);
         return true;
       }
-      if (screen === 'home') {
-        Alert.alert('صُنّاع', 'أنت بالفعل في الصفحة الرئيسية.');
+      if (screen !== 'home') {
+        screenRef.current = 'home';
+        setScreenState('home');
         return true;
       }
-      setScreen('home');
+      Alert.alert('صُنّاع', 'أنت بالفعل في الصفحة الرئيسية.');
       return true;
     };
     const subscription = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
     return () => subscription.remove();
-  }, [screen, offerDraft]);
+  }, [screen, offerDraft, notificationsOpen, session]);
 
   useEffect(() => {
     if (!['client', 'clientRegister', 'technicianRegister'].includes(screen)) return;
