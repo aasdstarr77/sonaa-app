@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { SvgXml } from 'react-native-svg';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -16,6 +17,8 @@ Notifications.setNotificationHandler({
 
 const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
 const COLORS = { navy: '#0B1B3A', navy2: '#173C6C', blue: '#2563EB', gold: '#F5B928', teal: '#14B8A6', bg: '#F4F7FB', text: '#152544', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
+
+const SONAA_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><circle cx="256" cy="256" r="231" fill="#fff" stroke="#1EB5A6" stroke-width="26"/><path d="M350 115c-29-23-65-35-108-35-75 0-125 39-125 98 0 51 37 77 105 96l47 13c37 10 51 22 51 43 0 27-28 44-72 44-43 0-79-14-111-42l-44 57c38 34 92 53 155 53 88 0 146-43 146-111 0-52-32-81-103-101l-52-15c-34-10-48-20-48-39 0-21 22-35 55-35 29 0 55 8 79 25z" fill="#0A2342"/><g fill="#0A2342" stroke="#0A2342" stroke-linecap="round" stroke-linejoin="round"><path d="M291 109l24-18 44 59-24 18z"/><path d="M274 84l37-28 39 51-37 28z"/><path d="M263 73l27-20 16 22-27 20z"/><path d="M180 345l-31 31 29 29 31-31 18 18-31 31c-8 8-20 8-28 0l-38-38c-8-8-8-20 0-28l31-31z"/><path d="M192 333l17-17 48 48-17 17z"/></g></svg>`;
 
 async function api(path, options = {}) {
   const { token, body, headers, ...fetchOptions } = options;
@@ -1977,7 +1980,7 @@ function AppContent() {
     <ScrollView contentContainerStyle={styles.homePage}>
       <View style={styles.welcomeHero}>
         <View style={styles.logoGlow}>
-          <View style={styles.logoRing}><Text style={styles.logoLetter}>ص</Text></View>
+          <SvgXml xml={SONAA_LOGO_SVG} width={112} height={112} />
         </View>
         <Text style={styles.homeBrandTitle}>صُنّاع</Text>
         <Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>
