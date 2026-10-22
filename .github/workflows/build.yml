@@ -1,7 +1,7 @@
 name: Build APK Final
 on:
   push:
-    branches: [ main ]
+    branches: [ main, review/ratings-logo-sync-20261022 ]
   workflow_dispatch:
 jobs:
   build:
