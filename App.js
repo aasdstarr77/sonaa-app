@@ -1068,7 +1068,6 @@ function AppContent() {
       const result = await api('/support/admin', { token: session.token });
       setAdminSupportCases(toList(result, ['supportCases', 'items']));
       await loadAdminRecoveryCases();
-      await loadAdminRecoveryCases();
     } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
   }
 
@@ -1134,9 +1133,24 @@ function AppContent() {
 
   useEffect(() => {
     if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
-    const timer = setInterval(() => { if (screenRef.current === 'admin') loadAdminSupportCases(); }, 3000);
+    const timer = setInterval(async () => {
+      if (screenRef.current !== 'admin') return;
+      if (adminSupportSelected?._id) {
+        try {
+          const result = await api('/support/admin/' + encodeURIComponent(adminSupportSelected._id), { token: session.token });
+          if (result.supportCase) setAdminSupportSelected(result.supportCase);
+        } catch (_) {}
+      }
+      if (adminRecoverySelected?.id || adminRecoverySelected?._id) {
+        try {
+          const id = adminRecoverySelected.id || adminRecoverySelected._id;
+          const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(id), { token: session.token });
+          if (result.recovery) setAdminRecoverySelected(result.recovery);
+        } catch (_) {}
+      }
+    }, 3000);
     return () => clearInterval(timer);
-  }, [screen, adminData.tab, session?.token]);
+  }, [screen, adminData.tab, session?.token, adminSupportSelected?._id, adminRecoverySelected?.id, adminRecoverySelected?._id]);
 
   async function changeAccountPassword() {
     if (!session) return;
