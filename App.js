@@ -66,12 +66,12 @@ function Button({ title, onPress, secondary = false, disabled = false }) {
     <Text style={[styles.buttonText, secondary && styles.buttonSecondaryText]}>{title}</Text>
   </TouchableOpacity>;
 }
-function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none' }) {
+function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none', returnKeyType = 'default', onSubmitEditing, blurOnSubmit = false }) {
   return <View style={styles.fieldWrap}>
     <Text style={styles.fieldLabel}>{label}</Text>
     <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder || label} placeholderTextColor="#94A3B8"
       secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
-      multiline={multiline} textAlign="right" style={[styles.input, multiline && styles.multiline]} />
+      multiline={multiline} returnKeyType={returnKeyType} onSubmitEditing={onSubmitEditing} blurOnSubmit={blurOnSubmit} textAlign="right" style={[styles.input, multiline && styles.multiline]} />
   </View>;
 }
 
@@ -115,6 +115,7 @@ function AppContent() {
   const [ratingPrompt, setRatingPrompt] = useState(null);
   const [dismissedRatings, setDismissedRatings] = useState({});
   const [ratingDismissalsLoaded, setRatingDismissalsLoaded] = useState(false);
+  const [ratingDismissalsLoadedFor, setRatingDismissalsLoadedFor] = useState('');
   const [clientTrackSN, setClientTrackSN] = useState('');
   const [clientTrackedOrder, setClientTrackedOrder] = useState(null);
   const [clientTrackError, setClientTrackError] = useState('');
@@ -129,6 +130,7 @@ function AppContent() {
   const [notifications, setNotifications] = useState({ items: [], unread: 0, loading: false, error: '' });
   const [orderChats, setOrderChats] = useState({});
   const orderChatsRef = useRef(orderChats);
+  const acceptedChatAutoOpenedRef = useRef({});
   useEffect(() => { orderChatsRef.current = orderChats; }, [orderChats]);
   const [chatDrafts, setChatDrafts] = useState({});
   const [priceDrafts, setPriceDrafts] = useState({});
@@ -175,8 +177,10 @@ function AppContent() {
   useEffect(() => {
     let active = true;
     setRatingDismissalsLoaded(false);
+    setRatingDismissalsLoadedFor('');
     if (!session || !['client', 'fanni'].includes(session.role)) {
       setDismissedRatings({});
+      setRatingDismissalsLoadedFor(ratingStorageKey);
       setRatingDismissalsLoaded(true);
       return () => { active = false; };
     }
@@ -205,7 +209,10 @@ function AppContent() {
       } catch (error) {
         console.warn('تعذر استعادة حالات تخطي التقييم:', error?.message || error);
       } finally {
-        if (active) setRatingDismissalsLoaded(true);
+        if (active) {
+          setRatingDismissalsLoadedFor(ratingStorageKey);
+          setRatingDismissalsLoaded(true);
+        }
       }
     })();
     return () => { active = false; };
@@ -468,7 +475,7 @@ function AppContent() {
   }, [session, screen, reloadKey]);
 
   useEffect(() => {
-    if (!session || session.role !== 'client' || screen !== 'client' || !ratingDismissalsLoaded || ratingPrompt) return;
+    if (!session || session.role !== 'client' || screen !== 'client' || !ratingDismissalsLoaded || ratingDismissalsLoadedFor !== ratingStorageKey || ratingPrompt) return;
     const completedOrder = clientData.orders.find(order => {
       const sn = getOrderSN(order);
       const alreadyRated = Boolean(order.myRating || order.clientRating || order.ratingByClient || order.clientReview || (order.ratings || []).some(item => ['client', 'customer'].includes(String(item.reviewerRole || item.role || '').toLowerCase())));
@@ -479,10 +486,10 @@ function AppContent() {
     const sn = getOrderSN(completedOrder);
     setRatingDrafts(current => current[sn] ? current : { ...current, [sn]: { stars: '5', comment: '', blockFuture: false } });
     setRatingPrompt({ role: 'client', order: completedOrder });
-  }, [session, screen, clientData.orders, ratingDismissalsLoaded, dismissedRatings, ratingDrafts, ratingPrompt]);
+  }, [session, screen, clientData.orders, ratingDismissalsLoaded, ratingDismissalsLoadedFor, ratingStorageKey, dismissedRatings, ratingDrafts, ratingPrompt]);
 
   useEffect(() => {
-    if (!session || session.role !== 'fanni' || screen !== 'technician' || !ratingDismissalsLoaded || ratingPrompt) return;
+    if (!session || session.role !== 'fanni' || screen !== 'technician' || !ratingDismissalsLoaded || ratingDismissalsLoadedFor !== ratingStorageKey || ratingPrompt) return;
     const completedOffer = techData.offers.find(item => {
       const sn = getOrderSN(item);
       const alreadyRated = Boolean(item.myRating || item.fanniRating || item.ratingByFanni || item.technicianReview || (item.ratings || []).some(rating => ['fanni', 'technician'].includes(String(rating.reviewerRole || rating.role || '').toLowerCase())));
@@ -493,7 +500,7 @@ function AppContent() {
     const sn = getOrderSN(completedOffer);
     setRatingDrafts(current => current[sn] ? current : { ...current, [sn]: { stars: '5', comment: '', blockFuture: false } });
     setRatingPrompt({ role: 'fanni', order: completedOffer });
-  }, [session, screen, techData.offers, ratingDismissalsLoaded, dismissedRatings, ratingDrafts, ratingPrompt]);
+  }, [session, screen, techData.offers, ratingDismissalsLoaded, ratingDismissalsLoadedFor, ratingStorageKey, dismissedRatings, ratingDrafts, ratingPrompt]);
 
   async function markNotificationRead(item) {
     const id = item?._id || item?.id;
@@ -761,6 +768,8 @@ function AppContent() {
       { text: 'قبول العرض', onPress: async () => {
         try {
           const result = await api(`/orders/${encodeURIComponent(sn)}/accept`, { method: 'POST', token: session.token, body: { offerId } });
+          acceptedChatAutoOpenedRef.current[`client:${sn}`] = true;
+          await refreshOrderChat({ ...order, status: 'تم اختيار فني', orderStatus: 'تم اختيار فني' }, 'client');
           Alert.alert('تم قبول العرض', 'تم تأكيد اختيار الفني بنجاح.');
           setReloadKey(v => v + 1);
         }
@@ -805,6 +814,22 @@ function AppContent() {
     const timer = setInterval(refreshTechnicianData, 5000);
     return () => { active = false; clearInterval(timer); };
   }, [session, screen]);
+
+  useEffect(() => {
+    if (!session || !['client', 'fanni'].includes(session.role)) return;
+    if (!['client', 'technician'].includes(screen)) return;
+    const role = screen === 'client' ? 'client' : 'fanni';
+    const orders = role === 'client' ? clientData.orders : techData.offers;
+    for (const order of orders) {
+      const sn = getOrderSN(order);
+      const status = String(role === 'client' ? (order.status || order.orderStatus || '') : (order.orderStatus || order.status || '')).trim();
+      if (!sn || !['تم اختيار فني', 'تم الانتهاء'].includes(status)) continue;
+      const key = `${role}:${sn}`;
+      if (acceptedChatAutoOpenedRef.current[key]) continue;
+      acceptedChatAutoOpenedRef.current[key] = true;
+      if (!orderChatsRef.current[sn]?.open) refreshOrderChat(order, role);
+    }
+  }, [session?.role, screen, clientData.orders, techData.offers]);
 
   function orderToken(role) { return role === 'client' ? (session?.token || clientData.clientToken || '') : (session?.token || ''); }
 
@@ -1688,9 +1713,9 @@ function AppContent() {
             {order.status === 'تم اختيار فني' && order.assignedFanniPhone ? <><Text style={styles.detail}>رقم الفني: {order.assignedFanniPhone}</Text><Button title="اتصال بالفني" secondary onPress={() => Linking.openURL(`tel:${order.assignedFanniPhone}`)} /></> : null}
             {!['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف','منتهي','منتهي - اعتذار'].includes(order.status) ? <Button title="إلغاء الطلب" secondary onPress={() => cancelClientOrder(order)} /> : null}
             {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitle}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCard}><Text style={styles.cardTitle}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Text style={styles.detail}>استفسار سريع قبل قبول العرض:</Text><View style={styles.roleActions}>{['هل السعر شامل؟','متى تقدر تيجي؟','هل في تكلفة إضافية؟'].map(question=><Button key={question} title={question} secondary onPress={()=>sendOrderChat({...order,_id:offer._id||offer.id},question)}/>)}</View><Button title="قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
-            <View style={styles.roleActions}><Button title={orderChats[sn]?.open?'إخفاء المحادثة':'فتح المحادثة'} secondary onPress={()=>toggleOrderChat(order,'client')}/>{order.status==='تم الانتهاء'&&!rating?.submitted&&!rating?.skipped&&!dismissedRatings[sn]?<Button title="تقييم الفني" onPress={()=>setRatingDrafts(current=>({...current,[sn]:{stars:'5',comment:'',blockFuture:false}}))}/>:null}</View>
+            <View style={styles.roleActions}>{['تم اختيار فني','تم الانتهاء'].includes(order.status || order.orderStatus) ? <Button title={orderChats[sn]?.open?'إخفاء المحادثة':'فتح المحادثة'} secondary onPress={()=>toggleOrderChat(order,'client')}/> : null}{order.status==='تم الانتهاء'&&!rating?.submitted&&!rating?.skipped&&!dismissedRatings[sn]?<Button title="تقييم الفني" onPress={()=>setRatingDrafts(current=>({...current,[sn]:{stars:'5',comment:'',blockFuture:false}}))}/>:null}</View>
             {order.status==='تم الانتهاء'&&rating&&!rating.submitted&&!rating.skipped?<View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم الفني</Text>{renderRatingStars(order, Number(rating.stars || 5))}<Field label="تعليق (اختياري)" value={rating.comment||''} onChangeText={value=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],comment:value}}))} multiline/>{Number(rating.stars)===1?<TouchableOpacity style={styles.inlineCheck} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],blockFuture:!current[sn]?.blockFuture}}))}><Text style={styles.detail}>{rating.blockFuture?'☑':'☐'} عدم استقبال عروض من الفني ده مرة تانية</Text></TouchableOpacity>:null}<Button title="حفظ التقييم" onPress={()=>submitOrderRating(order)}/></View>:null}
-            {orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
+            {['تم اختيار فني','تم الانتهاء'].includes(order.status || order.orderStatus) && orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={()=>sendOrderChat(order)} placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
           </> : null}
         </View>;
       })) : null}
@@ -1746,7 +1771,7 @@ function AppContent() {
                </TouchableOpacity>
                {expanded ? <>
                  <Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه</Text>
-                 <Text style={styles.detail}>{item.message || ''}</Text>{item.client && ['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus) ? <View style={styles.offerCard}><Text style={styles.cardTitle}>تفاصيل العميل والطلب</Text><Text style={styles.detail}>اسم العميل: {item.client.name || '—'}</Text><Text style={styles.detail}>المنطقة: {item.client.area || '—'}</Text><Text style={styles.detail}>العنوان بالتفصيل: {item.client.address || '—'}</Text><Text style={styles.detail}>تفاصيل المطلوب: {item.client.description || '—'}</Text><Text style={styles.detail}>ميزانية العميل: {item.client.budget || 'غير محددة'}</Text><Text style={styles.detail}>السعر المتفق عليه: {item.client.acceptedOfferPrice ?? item.price ?? '—'} جنيه</Text><Text style={styles.detail}>عمولة المنصة: {item.client.commissionAmount ?? '—'} جنيه</Text><Text style={styles.detail}>حالة العمولة: {item.client.commissionCharged ? 'تم الخصم' : 'لم يتم الخصم'}</Text>{item.client.phone && item.orderStatus === 'تم اختيار فني' ? <Button title={`اتصال بالعميل: ${item.client.phone}`} secondary onPress={() => Linking.openURL(`tel:${item.client.phone}`)} /> : null}</View> : null}<View style={styles.roleActions}><Button title={orderChats[getOrderSN(item)]?.open ? 'إخفاء المحادثة' : 'محادثة الطلب'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
+                 <Text style={styles.detail}>{item.message || ''}</Text>{item.client && ['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus) ? <View style={styles.offerCard}><Text style={styles.cardTitle}>تفاصيل العميل والطلب</Text><Text style={styles.detail}>اسم العميل: {item.client.name || '—'}</Text><Text style={styles.detail}>المنطقة: {item.client.area || '—'}</Text><Text style={styles.detail}>العنوان بالتفصيل: {item.client.address || '—'}</Text><Text style={styles.detail}>تفاصيل المطلوب: {item.client.description || '—'}</Text><Text style={styles.detail}>ميزانية العميل: {item.client.budget || 'غير محددة'}</Text><Text style={styles.detail}>السعر المتفق عليه: {item.client.acceptedOfferPrice ?? item.price ?? '—'} جنيه</Text><Text style={styles.detail}>عمولة المنصة: {item.client.commissionAmount ?? '—'} جنيه</Text><Text style={styles.detail}>حالة العمولة: {item.client.commissionCharged ? 'تم الخصم' : 'لم يتم الخصم'}</Text>{item.client.phone && item.orderStatus === 'تم اختيار فني' ? <Button title={`اتصال بالعميل: ${item.client.phone}`} secondary onPress={() => Linking.openURL(`tel:${item.client.phone}`)} /> : null}</View> : null}<View style={styles.roleActions}>{['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus || item.status) ? <Button title={orderChats[getOrderSN(item)]?.open ? 'إخفاء المحادثة' : 'محادثة الطلب'} secondary onPress={() => toggleOrderChat(item, 'fanni')} /> : null}{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
           {item.orderStatus !== 'تم اختيار فني' && item.orderStatus !== 'تم الانتهاء' ? <View style={styles.roleActions}><Text style={styles.detail}>رد سريع على استفسار العميل:</Text>{['نعم','لا','حسب الاتفاق'].map(reply=><Button key={reply} title={reply} secondary onPress={()=>sendOrderChat(item,reply)}/>)}</View> : null}
           {item.orderStatus === 'تم اختيار فني' ? <View style={styles.offerCard}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Field label="السعر الجديد بالجنيه" value={priceDrafts[getOrderSN(item)]?.price || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], price: value } }))} keyboardType="numeric" /><Field label="سبب التعديل" value={priceDrafts[getOrderSN(item)]?.reason || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], reason: value } }))} multiline /><Button title="إرسال طلب تعديل السعر" onPress={() => requestOrderPriceChange(item)} /></View> : null}
           {item.orderStatus === 'تم الانتهاء' && !ratingDrafts[getOrderSN(item)]?.submitted && !ratingDrafts[getOrderSN(item)]?.skipped && !dismissedRatings[getOrderSN(item)] ? (
@@ -1766,7 +1791,7 @@ function AppContent() {
               <Button title="حفظ تقييم العميل" onPress={() => submitOrderRating(item)} />
             </View>
           ) : null}
-          {orderChats[getOrderSN(item)]?.open ? (
+          {['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus || item.status) && orderChats[getOrderSN(item)]?.open ? (
             <View style={styles.chatPanel}>
               {orderChats[getOrderSN(item)]?.loading ? <ActivityIndicator color={COLORS.teal} /> : (
                 <View>
@@ -1784,7 +1809,7 @@ function AppContent() {
                       <Text style={styles.detail}>{request.reason}</Text>
                     </View>
                   ))}
-                  <Field label="ردك داخل المنصة" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value => setChatDrafts(current => ({ ...current, [getOrderSN(item)]: value }))} multiline />
+                  <Field label="ردك داخل المنصة" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value => setChatDrafts(current => ({ ...current, [getOrderSN(item)]: value }))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={() => sendOrderChat(item)} />
                   <View style={styles.roleActions}>
                     <Button title="إرسال الرسالة" onPress={() => sendOrderChat(item)} />
                     <Button title="تحديث المحادثة" secondary onPress={() => refreshOrderChat(item, 'fanni')} />
