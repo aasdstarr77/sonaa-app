@@ -573,10 +573,7 @@ function AppContent() {
       { text: 'قبول العرض', onPress: async () => {
         try {
           const result = await api(`/orders/${encodeURIComponent(sn)}/accept`, { method: 'POST', token: session.token, body: { offerId } });
-          const commission = result.commission?.amount;
-          Alert.alert('تم قبول العرض', commission !== undefined
-            ? `تم تأكيد اختيار الفني. عمولة المنصة: ${commission} جنيه.`
-            : 'تم إرسال تأكيدك إلى النظام.');
+          Alert.alert('تم قبول العرض', 'تم تأكيد اختيار الفني بنجاح.');
           setReloadKey(v => v + 1);
         }
         catch (err) { Alert.alert('تعذر قبول العرض', err.message || 'حاول مرة أخرى.'); }
@@ -590,7 +587,14 @@ function AppContent() {
     Alert.alert('تأكيد إنهاء الخدمة', `هل انتهيت من تنفيذ الطلب ${sn}؟`, [
       { text: 'رجوع', style: 'cancel' },
       { text: 'إنهاء الخدمة', onPress: async () => {
-        try { await api(`/orders/${encodeURIComponent(sn)}/complete`, { method: 'POST', token: session.token, body: {} }); Alert.alert('تم', 'تم تسجيل إنهاء الخدمة.'); setReloadKey(v => v + 1); }
+        try {
+          await api(`/orders/${encodeURIComponent(sn)}/complete`, { method: 'POST', token: session.token, body: {} });
+          setRatingDrafts(current => ({ ...current, [sn]: { stars: '5', comment: '', blockFuture: false } }));
+          setTechData(current => ({ ...current, tab: 'completed' }));
+          setExpandedTechnicianOrders(current => ({ ...current, [sn]: true }));
+          Alert.alert('تم', 'تم تسجيل إنهاء الخدمة. قيّم العميل الآن من قسم الطلبات المكتملة.');
+          setReloadKey(v => v + 1);
+        }
         catch (err) { Alert.alert('تعذر إنهاء الخدمة', err.message || 'حاول مرة أخرى.'); }
       } },
     ]);
@@ -1168,7 +1172,7 @@ function AppContent() {
             {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitle}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCard}><Text style={styles.cardTitle}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Text style={styles.detail}>استفسار سريع قبل قبول العرض:</Text><View style={styles.roleActions}>{['هل السعر شامل؟','متى تقدر تيجي؟','هل في تكلفة إضافية؟'].map(question=><Button key={question} title={question} secondary onPress={()=>sendOrderChat({...order,_id:offer._id||offer.id},question)}/>)}</View><Button title="قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
             <View style={styles.roleActions}><Button title={orderChats[sn]?.open?'إخفاء المحادثة':'فتح المحادثة'} secondary onPress={()=>toggleOrderChat(order,'client')}/>{order.status==='تم الانتهاء'&&!rating?.submitted?<Button title="تقييم الفني" onPress={()=>setRatingDrafts(current=>({...current,[sn]:{stars:'5',comment:'',blockFuture:false}}))}/>:null}</View>
             {order.status==='تم الانتهاء'&&rating&&!rating.submitted?<View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم الفني</Text><View style={styles.roleActions}>{[1,2,3,4,5].map(stars=><Button key={stars} title={'★'.repeat(stars)} secondary={Number(rating.stars)!==stars} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],stars:String(stars),blockFuture:stars===1?current[sn]?.blockFuture:false}}))}/>)}</View><Field label="تعليق (اختياري)" value={rating.comment||''} onChangeText={value=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],comment:value}}))} multiline/>{Number(rating.stars)===1?<TouchableOpacity style={styles.inlineCheck} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],blockFuture:!current[sn]?.blockFuture}}))}><Text style={styles.detail}>{rating.blockFuture?'☑':'☐'} عدم التعامل مع الفني مستقبلًا</Text></TouchableOpacity>:null}<Button title="حفظ التقييم" onPress={()=>submitOrderRating(order)}/></View>:null}
-            {orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={styles.chatMessage}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
+            {orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
           </> : null}
         </View>;
       })) : null}
@@ -1208,6 +1212,7 @@ function AppContent() {
                {expanded ? <>
                  <Text style={styles.detail}>{item.area || ''}</Text>
                  <Text style={styles.detail}>{item.description || item.desc || 'لا توجد تفاصيل إضافية.'}</Text>
+                 <Text style={styles.detail}>ميزانية العميل: {item.budget || 'غير محددة'}</Text>
                  <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
                </> : null}
              </View>;
@@ -1257,7 +1262,7 @@ function AppContent() {
                 <View>
                   {orderChats[getOrderSN(item)]?.error ? <Text style={styles.errorText}>{orderChats[getOrderSN(item)].error}</Text> : null}
                   {(orderChats[getOrderSN(item)]?.messages || []).map((message, index) => (
-                    <View key={String(message._id || index)} style={styles.chatMessage}>
+                    <View key={String(message._id || index)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}>
                       <Text style={styles.detail}>{message.senderRole === 'client' ? 'العميل' : 'الفني'} • {dateLabel(message.createdAt)}</Text>
                       <Text style={styles.chatMessageText}>{message.text}</Text>
                     </View>
@@ -1513,6 +1518,8 @@ const styles = StyleSheet.create({
   roleActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: 7, marginTop: 8 },
   chatPanel: { backgroundColor: '#F3F7FD', borderWidth: 1, borderColor: '#D8E4F3', borderRadius: 18, padding: 12, marginTop: 11, shadowColor: COLORS.navy, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   chatMessage: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 8, marginVertical: 4 },
+  chatMessageClient: { backgroundColor: '#E8F1FF', borderColor: '#93C5FD', alignSelf: 'flex-start', maxWidth: '92%' },
+  chatMessageTechnician: { backgroundColor: '#E6FFFB', borderColor: '#5EEAD4', alignSelf: 'flex-end', maxWidth: '92%' },
   chatMessageText: { color: COLORS.text, textAlign: 'right', lineHeight: 21, marginTop: 4 },
   priceRequest: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 10, marginVertical: 6 },
   inlineCheck: { paddingVertical: 8 },
