@@ -151,6 +151,7 @@ function AppContent() {
   const [supportLoading, setSupportLoading] = useState(false);
   const [supportError, setSupportError] = useState('');
   const [accountPasswordForm, setAccountPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
+  const [recoveryForm, setRecoveryForm] = useState({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
   const [adminSupportCases, setAdminSupportCases] = useState([]);
   const [adminSupportSelected, setAdminSupportSelected] = useState(null);
   const [adminSupportDraft, setAdminSupportDraft] = useState('');
@@ -1085,6 +1086,60 @@ function AppContent() {
     }
   }
 
+  async function startPasswordRecovery() {
+    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
+    try {
+      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
+      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
+  }
+
+  async function refreshPasswordRecovery() {
+    if (!recoveryForm.id || !recoveryForm.token) return;
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
+      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
+    } catch (_) {}
+  }
+
+  async function sendRecoveryMessage() {
+    const text = recoveryForm.text.trim();
+    if (!text) return;
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
+      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
+      await refreshPasswordRecovery();
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
+  }
+
+  async function verifyRecoveryCode() {
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
+      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
+  }
+
+  async function resetRecoveredPassword() {
+    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
+      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
+      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
+      setScreen('login');
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
+  }
+
+  useEffect(() => {
+    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
+    const timer = setInterval(refreshPasswordRecovery, 3000);
+    return () => clearInterval(timer);
+  }, [screen, recoveryForm.id, recoveryForm.token]);
+
   async function adminRefreshExtras() { setReloadKey(v => v + 1); }
   async function adminAddService() {
     const name = adminServiceDraft.name.trim(), category = adminServiceDraft.category.trim();
@@ -1293,6 +1348,7 @@ function AppContent() {
       </View>
       <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
       <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" />
+      <TouchableOpacity onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }}><Text style={styles.detail}>نسيت كلمة المرور؟ تواصل مع الدعم</Text></TouchableOpacity>
       <Button title={loginLoading ? 'جاري الدخول...' : authMode === 'client' ? 'دخول العميل' : 'دخول الفني'} onPress={handleLogin} disabled={loginLoading} />
       {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
       {authMode === 'fanni' && <Button title="تسجيل فني جديد" secondary onPress={() => setScreen('technicianRegister')} />}
@@ -1300,6 +1356,8 @@ function AppContent() {
   </SafeAreaView>;
 
   if (screen === 'account') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} /><Text style={styles.title}>حسابي</Text><Text style={styles.sectionTitle}>تغيير كلمة المرور</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
+  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيقوم الدعم بالتحقق من ملكية الحساب ثم إرسال رمز مؤقت داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
   if (screen === 'clientRegister' || screen === 'technicianRegister') {
     const isClient = screen === 'clientRegister';
