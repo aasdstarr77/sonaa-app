@@ -166,7 +166,7 @@ function AppContent() {
   // between login/session restoration responses, but the account phone stays stable.
   const ratingAccountId = String(
     session?.user?.phone || session?.user?._id || session?.user?.id || 'account'
-  ).trim().replace(/\\s+/g, '');
+  ).trim().replace(/\s+/g, '');
   const ratingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
   // Keep reading/writing the old key too, so previously skipped prompts stay skipped.
   const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
