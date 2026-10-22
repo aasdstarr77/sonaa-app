@@ -1,7 +1,7 @@
 name: Build APK Final
 on:
   push:
-    branches: [ main ]
+    branches: [ main, review/ratings-logo-sync-20261022 ]
   workflow_dispatch:
 jobs:
   build:
@@ -20,24 +20,19 @@ jobs:
       - name: Generate branded icons
         run: |
           mkdir -p assets
-          python3 -m pip install --quiet Pillow
+          python3 -m pip install --quiet Pillow CairoSVG
           python3 - <<'PY'
-          from PIL import Image, ImageDraw, ImageFont
+          from PIL import Image
+          import cairosvg
           from pathlib import Path
           out = Path("assets")
-          size = 1024
-          font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 500)
-          icon = Image.new("RGB", (size, size), "#F8FAFC")
-          ImageDraw.Draw(icon).ellipse((140,140,884,884), outline="#14B8A6", width=34)
-          ImageDraw.Draw(icon).text((512,480), "ص", font=font, fill="#0F172A", anchor="mm")
-          icon.save(out / "icon.png")
-          fg = Image.new("RGBA", (size,size), (0,0,0,0))
-          d=ImageDraw.Draw(fg)
-          d.ellipse((165,165,859,859), outline="#14B8A6", width=34)
-          d.text((512,480), "ص", font=font, fill="#0F172A", anchor="mm")
-          fg.save(out / "adaptive-icon.png")
-          fg.save(out / "splash-icon.png")
-          Image.new("RGB", (size,size), "#F8FAFC").save(out / "splash.png")
+          svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><circle cx="256" cy="256" r="231" fill="#fff" stroke="#1EB5A6" stroke-width="26"/><path d="M350 115c-29-23-65-35-108-35-75 0-125 39-125 98 0 51 37 77 105 96l47 13c37 10 51 22 51 43 0 27-28 44-72 44-43 0-79-14-111-42l-44 57c38 34 92 53 155 53 88 0 146-43 146-111 0-52-32-81-103-101l-52-15c-34-10-48-20-48-39 0-21 22-35 55-35 29 0 55 8 79 25z" fill="#0A2342"/><g fill="#0A2342" stroke="#0A2342" stroke-linecap="round" stroke-linejoin="round"><path d="M291 109l24-18 44 59-24 18z"/><path d="M274 84l37-28 39 51-37 28z"/><path d="M263 73l27-20 16 22-27 20z"/><path d="M180 345l-31 31 29 29 31-31 18 18-31 31c-8 8-20 8-28 0l-38-38c-8-8-8-20 0-28l31-31z"/><path d="M192 333l17-17 48 48-17 17z"/></g></svg>"""
+          logo = out / "sonaa-logo.svg"
+          logo.write_text(svg, encoding="utf-8")
+          cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(out / "icon.png"), output_width=1024, output_height=1024)
+          cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(out / "adaptive-icon.png"), output_width=1024, output_height=1024)
+          cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=str(out / "splash-icon.png"), output_width=1024, output_height=1024)
+          Image.new("RGB", (1024,1024), "#F8FAFC").save(out / "splash.png")
           PY
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean
