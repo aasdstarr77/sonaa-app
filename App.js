@@ -950,8 +950,17 @@ function AppContent() {
       await saveRatingDismissal(sn);
       setReloadKey(v => v + 1);
     } catch (err) {
+      // A 409 means the server already has this rating. Do not reopen the prompt:
+      // mark it dismissed locally and reload the order so the saved rating is reflected.
+      if (err?.status === 409) {
+        setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
+        await saveRatingDismissal(sn);
+        setReloadKey(v => v + 1);
+        Alert.alert('التقييم محفوظ بالفعل', 'سبق تسجيل تقييمك لهذه المهمة، ولن يظهر مربع التقييم مرة أخرى.');
+        return;
+      }
       if (activePrompt) setRatingPrompt(activePrompt);
-      Alert.alert('تعذر حفظ التقييم', err.message || 'قد يكون الطلب لم يكتمل أو سبق تقييمه.');
+      Alert.alert('تعذر حفظ التقييم', err.message || 'تعذر حفظ التقييم. حاول مرة أخرى.');
     }
   }
 
