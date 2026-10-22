@@ -298,9 +298,32 @@ function AppContent() {
 
   useEffect(() => {
     if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
-    const timer = setInterval(() => { if (screenRef.current === 'admin') loadAdminSupportCases(); }, 3000);
-    return () => clearInterval(timer);
-  }, [screen, adminData.tab, session?.token]);
+    let active = true, busy = false;
+    const supportId = adminSupportSelected?._id;
+    const recoveryId = adminRecoverySelected?.id || adminRecoverySelected?._id;
+    const refreshAllSupportChats = async () => {
+      if (!active || busy || screenRef.current !== 'admin') return;
+      busy = true;
+      try {
+        await loadAdminSupportCases();
+        if (supportId) {
+          try {
+            const result = await api('/support/admin/' + encodeURIComponent(supportId), { token: session.token });
+            if (active && result.supportCase) setAdminSupportSelected(result.supportCase);
+          } catch (_) {}
+        }
+        if (recoveryId) {
+          try {
+            const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(recoveryId), { token: session.token });
+            if (active && result.recovery) setAdminRecoverySelected(result.recovery);
+          } catch (_) {}
+        }
+      } finally { busy = false; }
+    };
+    refreshAllSupportChats();
+    const timer = setInterval(refreshAllSupportChats, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, [screen, adminData.tab, session?.token, adminSupportSelected?._id, adminRecoverySelected?.id, adminRecoverySelected?._id]);
 
   useEffect(() => {
     if (!session || screen !== 'admin' || session.role !== 'admin' || session.user?.role !== 'admin') return;
