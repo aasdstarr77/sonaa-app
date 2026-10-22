@@ -420,8 +420,9 @@ function AppContent() {
     if (!session || session.role !== 'client' || screen !== 'client' || !ratingDismissalsLoaded || ratingPrompt) return;
     const completedOrder = clientData.orders.find(order => {
       const sn = getOrderSN(order);
-      const alreadyRated = Boolean(order.myRating || order.clientRating || (order.ratings || []).some(item => item.reviewerRole === 'client'));
-      return sn && order.status === 'تم الانتهاء' && !dismissedRatings[sn] && !alreadyRated;
+      const alreadyRated = Boolean(order.myRating || order.clientRating || order.ratingByClient || order.clientReview || (order.ratings || []).some(item => ['client', 'customer'].includes(String(item.reviewerRole || item.role || '').toLowerCase())));
+      const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(order.status || order.orderStatus || '').trim().toLowerCase());
+      return sn && completed && !dismissedRatings[sn] && !alreadyRated;
     });
     if (!completedOrder) return;
     const sn = getOrderSN(completedOrder);
@@ -433,8 +434,9 @@ function AppContent() {
     if (!session || session.role !== 'fanni' || screen !== 'technician' || !ratingDismissalsLoaded || ratingPrompt) return;
     const completedOffer = techData.offers.find(item => {
       const sn = getOrderSN(item);
-      const alreadyRated = Boolean(item.myRating || item.fanniRating || (item.ratings || []).some(rating => rating.reviewerRole === 'fanni'));
-      return sn && item.orderStatus === 'تم الانتهاء' && !dismissedRatings[sn] && !alreadyRated;
+      const alreadyRated = Boolean(item.myRating || item.fanniRating || item.ratingByFanni || item.technicianReview || (item.ratings || []).some(rating => ['fanni', 'technician'].includes(String(rating.reviewerRole || rating.role || '').toLowerCase())));
+      const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.orderStatus || item.status || '').trim().toLowerCase());
+      return sn && completed && !dismissedRatings[sn] && !alreadyRated;
     });
     if (!completedOffer) return;
     const sn = getOrderSN(completedOffer);
@@ -1495,7 +1497,45 @@ function AppContent() {
     </KeyboardAvoidingView>
   </SafeAreaView>;
 
-  if (screen === 'account') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} /><Text style={styles.title}>حسابي</Text><Text style={styles.sectionTitle}>تغيير كلمة المرور</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+  if (screen === 'account') {
+    const isClientAccount = session?.role === 'client';
+    const history = isClientAccount ? clientData.orders : session?.role === 'fanni' ? techData.offers : [];
+    const completedHistory = (history || []).filter(item => ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.status || item.orderStatus || '').trim().toLowerCase()));
+    return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
+      <Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} />
+      <Text style={styles.title}>حسابي</Text>
+      <View style={styles.dataCard}>
+        <Text style={styles.sectionTitle}>بيانات الحساب</Text>
+        <Text style={styles.detail}>الاسم: {session?.user?.name || '—'}</Text>
+        <Text style={styles.detail}>رقم الهاتف: {session?.user?.phone || '—'}</Text>
+        <Text style={styles.detail}>نوع الحساب: {isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text>
+        {session?.user?.status ? <Text style={styles.detail}>حالة الحساب: {session.user.status}</Text> : null}
+        {session?.role === 'fanni' && Array.isArray(session?.user?.specialties) ? <Text style={styles.detail}>الخدمات والمهن: {session.user.specialties.join('، ') || '—'}</Text> : null}
+        {session?.role === 'fanni' && Array.isArray(session?.user?.areas) ? <Text style={styles.detail}>مناطق العمل: {session.user.areas.join('، ') || '—'}</Text> : null}
+        {session?.role === 'fanni' && session?.user?.level ? <Text style={styles.detail}>المستوى المهني: {session.user.level}</Text> : null}
+        {session?.role === 'fanni' && session?.user?.walletBalance != null ? <Text style={styles.detail}>الرصيد: {String(session.user.walletBalance)}</Text> : null}
+        {session?.user?.adminRole ? <Text style={styles.detail}>المنصب الإداري: {session.user.adminRole}</Text> : null}
+      </View>
+      <Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} />
+      {['client', 'fanni'].includes(session?.role) ? <>
+        <Text style={styles.sectionTitle}>سجل الخدمات والتقييمات</Text>
+        <Text style={styles.detail}>التقييم التلقائي يظهر مرة واحدة فقط. لو تخطّيته، تقدر ترجع هنا وتقيّم العملية يدويًا.</Text>
+        {completedHistory.length ? completedHistory.map((item, index) => {
+          const sn = getOrderSN(item);
+          const alreadyRated = Boolean(item.myRating || item.clientRating || item.fanniRating || item.ratingByClient || item.ratingByFanni || (item.ratings || []).some(r => r.reviewerRole === session.role));
+          const rating = item.myRating || item.clientRating || item.fanniRating || {};
+          return <View key={sn || index} style={styles.dataCard}>
+            <Text style={styles.detail}>رقم العملية: {sn || '—'}</Text>
+            <Text style={styles.detail}>الخدمة: {item.service || item.serviceName || item.title || 'خدمة'}</Text>
+            <Text style={styles.detail}>{alreadyRated ? 'التقييم: ' + ('★'.repeat(Math.max(0, Math.min(5, Number(rating.stars || rating.rating) || 0))) + ' ' + String(rating.stars || rating.rating || 'تم التقييم')) : 'لم يتم التقييم'}</Text>
+            {!alreadyRated ? <Button title="تقييم العملية يدويًا" secondary onPress={() => { setScreen(session.role === 'client' ? 'client' : 'technician'); setRatingPrompt({ role: session.role, order: item }); }} /> : null}
+          </View>;
+        }) : <Text style={styles.detail}>لا توجد عمليات مكتملة لعرضها حاليًا.</Text>}
+      </> : null}
+    </ScrollView></SafeAreaView>;
+  }
+
+  if (screen === 'changePassword') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع إلى حسابي" secondary onPress={() => setScreen('account')} /><Text style={styles.title}>تغيير كلمة المرور</Text><Text style={styles.detail}>اكتب كلمة المرور الحالية ثم كلمة المرور الجديدة.</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
   if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيقوم الدعم بالتحقق من ملكية الحساب ثم إرسال رمز مؤقت داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
