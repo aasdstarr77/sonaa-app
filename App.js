@@ -152,7 +152,6 @@ function AppContent() {
   const [supportError, setSupportError] = useState('');
   const [accountPasswordForm, setAccountPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
   const [recoveryForm, setRecoveryForm] = useState({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
-  const [recoveryForm, setRecoveryForm] = useState({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
   const [adminSupportCases, setAdminSupportCases] = useState([]);
   const [adminSupportSelected, setAdminSupportSelected] = useState(null);
   const [adminSupportDraft, setAdminSupportDraft] = useState('');
