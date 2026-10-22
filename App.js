@@ -35,7 +35,11 @@ async function api(path, options = {}) {
     throw new Error('تعذر الاتصال بالإنترنت أو بالخادم. تأكد من الاتصال ثم أعد المحاولة.');
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || data.error || `خطأ من الخادم (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || `خطأ من الخادم (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
@@ -169,13 +173,12 @@ function AppContent() {
           saved = { token: saved.token, user, role: saved.role };
           await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(saved));
         } catch (error) {
-          // A temporary network outage must not erase a valid saved session.
-          if (String(error?.message || '').includes('تعذر الاتصال بالإنترنت')) {
-            if (!saved.user) throw error;
-          } else {
+          // Clear only rejected sessions. Network/server errors should not sign users out.
+          if (error?.status === 401 || error?.status === 403) {
             await SecureStore.deleteItemAsync('sonaa.auth.session.v1');
             return;
           }
+          if (!saved.user) throw error;
         }
         if (!mounted) return;
         setSession(saved);
