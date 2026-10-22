@@ -156,6 +156,10 @@ function AppContent() {
   const [adminSupportCases, setAdminSupportCases] = useState([]);
   const [adminSupportSelected, setAdminSupportSelected] = useState(null);
   const [adminSupportDraft, setAdminSupportDraft] = useState('');
+  const [adminRecoveryCases, setAdminRecoveryCases] = useState([]);
+  const [adminRecoverySelected, setAdminRecoverySelected] = useState(null);
+  const [adminRecoveryCode, setAdminRecoveryCode] = useState('');
+  const [adminRecoveryDraft, setAdminRecoveryDraft] = useState('');
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -1043,7 +1047,53 @@ function AppContent() {
     try {
       const result = await api('/support/admin', { token: session.token });
       setAdminSupportCases(toList(result, ['supportCases', 'items']));
+      await loadAdminRecoveryCases();
     } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
+  }
+
+  async function loadAdminRecoveryCases() {
+    if (!session || session.role !== 'admin') return;
+    try {
+      const result = await api('/password-recovery/admin/requests', { token: session.token });
+      setAdminRecoveryCases(toList(result, ['recoveries', 'items']));
+    } catch (err) { setAdminRecoveryCases([]); }
+  }
+
+  async function openAdminRecovery(item) {
+    try {
+      const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(item.id || item._id), { token: session.token });
+      setAdminRecoverySelected(result.recovery || item);
+      setAdminRecoveryCode('');
+      setAdminRecoveryDraft('');
+    } catch (err) { Alert.alert('طلب الاستعادة', err.message || 'تعذر فتح الطلب.'); }
+  }
+
+  async function issueAdminRecoveryCode() {
+    if (!adminRecoverySelected) return;
+    Alert.alert('تأكيد التحقق', 'لا تصدر الرمز إلا بعد التأكد من ملكية الحساب عبر أسئلة الدعم.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'تم التحقق', onPress: async () => {
+        try {
+          const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(adminRecoverySelected.id || adminRecoverySelected._id) + '/issue-code', { method: 'POST', token: session.token, body: {} });
+          setAdminRecoverySelected(result.recovery);
+          setAdminRecoveryCode(String(result.code || ''));
+          await loadAdminRecoveryCases();
+        } catch (err) { Alert.alert('تعذر إصدار الرمز', err.message || 'حاول مرة أخرى.'); }
+      } }
+    ]);
+  }
+
+  async function replyAdminRecovery() {
+    const text = adminRecoveryDraft.trim();
+    if (!adminRecoverySelected || !text) { Alert.alert('رد الدعم', 'اكتب الرد أولًا.'); return; }
+    try {
+      const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(adminRecoverySelected.id || adminRecoverySelected._id) + '/reply', { method: 'POST', token: session.token, body: { text } });
+      setAdminRecoverySelected(result.recovery);
+      setAdminRecoveryDraft('');
+      setAdminRecoveryCode('');
+      await loadAdminRecoveryCases();
+      Alert.alert('تم إرسال الرد', 'تم إرسال الرسالة داخل محادثة استعادة الحساب.');
+    } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
   }
 
   async function replyAdminSupport(item) {
