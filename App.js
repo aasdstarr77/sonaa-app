@@ -150,9 +150,16 @@ function AppContent() {
   const [supportSubject, setSupportSubject] = useState('استفسار عام');
   const [supportLoading, setSupportLoading] = useState(false);
   const [supportError, setSupportError] = useState('');
+  const [accountPasswordForm, setAccountPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
+  const [recoveryForm, setRecoveryForm] = useState({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
+  const [recoveryForm, setRecoveryForm] = useState({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
   const [adminSupportCases, setAdminSupportCases] = useState([]);
   const [adminSupportSelected, setAdminSupportSelected] = useState(null);
   const [adminSupportDraft, setAdminSupportDraft] = useState('');
+  const [adminRecoveryCases, setAdminRecoveryCases] = useState([]);
+  const [adminRecoverySelected, setAdminRecoverySelected] = useState(null);
+  const [adminRecoveryCode, setAdminRecoveryCode] = useState('');
+  const [adminRecoveryDraft, setAdminRecoveryDraft] = useState('');
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
@@ -273,8 +280,28 @@ function AppContent() {
   }, [reloadKey, screen]);
 
   useEffect(() => {
-    if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) loadSupportCases();
-  }, [screen, session?.token]);
+    if (screen !== 'support' || !session || !['client', 'fanni'].includes(session.role)) return;
+    let active = true;
+    const refreshSupport = async () => {
+      if (!active || screenRef.current !== 'support') return;
+      await loadSupportCases();
+      if (supportCase?._id) {
+        try {
+          const result = await api('/support/' + session.role + '/' + encodeURIComponent(supportCase._id), { token: session.token });
+          if (active && result.supportCase) setSupportCase(result.supportCase);
+        } catch (_) {}
+      }
+    };
+    refreshSupport();
+    const timer = setInterval(refreshSupport, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, [screen, session?.token, supportCase?._id]);
+
+  useEffect(() => {
+    if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
+    const timer = setInterval(() => { if (screenRef.current === 'admin') loadAdminSupportCases(); }, 3000);
+    return () => clearInterval(timer);
+  }, [screen, adminData.tab, session?.token]);
 
   useEffect(() => {
     if (!session || screen !== 'admin' || session.role !== 'admin' || session.user?.role !== 'admin') return;
@@ -1040,7 +1067,53 @@ function AppContent() {
     try {
       const result = await api('/support/admin', { token: session.token });
       setAdminSupportCases(toList(result, ['supportCases', 'items']));
+      await loadAdminRecoveryCases();
     } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
+  }
+
+  async function loadAdminRecoveryCases() {
+    if (!session || session.role !== 'admin') return;
+    try {
+      const result = await api('/password-recovery/admin/requests', { token: session.token });
+      setAdminRecoveryCases(toList(result, ['recoveries', 'items']));
+    } catch (err) { setAdminRecoveryCases([]); }
+  }
+
+  async function openAdminRecovery(item) {
+    try {
+      const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(item.id || item._id), { token: session.token });
+      setAdminRecoverySelected(result.recovery || item);
+      setAdminRecoveryCode('');
+      setAdminRecoveryDraft('');
+    } catch (err) { Alert.alert('طلب الاستعادة', err.message || 'تعذر فتح الطلب.'); }
+  }
+
+  async function issueAdminRecoveryCode() {
+    if (!adminRecoverySelected) return;
+    Alert.alert('تأكيد التحقق', 'لا تصدر الرمز إلا بعد التأكد من ملكية الحساب عبر أسئلة الدعم.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'تم التحقق', onPress: async () => {
+        try {
+          const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(adminRecoverySelected.id || adminRecoverySelected._id) + '/issue-code', { method: 'POST', token: session.token, body: {} });
+          setAdminRecoverySelected(result.recovery);
+          setAdminRecoveryCode(String(result.code || ''));
+          await loadAdminRecoveryCases();
+        } catch (err) { Alert.alert('تعذر إصدار الرمز', err.message || 'حاول مرة أخرى.'); }
+      } }
+    ]);
+  }
+
+  async function replyAdminRecovery() {
+    const text = adminRecoveryDraft.trim();
+    if (!adminRecoverySelected || !text) { Alert.alert('رد الدعم', 'اكتب الرد أولًا.'); return; }
+    try {
+      const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(adminRecoverySelected.id || adminRecoverySelected._id) + '/reply', { method: 'POST', token: session.token, body: { text } });
+      setAdminRecoverySelected(result.recovery);
+      setAdminRecoveryDraft('');
+      setAdminRecoveryCode('');
+      await loadAdminRecoveryCases();
+      Alert.alert('تم إرسال الرد', 'تم إرسال الرسالة داخل محادثة استعادة الحساب.');
+    } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
   }
 
   async function replyAdminSupport(item) {
@@ -1057,6 +1130,155 @@ function AppContent() {
       Alert.alert('تم إرسال الرد', 'تم حفظ ردك داخل محادثة الدعم.');
     } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
   }
+
+  useEffect(() => {
+    if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
+    const timer = setInterval(async () => {
+      if (screenRef.current !== 'admin') return;
+      if (adminSupportSelected?._id) {
+        try {
+          const result = await api('/support/admin/' + encodeURIComponent(adminSupportSelected._id), { token: session.token });
+          if (result.supportCase) setAdminSupportSelected(result.supportCase);
+        } catch (_) {}
+      }
+      if (adminRecoverySelected?.id || adminRecoverySelected?._id) {
+        try {
+          const id = adminRecoverySelected.id || adminRecoverySelected._id;
+          const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(id), { token: session.token });
+          if (result.recovery) setAdminRecoverySelected(result.recovery);
+        } catch (_) {}
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [screen, adminData.tab, session?.token, adminSupportSelected?._id, adminRecoverySelected?.id, adminRecoverySelected?._id]);
+
+  async function changeAccountPassword() {
+    if (!session) return;
+    const currentPassword = accountPasswordForm.currentPassword;
+    const newPassword = accountPasswordForm.newPassword;
+    const confirmPassword = accountPasswordForm.confirmPassword;
+    if (!currentPassword || newPassword.length < 8 || newPassword !== confirmPassword) {
+      setAccountPasswordForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' }));
+      return;
+    }
+    setAccountPasswordForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const role = session.role === 'client' ? 'client' : ((session.user?.role === 'admin' || session.user?.adminRole) ? 'admin' : 'fanni');
+      const result = await api('/password-recovery/change/' + role, { method: 'POST', token: session.token, body: { currentPassword, newPassword, confirmPassword } });
+      setAccountPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
+      Alert.alert('حسابي', result.message || 'تم تغيير كلمة المرور.');
+    } catch (err) {
+      setAccountPasswordForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' }));
+    }
+  }
+
+  async function startPasswordRecovery() {
+    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
+    try {
+      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
+      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
+  }
+
+  async function refreshPasswordRecovery() {
+    if (!recoveryForm.id || !recoveryForm.token) return;
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
+      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
+    } catch (_) {}
+  }
+
+  async function sendRecoveryMessage() {
+    const text = recoveryForm.text.trim();
+    if (!text) return;
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
+      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
+      await refreshPasswordRecovery();
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
+  }
+
+  async function verifyRecoveryCode() {
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
+      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
+  }
+
+  async function resetRecoveredPassword() {
+    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
+      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
+      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
+      setScreen('login');
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
+  }
+
+  useEffect(() => {
+    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
+    const timer = setInterval(refreshPasswordRecovery, 3000);
+    return () => clearInterval(timer);
+  }, [screen, recoveryForm.id, recoveryForm.token]);
+
+  async function startPasswordRecovery() {
+    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
+    try {
+      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
+      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
+  }
+
+  async function refreshPasswordRecovery() {
+    if (!recoveryForm.id || !recoveryForm.token) return;
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
+      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
+    } catch (_) {}
+  }
+
+  async function sendRecoveryMessage() {
+    const text = recoveryForm.text.trim();
+    if (!text) return;
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
+      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
+      await refreshPasswordRecovery();
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
+  }
+
+  async function verifyRecoveryCode() {
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
+      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
+  }
+
+  async function resetRecoveredPassword() {
+    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
+      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
+      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
+      setScreen('login');
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
+  }
+
+  useEffect(() => {
+    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
+    const timer = setInterval(refreshPasswordRecovery, 3000);
+    return () => clearInterval(timer);
+  }, [screen, recoveryForm.id, recoveryForm.token]);
 
   async function adminRefreshExtras() { setReloadKey(v => v + 1); }
   async function adminAddService() {
@@ -1266,11 +1488,18 @@ function AppContent() {
       </View>
       <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
       <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" />
+      <TouchableOpacity onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }}><Text style={styles.detail}>نسيت كلمة المرور؟ تواصل مع الدعم</Text></TouchableOpacity>
       <Button title={loginLoading ? 'جاري الدخول...' : authMode === 'client' ? 'دخول العميل' : 'دخول الفني'} onPress={handleLogin} disabled={loginLoading} />
       {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
       {authMode === 'fanni' && <Button title="تسجيل فني جديد" secondary onPress={() => setScreen('technicianRegister')} />}
     </KeyboardAvoidingView>
   </SafeAreaView>;
+
+  if (screen === 'account') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} /><Text style={styles.title}>حسابي</Text><Text style={styles.sectionTitle}>تغيير كلمة المرور</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
+  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيقوم الدعم بالتحقق من ملكية الحساب ثم إرسال رمز مؤقت داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
+  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيتحقق الدعم من ملكية الحساب ثم يرسل رمزًا مؤقتًا داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
   if (screen === 'clientRegister' || screen === 'technicianRegister') {
     const isClient = screen === 'clientRegister';
@@ -1296,7 +1525,7 @@ function AppContent() {
 
   if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}>
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
       {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
         <Text style={styles.fieldLabel}>المهنة الرئيسية</Text>
@@ -1445,7 +1674,7 @@ function AppContent() {
           ) : null}
           </> : null}</View>; }} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على المحفظة فقط إلى الرقم التالي، ولا نقبل التحويل عبر إنستا باي.</Text><View style={styles.codeRow}><Text selectable style={styles.cardTitle}>01152822263</Text><Button title="نسخ الرقم" secondary onPress={()=>copyOrderCode('01152822263')}/></View><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Text style={styles.fieldLabel}>المحفظة التي حوّلت منها</Text><View style={styles.roleActions}>{[{value:'vodafone_cash',label:'فودافون كاش'},{value:'orange_cash',label:'أورنج كاش'},{value:'etisalat_cash',label:'اتصالات كاش'},{value:'we_pay',label:'وي باي'}].map(method=><Button key={method.value} title={method.label} secondary={topup.method!==method.value} onPress={()=>setTopup(t=>({...t,method:method.value}))}/>)}</View><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
-          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /></ScrollView>}
+          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><View style={styles.roleActions}><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /><Button title="تغيير كلمة المرور" onPress={() => setScreen('account')} /></View></ScrollView>}
           {tab === 'notifications' && <ScrollView contentContainerStyle={styles.page}><View style={styles.headerRow}><Text style={styles.sectionTitle}>إشعارات الفني</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>{notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={[styles.dataCard, !(item.read || item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title || 'إشعار'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</ScrollView>}
         </>}
       </View>
@@ -1504,7 +1733,7 @@ function AppContent() {
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
     const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'wallets', label: 'محافظ الفنيين' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : item.key === 'support' ? ` (${adminSupportCases.length})` : ''}</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
@@ -1559,6 +1788,9 @@ function AppContent() {
         </ScrollView> : tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'support' ? <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.sectionTitle}>حالات دعم صُنّاع</Text>
           <Text style={styles.detail}>الحالات التي تحتاج تدخلًا بشريًا تظهر أولًا. افتح الحالة لقراءة الرسائل والرد من داخل التطبيق.</Text>
+          <Text style={styles.sectionTitle}>طلبات استعادة كلمة المرور</Text>
+          {adminRecoveryCases.map(item => <TouchableOpacity key={String(item.id || item._id)} onPress={() => openAdminRecovery(item)} style={[styles.dataCard, adminRecoverySelected && String(adminRecoverySelected.id || adminRecoverySelected._id) === String(item.id || item._id) && { borderColor: COLORS.teal }]}><Text style={styles.cardTitle}>{item.accountName || 'حساب'} — {item.phone || ''}</Text><Text style={styles.detail}>{item.ownerRole === 'client' ? 'عميل' : item.ownerRole === 'admin' ? 'إدارة' : 'فني'} • {item.status || 'بانتظار الدعم'}</Text><Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text></TouchableOpacity>)}
+          {adminRecoverySelected ? <View style={styles.chatPanel}><Text style={styles.cardTitle}>محادثة استعادة كلمة المرور</Text>{(adminRecoverySelected.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}><Text style={styles.detail}>{message.senderRole === 'admin' ? 'الدعم' : 'المستخدم'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}<Text style={styles.detail}>تحقق من ملكية الحساب قبل إصدار الرمز.</Text><Button title="تأكيد التحقق وإصدار رمز" onPress={issueAdminRecoveryCode} />{adminRecoveryCode ? <View style={styles.dataCard}><Text style={styles.cardTitle}>رمز مؤقت — صالح 10 دقائق</Text><Text selectable style={styles.title}>{adminRecoveryCode}</Text><Button title="تجهيز إرسال الرمز في المحادثة" onPress={() => setAdminRecoveryDraft('رمز استعادة كلمة المرور: ' + adminRecoveryCode + ' — صالح لمدة 10 دقائق.')} /></View> : null}<Field label="رسالة الدعم" value={adminRecoveryDraft} onChangeText={setAdminRecoveryDraft} multiline placeholder="اكتب الرد أو جهز إرسال الرمز أعلاه..." /><View style={styles.roleActions}><Button title="إرسال الرد" onPress={replyAdminRecovery} /><Button title="تحديث الطلبات" secondary onPress={loadAdminRecoveryCases} /></View></View> : null}
           {adminSupportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => setAdminSupportSelected(item)} style={[styles.dataCard, adminSupportSelected?._id === item._id && { borderColor: COLORS.teal }]}>
             <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'} — {item.ownerName || (item.ownerRole === 'fanni' ? 'فني' : 'عميل')}</Text>
             <Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.ownerRole === 'fanni' ? 'فني' : 'عميل'}{item.needsHuman ? ' • يحتاج تدخلًا' : ''}</Text>
