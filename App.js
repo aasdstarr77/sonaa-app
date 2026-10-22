@@ -162,7 +162,14 @@ function AppContent() {
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
-  const ratingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
+  // Prefer the phone as the stable account identity: database IDs can differ
+  // between login/session restoration responses, but the account phone stays stable.
+  const ratingAccountId = String(
+    session?.user?.phone || session?.user?._id || session?.user?.id || 'account'
+  ).trim().replace(/\\s+/g, '');
+  const ratingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
+  // Keep reading/writing the old key too, so previously skipped prompts stay skipped.
+  const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
 
   useEffect(() => {
     let active = true;
@@ -172,15 +179,34 @@ function AppContent() {
       setRatingDismissalsLoaded(true);
       return () => { active = false; };
     }
-    SecureStore.getItemAsync(ratingStorageKey).then(raw => {
-      if (!active) return;
-      let saved = {};
-      try { saved = raw ? JSON.parse(raw) : {}; } catch (_) {}
-      setDismissedRatings(saved && typeof saved === 'object' ? saved : {});
-      setRatingDismissalsLoaded(true);
-    }).catch(() => { if (active) setRatingDismissalsLoaded(true); });
+    (async () => {
+      try {
+        const [currentRaw, legacyRaw] = await Promise.all([
+          SecureStore.getItemAsync(ratingStorageKey),
+          legacyRatingStorageKey === ratingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(legacyRatingStorageKey),
+        ]);
+        if (!active) return;
+        const parseDismissals = raw => {
+          try {
+            const parsed = raw ? JSON.parse(raw) : {};
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+          } catch (_) { return {}; }
+        };
+        const current = parseDismissals(currentRaw);
+        const legacy = parseDismissals(legacyRaw);
+        const saved = { ...legacy, ...current };
+        setDismissedRatings(saved);
+        if (!currentRaw && Object.keys(saved).length) {
+          await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(saved));
+        }
+      } catch (error) {
+        console.warn('تعذر استعادة حالات تخطي التقييم:', error?.message || error);
+      } finally {
+        if (active) setRatingDismissalsLoaded(true);
+      }
+    })();
     return () => { active = false; };
-  }, [ratingStorageKey, session?.role]);
+  }, [ratingStorageKey, legacyRatingStorageKey, session?.role, session?.user?._id, session?.user?.id, session?.user?.phone]);
 
   // Keep client/technician sessions across app restarts using encrypted device storage.
   useEffect(() => {
@@ -917,8 +943,15 @@ function AppContent() {
     if (!sn) return;
     const next = { ...dismissedRatings, [sn]: true };
     setDismissedRatings(next);
-    try { await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(next)); }
-    catch (error) { console.warn('تعذر حفظ حالة تخطي التقييم:', error?.message || error); }
+    try {
+      // Save under the stable key and the legacy key for backward compatibility.
+      await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(next));
+      if (legacyRatingStorageKey !== ratingStorageKey) {
+        await SecureStore.setItemAsync(legacyRatingStorageKey, JSON.stringify(next));
+      }
+    } catch (error) {
+      console.warn('تعذر حفظ حالة تخطي التقييم:', error?.message || error);
+    }
   }
 
   async function skipRatingPrompt() {
