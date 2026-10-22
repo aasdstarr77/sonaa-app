@@ -1510,6 +1510,10 @@ function AppContent() {
         <Text style={styles.detail}>رقم الهاتف: {session?.user?.phone || '—'}</Text>
         <Text style={styles.detail}>نوع الحساب: {isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text>
         {session?.user?.status ? <Text style={styles.detail}>حالة الحساب: {session.user.status}</Text> : null}
+        {session?.role === 'fanni' && Array.isArray(session?.user?.specialties) ? <Text style={styles.detail}>الخدمات والمهن: {session.user.specialties.join('، ') || '—'}</Text> : null}
+        {session?.role === 'fanni' && Array.isArray(session?.user?.areas) ? <Text style={styles.detail}>مناطق العمل: {session.user.areas.join('، ') || '—'}</Text> : null}
+        {session?.role === 'fanni' && session?.user?.level ? <Text style={styles.detail}>المستوى المهني: {session.user.level}</Text> : null}
+        {session?.role === 'fanni' && session?.user?.walletBalance != null ? <Text style={styles.detail}>الرصيد: {String(session.user.walletBalance)}</Text> : null}
         {session?.user?.adminRole ? <Text style={styles.detail}>المنصب الإداري: {session.user.adminRole}</Text> : null}
       </View>
       <Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} />
