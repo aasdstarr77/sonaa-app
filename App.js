@@ -102,14 +102,16 @@ function AppContent() {
   const [authMode, setAuthMode] = useState('fanni');
   const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', budget: '', specialties: [], areas: [] });
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
-  const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'available' });
+  const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
   const [technicianSearch, setTechnicianSearch] = useState('');
   const [technicianServiceFilter, setTechnicianServiceFilter] = useState('الكل');
   const [guidelinesChecked, setGuidelinesChecked] = useState(false);
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
-  const [clientTab, setClientTab] = useState('new');
+  const [clientTab, setClientTab] = useState('current');
   const [clientServiceSearch, setClientServiceSearch] = useState('');
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  const [subservicePickerOpen, setSubservicePickerOpen] = useState(false);
   const [clientTrackSN, setClientTrackSN] = useState('');
   const [clientTrackedOrder, setClientTrackedOrder] = useState(null);
   const [clientTrackError, setClientTrackError] = useState('');
@@ -238,9 +240,8 @@ function AppContent() {
         if (!mounted) return;
         setCategories(serviceResult.categories);
         setSelected(current => current && serviceResult.categories.some(item => item.label === current.label)
-          ? serviceResult.categories.find(item => item.label === current.label) : (serviceResult.categories[0] || null));
+          ? serviceResult.categories.find(item => item.label === current.label) : null);
         setAreas(toList(areaResult, ['areas']));
-        if (!form.service && serviceResult.categories[0]?.services?.[0]) updateForm('service', serviceResult.categories[0].services[0]);
       } catch (err) {
         if (mounted) { setServicesError(err.message || 'تعذر تحميل الخدمات'); setCategories([]); }
       } finally { if (mounted) setServicesLoading(false); }
@@ -543,6 +544,7 @@ function AppContent() {
       const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
+      setClientTab('current');
       setForm(current => ({ ...current, address: '', description: '', budget: '' }));
       setReloadKey(value => value + 1);
       Alert.alert('تم استلام الطلب', `كود المتابعة: ${result.sn || result.order?.sn || '—'}\nسيتم مراجعته من الإدارة.`);
@@ -777,7 +779,7 @@ function AppContent() {
         inFlight = false;
       }
     };
-    const timer = setInterval(pollOpenChats, 5000);
+    const timer = setInterval(pollOpenChats, 3000);
     return () => { mounted = false; clearInterval(timer); };
   }, [screen, session, clientData.orders, techData.offers]);
 
@@ -1104,7 +1106,7 @@ function AppContent() {
     setScreenState('home');
     setSession(null); setUsername(''); setPassword('');
     setClientData({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
-    setTechData({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'available' });
+    setTechData({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
     setAdminData({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
     setNotifications({ items: [], unread: 0, loading: false, error: '' });
     setAdminUsers([]);
@@ -1204,12 +1206,17 @@ function AppContent() {
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
       {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
-        <Text style={styles.fieldLabel}>الخدمة</Text>
-        <Text style={styles.fieldLabel}>الفئة</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>{categories.map(category => <TouchableOpacity key={category.label} onPress={() => setSelected(category)} style={[styles.pill, selected?.label === category.label && styles.pillActive]}><Text style={[styles.pillText, selected?.label === category.label && styles.pillTextActive]}>{category.emoji || '🛠️'} {category.label}</Text></TouchableOpacity>)}</ScrollView>
-        <Field label="ابحث عن خدمة أو قسم" value={clientServiceSearch} onChangeText={setClientServiceSearch} placeholder="اكتب اسم الخدمة أو القسم..." />
-        <Text style={styles.fieldLabel}>الخدمة</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>{(selected?.services || []).filter(service => !clientServiceSearch.trim() || service.toLowerCase().includes(clientServiceSearch.trim().toLowerCase())).map(service => <TouchableOpacity key={service} onPress={() => updateForm('service', service)} style={[styles.pill, form.service === service && styles.pillActive]}><Text style={[styles.pillText, form.service === service && styles.pillTextActive]}>{service}</Text></TouchableOpacity>)}</ScrollView>
+        <Text style={styles.fieldLabel}>المهنة الرئيسية</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={() => setServicePickerOpen(value => !value)} style={styles.dropdownButton}>
+          <Text style={styles.dropdownButtonText}>{selected?.label || 'اختر الخدمة المطلوبة'}</Text><Text style={styles.dropdownArrow}>{servicePickerOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {servicePickerOpen ? <View style={styles.dropdownOptions}>{categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{category.emoji || '🛠️'} {category.label}</Text></TouchableOpacity>)}</View> : null}
+        <Text style={styles.fieldLabel}>الخدمة التفصيلية</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={!selected} onPress={() => setSubservicePickerOpen(value => !value)} style={[styles.dropdownButton, !selected && styles.disabledButton]}>
+          <Text style={styles.dropdownButtonText}>{form.service || 'حدد نوع الخدمة بالضبط'}</Text><Text style={styles.dropdownArrow}>{subservicePickerOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {subservicePickerOpen && selected ? <View style={styles.dropdownOptions}>{(selected.services || []).filter(service => !clientServiceSearch.trim() || service.toLowerCase().includes(clientServiceSearch.trim().toLowerCase())).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{service}</Text></TouchableOpacity>)}</View> : null}
+        <Field label="ابحث عن خدمة تفصيلية (اختياري)" value={clientServiceSearch} onChangeText={setClientServiceSearch} placeholder="اكتب اسم الخدمة..." />
         <Field label="الحي أو المنطقة *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="اكتب الحي أو المنطقة بنفسك، مثال: المعادي" />
         <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
         <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
@@ -1590,6 +1597,12 @@ const styles = StyleSheet.create({
   pillTextActive: { color: COLORS.white },
   sectionTitle: { color: COLORS.navy, fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 12, marginBottom: 5 },
   selectionGroup: { backgroundColor: COLORS.white, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 5 },
+  dropdownButton: { minHeight: 50, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginVertical: 5 },
+  dropdownButtonText: { color: COLORS.text, textAlign: 'right', fontSize: 15, fontWeight: '700', flex: 1 },
+  dropdownArrow: { color: COLORS.navy, fontSize: 14, marginLeft: 10 },
+  dropdownOptions: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, marginBottom: 8, overflow: 'hidden' },
+  dropdownOption: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dropdownOptionText: { color: COLORS.text, textAlign: 'right', fontSize: 14 },
   categoryToggle: { paddingVertical: 5 },
   offerCard: { backgroundColor: '#F4F8FE', borderWidth: 1, borderColor: '#DCE6F3', borderRadius: 16, padding: 12, marginTop: 9, shadowColor: COLORS.navy, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
   groupTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginBottom: 5 },
