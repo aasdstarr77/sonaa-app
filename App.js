@@ -473,13 +473,13 @@ function AppContent() {
       const sn = getOrderSN(order);
       const alreadyRated = Boolean(order.myRating || order.clientRating || order.ratingByClient || order.clientReview || (order.ratings || []).some(item => ['client', 'customer'].includes(String(item.reviewerRole || item.role || '').toLowerCase())));
       const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(order.status || order.orderStatus || '').trim().toLowerCase());
-      return sn && completed && !dismissedRatings[sn] && !alreadyRated;
+      return sn && completed && !dismissedRatings[sn] && !ratingDrafts[sn]?.skipped && !alreadyRated;
     });
     if (!completedOrder) return;
     const sn = getOrderSN(completedOrder);
     setRatingDrafts(current => current[sn] ? current : { ...current, [sn]: { stars: '5', comment: '', blockFuture: false } });
     setRatingPrompt({ role: 'client', order: completedOrder });
-  }, [session, screen, clientData.orders, ratingDismissalsLoaded, dismissedRatings, ratingPrompt]);
+  }, [session, screen, clientData.orders, ratingDismissalsLoaded, dismissedRatings, ratingDrafts, ratingPrompt]);
 
   useEffect(() => {
     if (!session || session.role !== 'fanni' || screen !== 'technician' || !ratingDismissalsLoaded || ratingPrompt) return;
@@ -487,13 +487,13 @@ function AppContent() {
       const sn = getOrderSN(item);
       const alreadyRated = Boolean(item.myRating || item.fanniRating || item.ratingByFanni || item.technicianReview || (item.ratings || []).some(rating => ['fanni', 'technician'].includes(String(rating.reviewerRole || rating.role || '').toLowerCase())));
       const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.orderStatus || item.status || '').trim().toLowerCase());
-      return sn && completed && !dismissedRatings[sn] && !alreadyRated;
+      return sn && completed && !dismissedRatings[sn] && !ratingDrafts[sn]?.skipped && !alreadyRated;
     });
     if (!completedOffer) return;
     const sn = getOrderSN(completedOffer);
     setRatingDrafts(current => current[sn] ? current : { ...current, [sn]: { stars: '5', comment: '', blockFuture: false } });
     setRatingPrompt({ role: 'fanni', order: completedOffer });
-  }, [session, screen, techData.offers, ratingDismissalsLoaded, dismissedRatings, ratingPrompt]);
+  }, [session, screen, techData.offers, ratingDismissalsLoaded, dismissedRatings, ratingDrafts, ratingPrompt]);
 
   async function markNotificationRead(item) {
     const id = item?._id || item?.id;
@@ -966,9 +966,16 @@ function AppContent() {
 
   async function saveRatingDismissal(sn) {
     if (!sn) return;
-    const next = { ...dismissedRatings, [sn]: true };
-    setDismissedRatings(next);
+    // Update from the latest React state so dismissals for different orders cannot overwrite each other.
+    setDismissedRatings(current => ({ ...current, [sn]: true }));
     try {
+      const raw = await SecureStore.getItemAsync(ratingStorageKey);
+      let persisted = {};
+      try {
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) persisted = parsed;
+      } catch (_) {}
+      const next = { ...persisted, ...dismissedRatings, [sn]: true };
       // The role-only key survives logout/login even if the API returns a different user ID shape.
       await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(next));
       if (previousRatingStorageKey !== ratingStorageKey) {
