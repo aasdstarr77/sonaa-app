@@ -167,9 +167,10 @@ function AppContent() {
   const ratingAccountId = String(
     session?.user?.phone || session?.user?._id || session?.user?.id || 'account'
   ).trim().replace(/\s+/g, '');
-  const ratingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
+  const ratingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
   // Keep reading/writing the old key too, so previously skipped prompts stay skipped.
   const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
+  const previousRatingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
 
   useEffect(() => {
     let active = true;
@@ -181,9 +182,10 @@ function AppContent() {
     }
     (async () => {
       try {
-        const [currentRaw, legacyRaw] = await Promise.all([
+        const [currentRaw, previousRaw, legacyRaw] = await Promise.all([
           SecureStore.getItemAsync(ratingStorageKey),
-          legacyRatingStorageKey === ratingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(legacyRatingStorageKey),
+          previousRatingStorageKey === ratingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(previousRatingStorageKey),
+          legacyRatingStorageKey === ratingStorageKey || legacyRatingStorageKey === previousRatingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(legacyRatingStorageKey),
         ]);
         if (!active) return;
         const parseDismissals = raw => {
@@ -193,10 +195,11 @@ function AppContent() {
           } catch (_) { return {}; }
         };
         const current = parseDismissals(currentRaw);
+        const previous = parseDismissals(previousRaw);
         const legacy = parseDismissals(legacyRaw);
-        const saved = { ...legacy, ...current };
+        const saved = { ...legacy, ...previous, ...current };
         setDismissedRatings(saved);
-        if (!currentRaw && Object.keys(saved).length) {
+        if (Object.keys(saved).length && (!currentRaw || !previousRaw || !legacyRaw)) {
           await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(saved));
         }
       } catch (error) {
@@ -923,12 +926,22 @@ function AppContent() {
     }));
   }
 
+  function renderRatingStars(order, selectedStars) {
+    return <View style={styles.ratingStarsRow}>
+      {[1, 2, 3, 4, 5].map(value => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`تقييم ${value} من 5`} onPress={() => setOrderRatingStars(order, value)} style={styles.ratingStarButton}>
+        <Text style={[styles.ratingStar, selectedStars >= value && styles.ratingStarActive]}>★</Text>
+      </TouchableOpacity>)}
+    </View>;
+  }
+
   async function submitOrderRating(order) {
     const sn = getOrderSN(order), draft = ratingDrafts[getOrderSN(order)] || {};
     const stars = Number(draft.stars || 5), comment = String(draft.comment || '').trim(), blockFuture = Boolean(draft.blockFuture);
     if (!sn || !Number.isInteger(stars) || stars < 1 || stars > 5 || (blockFuture && stars !== 1)) {
       Alert.alert('راجع التقييم', 'اختار من نجمة إلى 5 نجوم. منع التعامل متاح مع تقييم نجمة واحدة فقط.'); return;
     }
+    const activePrompt = ratingPrompt && getOrderSN(ratingPrompt.order) === sn ? ratingPrompt : null;
+    if (activePrompt) setRatingPrompt(null);
     try {
       const result = await api(`/orders/${encodeURIComponent(sn)}/rating`, { method: 'POST', token: orderToken(session?.role || 'client'), body: { stars, comment, blockFuture } });
       Alert.alert('تم حفظ التقييم', result.message || 'تم حفظ تقييمك بنجاح.');
@@ -936,7 +949,10 @@ function AppContent() {
       setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
       await saveRatingDismissal(sn);
       setReloadKey(v => v + 1);
-    } catch (err) { Alert.alert('تعذر حفظ التقييم', err.message || 'قد يكون الطلب لم يكتمل أو سبق تقييمه.'); }
+    } catch (err) {
+      if (activePrompt) setRatingPrompt(activePrompt);
+      Alert.alert('تعذر حفظ التقييم', err.message || 'قد يكون الطلب لم يكتمل أو سبق تقييمه.');
+    }
   }
 
   async function saveRatingDismissal(sn) {
@@ -944,9 +960,12 @@ function AppContent() {
     const next = { ...dismissedRatings, [sn]: true };
     setDismissedRatings(next);
     try {
-      // Save under the stable key and the legacy key for backward compatibility.
+      // The role-only key survives logout/login even if the API returns a different user ID shape.
       await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(next));
-      if (legacyRatingStorageKey !== ratingStorageKey) {
+      if (previousRatingStorageKey !== ratingStorageKey) {
+        await SecureStore.setItemAsync(previousRatingStorageKey, JSON.stringify(next));
+      }
+      if (legacyRatingStorageKey !== ratingStorageKey && legacyRatingStorageKey !== previousRatingStorageKey) {
         await SecureStore.setItemAsync(legacyRatingStorageKey, JSON.stringify(next));
       }
     } catch (error) {
@@ -974,7 +993,7 @@ function AppContent() {
         <View style={styles.ratingModal}>
           <Text style={styles.title}>{role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text>
           <Text style={styles.detail}>المهمة {sn} انتهت. اختار تقييمك، والتعليق اختياري.</Text>
-          <View style={styles.roleActions}>{[1, 2, 3, 4, 5].map(value => <Button key={value} title={'★'.repeat(value)} secondary={stars !== value} onPress={() => setOrderRatingStars(order, value)} />)}</View>
+          {renderRatingStars(order, stars)}
           <Field label="تعليق (اختياري)" value={draft.comment || ''} onChangeText={value => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], comment: value } }))} multiline placeholder="اكتب ملاحظتك هنا..." />
           {stars === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], blockFuture: !current[sn]?.blockFuture } }))} style={styles.inlineCheck}>
             <Text style={styles.detail}>{draft.blockFuture ? '☑' : '☐'} {role === 'client' ? 'عدم استقبال عروض من الفني ده مرة تانية' : 'عدم إظهار طلبات العميل ده ليّ مرة تانية'}</Text>
@@ -1654,7 +1673,7 @@ function AppContent() {
             {!['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف','منتهي','منتهي - اعتذار'].includes(order.status) ? <Button title="إلغاء الطلب" secondary onPress={() => cancelClientOrder(order)} /> : null}
             {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitle}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCard}><Text style={styles.cardTitle}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Text style={styles.detail}>استفسار سريع قبل قبول العرض:</Text><View style={styles.roleActions}>{['هل السعر شامل؟','متى تقدر تيجي؟','هل في تكلفة إضافية؟'].map(question=><Button key={question} title={question} secondary onPress={()=>sendOrderChat({...order,_id:offer._id||offer.id},question)}/>)}</View><Button title="قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
             <View style={styles.roleActions}><Button title={orderChats[sn]?.open?'إخفاء المحادثة':'فتح المحادثة'} secondary onPress={()=>toggleOrderChat(order,'client')}/>{order.status==='تم الانتهاء'&&!rating?.submitted&&!rating?.skipped&&!dismissedRatings[sn]?<Button title="تقييم الفني" onPress={()=>setRatingDrafts(current=>({...current,[sn]:{stars:'5',comment:'',blockFuture:false}}))}/>:null}</View>
-            {order.status==='تم الانتهاء'&&rating&&!rating.submitted&&!rating.skipped?<View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم الفني</Text><View style={styles.roleActions}>{[1,2,3,4,5].map(stars=><Button key={stars} title={'★'.repeat(stars)} secondary={Number(rating.stars)!==stars} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],stars:String(stars),blockFuture:stars===1?current[sn]?.blockFuture:false}}))}/>)}</View><Field label="تعليق (اختياري)" value={rating.comment||''} onChangeText={value=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],comment:value}}))} multiline/>{Number(rating.stars)===1?<TouchableOpacity style={styles.inlineCheck} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],blockFuture:!current[sn]?.blockFuture}}))}><Text style={styles.detail}>{rating.blockFuture?'☑':'☐'} عدم استقبال عروض من الفني ده مرة تانية</Text></TouchableOpacity>:null}<Button title="حفظ التقييم" onPress={()=>submitOrderRating(order)}/></View>:null}
+            {order.status==='تم الانتهاء'&&rating&&!rating.submitted&&!rating.skipped?<View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم الفني</Text>{renderRatingStars(order, Number(rating.stars || 5))}<Field label="تعليق (اختياري)" value={rating.comment||''} onChangeText={value=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],comment:value}}))} multiline/>{Number(rating.stars)===1?<TouchableOpacity style={styles.inlineCheck} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],blockFuture:!current[sn]?.blockFuture}}))}><Text style={styles.detail}>{rating.blockFuture?'☑':'☐'} عدم استقبال عروض من الفني ده مرة تانية</Text></TouchableOpacity>:null}<Button title="حفظ التقييم" onPress={()=>submitOrderRating(order)}/></View>:null}
             {orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
           </> : null}
         </View>;
@@ -1717,16 +1736,7 @@ function AppContent() {
           {item.orderStatus === 'تم الانتهاء' && !ratingDrafts[getOrderSN(item)]?.submitted && !ratingDrafts[getOrderSN(item)]?.skipped && !dismissedRatings[getOrderSN(item)] ? (
             <View style={styles.offerCard}>
               <Text style={styles.cardTitle}>تقييم العميل</Text>
-              <View style={styles.roleActions}>
-                {[1, 2, 3, 4, 5].map(stars => (
-                  <Button
-                    key={stars}
-                    title={'★'.repeat(stars)}
-                    secondary={Number(ratingDrafts[getOrderSN(item)]?.stars || 5) !== stars}
-                    onPress={() => setOrderRatingStars(item, stars)}
-                  />
-                ))}
-              </View>
+              {renderRatingStars(item, Number(ratingDrafts[getOrderSN(item)]?.stars || 5))}
               <Field
                 label="تعليق (اختياري)"
                 value={ratingDrafts[getOrderSN(item)]?.comment || ''}
@@ -2020,7 +2030,11 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.navy, fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 12, marginBottom: 5 },
   selectionGroup: { backgroundColor: COLORS.white, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 5 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(5, 15, 35, 0.62)', justifyContent: 'center', padding: 20 },
-  ratingModal: { backgroundColor: COLORS.white, borderRadius: 22, padding: 18, borderWidth: 1, borderColor: COLORS.gold, maxHeight: '90%' },
+  ratingModal: { alignSelf: 'center', width: '100%', maxWidth: 360, backgroundColor: COLORS.white, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: COLORS.gold, maxHeight: '82%' },
+  ratingStarsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 8 },
+  ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
+  ratingStar: { fontSize: 27, color: '#CBD5E1' },
+  ratingStarActive: { color: COLORS.gold },
   dropdownButton: { minHeight: 50, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginVertical: 5 },
   dropdownButtonText: { color: COLORS.text, textAlign: 'right', fontSize: 15, fontWeight: '700', flex: 1 },
   dropdownArrow: { color: COLORS.navy, fontSize: 14, marginLeft: 10 },
