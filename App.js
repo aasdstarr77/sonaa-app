@@ -280,8 +280,28 @@ function AppContent() {
   }, [reloadKey, screen]);
 
   useEffect(() => {
-    if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) loadSupportCases();
-  }, [screen, session?.token]);
+    if (screen !== 'support' || !session || !['client', 'fanni'].includes(session.role)) return;
+    let active = true;
+    const refreshSupport = async () => {
+      if (!active || screenRef.current !== 'support') return;
+      await loadSupportCases();
+      if (supportCase?._id) {
+        try {
+          const result = await api('/support/' + session.role + '/' + encodeURIComponent(supportCase._id), { token: session.token });
+          if (active && result.supportCase) setSupportCase(result.supportCase);
+        } catch (_) {}
+      }
+    };
+    refreshSupport();
+    const timer = setInterval(refreshSupport, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, [screen, session?.token, supportCase?._id]);
+
+  useEffect(() => {
+    if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
+    const timer = setInterval(() => { if (screenRef.current === 'admin') loadAdminSupportCases(); }, 3000);
+    return () => clearInterval(timer);
+  }, [screen, adminData.tab, session?.token]);
 
   useEffect(() => {
     if (!session || screen !== 'admin' || session.role !== 'admin' || session.user?.role !== 'admin') return;
@@ -1047,6 +1067,7 @@ function AppContent() {
     try {
       const result = await api('/support/admin', { token: session.token });
       setAdminSupportCases(toList(result, ['supportCases', 'items']));
+      await loadAdminRecoveryCases();
       await loadAdminRecoveryCases();
     } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
   }
