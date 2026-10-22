@@ -150,6 +150,7 @@ function AppContent() {
   const [supportSubject, setSupportSubject] = useState('استفسار عام');
   const [supportLoading, setSupportLoading] = useState(false);
   const [supportError, setSupportError] = useState('');
+  const [accountPasswordForm, setAccountPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
   const [adminSupportCases, setAdminSupportCases] = useState([]);
   const [adminSupportSelected, setAdminSupportSelected] = useState(null);
   const [adminSupportDraft, setAdminSupportDraft] = useState('');
@@ -1057,6 +1058,12 @@ function AppContent() {
       Alert.alert('تم إرسال الرد', 'تم حفظ ردك داخل محادثة الدعم.');
     } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
   }
+
+  useEffect(() => {
+    if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
+    const timer = setInterval(() => { if (screenRef.current === 'admin') loadAdminSupportCases(); }, 3000);
+    return () => clearInterval(timer);
+  }, [screen, adminData.tab, session?.token]);
 
   async function adminRefreshExtras() { setReloadKey(v => v + 1); }
   async function adminAddService() {
