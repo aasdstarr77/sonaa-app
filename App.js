@@ -1065,6 +1065,26 @@ function AppContent() {
     return () => clearInterval(timer);
   }, [screen, adminData.tab, session?.token]);
 
+  async function changeAccountPassword() {
+    if (!session) return;
+    const currentPassword = accountPasswordForm.currentPassword;
+    const newPassword = accountPasswordForm.newPassword;
+    const confirmPassword = accountPasswordForm.confirmPassword;
+    if (!currentPassword || newPassword.length < 8 || newPassword !== confirmPassword) {
+      setAccountPasswordForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' }));
+      return;
+    }
+    setAccountPasswordForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const role = session.role === 'client' ? 'client' : ((session.user?.role === 'admin' || session.user?.adminRole) ? 'admin' : 'fanni');
+      const result = await api('/password-recovery/change/' + role, { method: 'POST', token: session.token, body: { currentPassword, newPassword, confirmPassword } });
+      setAccountPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
+      Alert.alert('حسابي', result.message || 'تم تغيير كلمة المرور.');
+    } catch (err) {
+      setAccountPasswordForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' }));
+    }
+  }
+
   async function adminRefreshExtras() { setReloadKey(v => v + 1); }
   async function adminAddService() {
     const name = adminServiceDraft.name.trim(), category = adminServiceDraft.category.trim();
@@ -1279,6 +1299,8 @@ function AppContent() {
     </KeyboardAvoidingView>
   </SafeAreaView>;
 
+  if (screen === 'account') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} /><Text style={styles.title}>حسابي</Text><Text style={styles.sectionTitle}>تغيير كلمة المرور</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
   if (screen === 'clientRegister' || screen === 'technicianRegister') {
     const isClient = screen === 'clientRegister';
     return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
@@ -1303,7 +1325,7 @@ function AppContent() {
 
   if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}>
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
       {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
         <Text style={styles.fieldLabel}>المهنة الرئيسية</Text>
@@ -1511,7 +1533,7 @@ function AppContent() {
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
     const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'wallets', label: 'محافظ الفنيين' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : item.key === 'support' ? ` (${adminSupportCases.length})` : ''}</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
