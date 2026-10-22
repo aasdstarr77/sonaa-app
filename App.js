@@ -8,6 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -90,6 +91,7 @@ function AppContent() {
   const [servicesError, setServicesError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [session, setSession] = useState(null);
+  const [authRestoring, setAuthRestoring] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -145,6 +147,50 @@ function AppContent() {
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
+
+  // Keep client/technician sessions across app restarts using encrypted device storage.
+  useEffect(() => {
+    let mounted = true;
+    async function restoreSession() {
+      let saved = null;
+      try {
+        const raw = await SecureStore.getItemAsync('sonaa.auth.session.v1');
+        if (!raw) return;
+        saved = JSON.parse(raw);
+        if (!saved?.token || !['client', 'fanni'].includes(saved.role)) {
+          await SecureStore.deleteItemAsync('sonaa.auth.session.v1');
+          return;
+        }
+        try {
+          const endpoint = saved.role === 'client' ? '/client/me' : '/fanni/me';
+          const result = await api(endpoint, { token: saved.token });
+          const user = result.client || result.user || saved.user;
+          if (!user) throw new Error('استجابة التحقق من الجلسة غير مكتملة.');
+          saved = { token: saved.token, user, role: saved.role };
+          await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(saved));
+        } catch (error) {
+          // A temporary network outage must not erase a valid saved session.
+          if (String(error?.message || '').includes('تعذر الاتصال بالإنترنت')) {
+            if (!saved.user) throw error;
+          } else {
+            await SecureStore.deleteItemAsync('sonaa.auth.session.v1');
+            return;
+          }
+        }
+        if (!mounted) return;
+        setSession(saved);
+        const target = saved.role === 'client' ? 'client' : 'technician';
+        screenRef.current = target;
+        setScreenState(target);
+      } catch (error) {
+        console.warn('تعذر استعادة جلسة صُنّاع:', error?.message || error);
+      } finally {
+        if (mounted) setAuthRestoring(false);
+      }
+    }
+    void restoreSession();
+    return () => { mounted = false; };
+  }, []);
 
   // Hardware Back returns one screen at a time and never logs a user out.
   useEffect(() => {
@@ -443,7 +489,11 @@ function AppContent() {
         if (!result.token || !result.user) throw new Error('استجابة تسجيل دخول الفني غير مكتملة.');
         role = 'fanni'; user = result.user;
       }
-      setSession({ token: result.token, user, role });
+      const nextSession = { token: result.token, user, role };
+      if (role === 'client' || role === 'fanni') {
+        await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession));
+      }
+      setSession(nextSession);
       setPassword('');
       setScreen(role === 'admin' ? 'admin' : role === 'client' ? 'client' : 'technician');
     } catch (err) {
@@ -457,7 +507,9 @@ function AppContent() {
     try {
       const result = await api('/client/register', { method: 'POST', body: { name: form.name.trim(), phone: form.phone.trim(), password: form.password, confirmPassword: form.confirmPassword } });
       if (!result.token || !result.client) throw new Error('تم التسجيل لكن استجابة الخادم غير مكتملة.');
-      setSession({ token: result.token, user: result.client, role: 'client' });
+      const nextSession = { token: result.token, user: result.client, role: 'client' };
+      await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession));
+      setSession(nextSession);
       setScreen('client');
     } catch (err) { Alert.alert('تعذر إنشاء الحساب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
     finally { setLoginLoading(false); }
@@ -1042,6 +1094,8 @@ function AppContent() {
       } catch (_) {}
     }
     pushTokenRef.current = null;
+    try { await SecureStore.deleteItemAsync('sonaa.auth.session.v1'); }
+    catch (error) { console.warn('تعذر مسح الجلسة المحفوظة:', error?.message || error); }
     screenHistoryRef.current = [];
     screenRef.current = 'home';
     setScreenState('home');
@@ -1102,6 +1156,8 @@ function AppContent() {
   }, [session]);
   const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
   const toggleArray = (key, value) => updateForm(key, form[key].includes(value) ? form[key].filter(item => item !== value) : [...form[key], value]);
+
+  if (authRestoring) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.statusText}>جاري استعادة حسابك...</Text></View></SafeAreaView>;
 
   if (screen === 'login') return <SafeAreaView style={styles.safe}>
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
