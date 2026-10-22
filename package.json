@@ -18,6 +18,7 @@
     "expo-notifications": "~0.28.19",
     "expo-device": "~6.0.2",
     "expo-constants": "~16.0.2",
-    "expo-secure-store": "~13.0.2"
+    "expo-secure-store": "~13.0.2",
+    "react-native-svg": "15.2.0"
   }
 }
