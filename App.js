@@ -99,7 +99,7 @@ function AppScreens() {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [authMode, setAuthMode] = useState('fanni');
-  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', address: '', description: '', budget: '', specialties: [] });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', budget: '', specialties: [] });
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
   const [technicianSearch, setTechnicianSearch] = useState('');
@@ -675,7 +675,7 @@ function AppScreens() {
   }
 
   async function createOrder() {
-    if (!form.service || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب العنوان بالتفصيل.'); return; }
+    if (!form.service || form.area.trim().length < 2 || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب المنطقة والعنوان بالتفصيل.'); return; }
     setLoginLoading(true);
     try {
       const description = form.description.trim();
@@ -684,11 +684,11 @@ function AppScreens() {
         setLoginLoading(false);
         return;
       }
-      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, address: form.address.trim(), description, budget: form.budget.trim() };
+      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setClientTab('current');
-      setForm(current => ({ ...current, address: '', description: '', budget: '' }));
+      setForm(current => ({ ...current, area: '', address: '', description: '', budget: '' }));
       setReloadKey(value => value + 1);
       Alert.alert('تم استلام الطلب', `كود المتابعة: ${result.sn || result.order?.sn || '—'}\nسيتم مراجعته من الإدارة.`);
     } catch (err) { Alert.alert('تعذر إنشاء الطلب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
@@ -1703,6 +1703,7 @@ function AppScreens() {
           <Text style={styles.dropdownButtonText}>{form.service || 'حدد نوع الخدمة بالضبط'}</Text><Text style={styles.dropdownArrow}>{subservicePickerOpen ? '▲' : '▼'}</Text>
         </TouchableOpacity>
         {subservicePickerOpen && selected ? <View style={styles.dropdownOptions}>{(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{service}</Text></TouchableOpacity>)}</View> : null}
+        <Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
         <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
         <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
         <Text style={styles.note}>اكتب تفاصيل الشغل المطلوبة بوضوح؛ التفاصيل إلزامية وتساعد الفني على تقديم عرض مناسب.</Text>
