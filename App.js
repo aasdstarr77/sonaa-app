@@ -1745,21 +1745,27 @@ function AppScreens({ onScreenChange }) {
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
       {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
-        <Text style={styles.fieldLabel}>المهنة الرئيسية</Text>
-        <TouchableOpacity accessibilityRole="button" onPress={() => setServicePickerOpen(value => !value)} style={styles.dropdownButton}>
-          <Text style={styles.dropdownButtonText}>{selected?.label || 'اختر الخدمة المطلوبة'}</Text><Text style={styles.dropdownArrow}>{servicePickerOpen ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-        {servicePickerOpen ? <View style={styles.dropdownOptions}>{categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{category.emoji || '🛠️'} {category.label}</Text></TouchableOpacity>)}</View> : null}
-        <Text style={styles.fieldLabel}>الخدمة التفصيلية</Text>
-        <TouchableOpacity accessibilityRole="button" disabled={!selected} onPress={() => setSubservicePickerOpen(value => !value)} style={[styles.dropdownButton, !selected && styles.disabledButton]}>
-          <Text style={styles.dropdownButtonText}>{form.service || 'حدد نوع الخدمة بالضبط'}</Text><Text style={styles.dropdownArrow}>{subservicePickerOpen ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-        {subservicePickerOpen && selected ? <View style={styles.dropdownOptions}>{(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{service}</Text></TouchableOpacity>)}</View> : null}
+        <Text style={styles.fieldLabel}>اختار المهنة الرئيسية</Text>
+        <View style={styles.serviceTiles}>
+          {categories.map(category => <TouchableOpacity key={category.label} accessibilityRole="button" accessibilityState={{ selected: selected?.label === category.label }} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={[styles.serviceTile, selected?.label === category.label && styles.serviceTileSelected]}>
+            <Text style={styles.serviceTileIcon}>{category.emoji || '🛠️'}</Text>
+            <Text style={styles.serviceTileLabel}>{category.label}</Text>
+          </TouchableOpacity>)}
+        </View>
+        {selected ? <>
+          <Text style={styles.fieldLabel}>اختار الخدمة التفصيلية</Text>
+          <View style={styles.serviceTiles}>
+            {(selected.services || []).map(service => <TouchableOpacity key={service} accessibilityRole="button" accessibilityState={{ selected: form.service === service }} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={[styles.serviceTile, styles.detailServiceTile, form.service === service && styles.serviceTileSelected]}>
+              <Text style={styles.serviceTileIcon}>{getServiceEmoji(service)}</Text>
+              <Text style={styles.serviceTileLabel}>{service}</Text>
+            </TouchableOpacity>)}
+          </View>
+        </> : <Text style={styles.servicePickerHint}>اختار المهنة الرئيسية الأول علشان تظهر الخدمات التفصيلية الخاصة بيها.</Text>}
         <Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
         <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
         <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
         <Text style={styles.note}>اكتب تفاصيل الشغل المطلوبة بوضوح؛ التفاصيل إلزامية وتساعد الفني على تقديم عرض مناسب.</Text>
-        <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: حسب المعاينة" />
+        <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: من 300 إلى 500 جنيه" />
         <Button title={loginLoading ? 'جاري إرسال الطلب...' : 'إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} />
       </>}</> : null}
       {clientData.sn ? <View style={styles.codeRow}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ الكود" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
@@ -2076,6 +2082,22 @@ function AppScreens({ onScreenChange }) {
   </SafeAreaView>;
 }
 
+function getServiceEmoji(service) {
+  const value = String(service || '');
+  if (/تسريب|حنفي|صنبور|مياه|صرف|بالوعة|سيفون|سخان|خلاط/.test(value)) return '🚰';
+  if (/كهرب|لمبة|نجفة|مفتاح|فيشة|كهرباء|إنارة|كشاف/.test(value)) return '💡';
+  if (/تكييف|تبريد|فريون/.test(value)) return '❄️';
+  if (/غسالة|ثلاجة|بوتاجاز|فرن|ميكروويف/.test(value)) return '🧰';
+  if (/دهان|نقاشة|طلاء|لون/.test(value)) return '🖌️';
+  if (/نجارة|باب|دولاب|مطبخ|خشب|مفصلات/.test(value)) return '🪚';
+  if (/قفل|مفتاح|كالون/.test(value)) return '🔑';
+  if (/شاشة|كاميرا|دش|ريسيفر|تلفزيون/.test(value)) return '📺';
+  if (/تنظيف|تطهير|مكافحة/.test(value)) return '🧹';
+  if (/تركيب|فك|تثبيت|صيانة|إصلاح|تصليح/.test(value)) return '🔧';
+  if (/بناء|محارة|طوب|سيراميك|بلاط|رخام/.test(value)) return '🧱';
+  return '🛠️';
+}
+
 const styles = StyleSheet.create({
   appRoot: { flex: 1, backgroundColor: '#FFFFFF' },
   brandHeaderSafe: { backgroundColor: '#FFFFFF' },
@@ -2189,6 +2211,13 @@ const styles = StyleSheet.create({
   ratingStar: { fontSize: 27, color: '#CBD5E1' },
   ratingStarActive: { color: COLORS.gold },
   dropdownButton: { minHeight: 50, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginVertical: 5 },
+  serviceTiles: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginHorizontal: -4, marginBottom: 12 },
+  serviceTile: { width: '31.8%', minHeight: 112, aspectRatio: 0.92, marginHorizontal: '0.75%', marginBottom: 10, paddingHorizontal: 5, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF5F6', borderWidth: 1.5, borderColor: '#C6E3E5', borderRadius: 17 },
+  detailServiceTile: { minHeight: 104, backgroundColor: '#EAF5F6' },
+  serviceTileSelected: { backgroundColor: '#D0EBE9', borderColor: COLORS.teal, borderWidth: 2.5 },
+  serviceTileIcon: { fontSize: 34, marginBottom: 8, textAlign: 'center' },
+  serviceTileLabel: { color: COLORS.navy, fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
+  servicePickerHint: { color: COLORS.muted, textAlign: 'center', fontSize: 13, lineHeight: 20, paddingVertical: 8, marginBottom: 8 },
   dropdownButtonText: { color: COLORS.text, textAlign: 'right', fontSize: 15, fontWeight: '700', flex: 1 },
   dropdownArrow: { color: COLORS.navy, fontSize: 14, marginLeft: 10 },
   dropdownOptions: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, marginBottom: 8, overflow: 'hidden' },
