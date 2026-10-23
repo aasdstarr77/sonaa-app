@@ -950,15 +950,46 @@ function AppScreens({ onScreenChange }) {
 
   async function saveRatingDismissal(sn) {
     if (!sn) return;
-    const next = { ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
-    dismissedRatingsRef.current = next; setDismissedRatings(next);
-    try { await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(next)); } catch {}
+
+    // Update memory immediately, then merge with storage to avoid losing dismissals
+    // when multiple completed orders are skipped close together.
+    const inMemory = { ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
+    dismissedRatingsRef.current = inMemory;
+    setDismissedRatings(inMemory);
+
+    try {
+      const raw = await SecureStore.getItemAsync(ratingStorageKey);
+      let persisted = {};
+      try {
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) persisted = parsed;
+      } catch (_) {}
+
+      const merged = { ...persisted, ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
+      dismissedRatingsRef.current = merged;
+      setDismissedRatings(merged);
+      await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(merged));
+
+      // Keep legacy account-scoped keys in sync for existing installations.
+      if (previousRatingStorageKey !== ratingStorageKey) {
+        await SecureStore.setItemAsync(previousRatingStorageKey, JSON.stringify(merged));
+      }
+      if (legacyRatingStorageKey !== ratingStorageKey && legacyRatingStorageKey !== previousRatingStorageKey) {
+        await SecureStore.setItemAsync(legacyRatingStorageKey, JSON.stringify(merged));
+      }
+    } catch (error) {
+      console.warn('تعذر حفظ حالة تخطي التقييم:', error?.message || error);
+    }
   }
   async function skipRatingPrompt() {
-    const prompt = ratingPrompt; if (!prompt) return;
+    const prompt = ratingPrompt;
+    if (!prompt) return;
     const sn = getOrderSN(prompt.order);
-    setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], skipped: true } }));
-    await saveRatingDismissal(sn); setRatingPrompt(null);
+    if (!sn) return;
+
+    setRatingDrafts(current => ({ ...current, [sn]: { ...(current[sn] || {}), skipped: true } }));
+    await saveRatingDismissal(sn);
+    setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
   }
   function renderRatingModal(role) {
     if (!ratingPrompt || !ratingPrompt.order || ratingPrompt.role !== role) return null;
