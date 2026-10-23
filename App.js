@@ -275,7 +275,7 @@ function AppScreens() {
         return true;
       }
       let previous = screenHistoryRef.current.pop();
-      while (previous && ['login', 'clientRegister', 'technicianRegister'].includes(previous) && session) {
+      while (previous && ['home', 'login', 'clientRegister', 'technicianRegister'].includes(previous) && session) {
         previous = screenHistoryRef.current.pop();
       }
       if (previous) {
@@ -1559,9 +1559,9 @@ function AppScreens() {
   }
 
   function logout() {
-    Alert.alert('تأكيد تسجيل الخروج', 'هل تريد تسجيل الخروج من حسابك؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      { text: 'تسجيل الخروج', style: 'destructive', onPress: () => { void performLogout(); } }
+    Alert.alert('تأكيد تسجيل الخروج', 'هل تريد تسجيل الخروج من حسابك والعودة إلى الصفحة الرئيسية؟', [
+      { text: 'لا', style: 'cancel' },
+      { text: 'نعم', style: 'destructive', onPress: () => { void performLogout(); } }
     ]);
   }
 
@@ -2018,10 +2018,9 @@ function AppScreens() {
 
 const styles = StyleSheet.create({
   appRoot: { flex: 1, backgroundColor: '#F8FAFC' },
-  brandHeaderSafe: { backgroundColor: '#F5008F' },
-  brandHeader: { minHeight: 66, paddingHorizontal: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-start', gap: 10, backgroundColor: '#F5008F' },
-  brandHeaderLogo: { width: 54, height: 54, borderRadius: 10 },
-  brandHeaderTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', textAlign: 'right' },
+  brandHeaderSafe: { backgroundColor: '#F4F7FB' },
+  brandHeader: { minHeight: 56, paddingLeft: 12, paddingRight: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#F4F7FB' },
+  brandHeaderLogo: { width: 46, height: 46, borderRadius: 8 },
   appScreenArea: { flex: 1 },
   homeLogoImage: { width: 140, height: 140, alignSelf: 'center', borderRadius: 18, marginBottom: 8 },
   safe: { flex: 1, backgroundColor: COLORS.bg },
@@ -2146,7 +2145,6 @@ function AppContent() {
     <SafeAreaView style={styles.brandHeaderSafe}>
       <View style={styles.brandHeader}>
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
-        <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
       </View>
     </SafeAreaView>
     <View style={styles.appScreenArea}><AppScreens /></View>
