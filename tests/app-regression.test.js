@@ -66,3 +66,40 @@ test('client order cards define order inside the client orders map callback', ()
     'client order rendering must declare order in the map callback before reading it'
   );
 });
+
+test('technician offer flow rejects missing order data before opening or submitting an offer', () => {
+  const sendStart = app.indexOf('function sendOffer(order)');
+  const submitStart = app.indexOf('async function submitOffer()', sendStart);
+  assert.notEqual(sendStart, -1, 'technician sendOffer handler should exist');
+  assert.notEqual(submitStart, -1, 'technician submitOffer handler should exist');
+  const sendBody = app.slice(sendStart, submitStart);
+  const submitEnd = app.indexOf('\n  async function cancelClientOrder', submitStart);
+  assert.notEqual(submitEnd, -1, 'submitOffer should end before client order handlers');
+  const submitBody = app.slice(submitStart, submitEnd);
+  assert.match(sendBody, /!order \|\| typeof order !== 'object' \|\| !getOrderSN\(order\)/);
+  assert.match(submitBody, /const orderSN = getOrderSN\(offerDraft\?\.order\)/);
+  assert.match(submitBody, /if \(!orderSN \|\| !session\?\.token\)/);
+  assert.match(submitBody, /encodeURIComponent\(orderSN\)/);
+});
+
+test('rating modal and rating submission safely handle missing technician order data', () => {
+  const modalStart = app.indexOf('function renderRatingModal(role)');
+  const modalEnd = app.indexOf('\n  async function sendAdminBroadcast', modalStart);
+  assert.notEqual(modalStart, -1, 'rating modal renderer should exist');
+  assert.notEqual(modalEnd, -1, 'rating modal renderer boundary should exist');
+  const modalBody = app.slice(modalStart, modalEnd);
+  assert.match(modalBody, /if \(!order \|\| typeof order !== 'object' \|\| !sn\) return null/);
+  const submitStart = app.indexOf('async function submitOrderRating(order)');
+  const submitEnd = app.indexOf('\n  async function ', submitStart + 10);
+  assert.notEqual(submitStart, -1, 'rating submit handler should exist');
+  assert.match(app.slice(submitStart, submitEnd), /!order \|\| typeof order !== 'object' \|\| !sn/);
+  assert.match(app, /if \(!sn\) \{ setRatingPrompt\(null\); return; \}/);
+});
+
+test('Sonaa agreed tagline appears on login, opening splash, home, and technician screen', () => {
+  const tagline = 'كل خدمة تبدأ بخطوة';
+  assert.ok(app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login screen should show the full brand tagline');
+  assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'opening splash should show the agreed tagline');
+  assert.ok(app.includes('<Text style={styles.homeTagline}>كل خدمة تبدأ بخطوة</Text>'), 'home screen should show the agreed tagline');
+  assert.ok(app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should show the agreed tagline');
+});
