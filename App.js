@@ -31,7 +31,8 @@ async function api(path, options = {}) {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  } catch {
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('استغرق إرسال التقييم أكثر من 30 ثانية. راجع الاتصال ثم حاول مرة أخرى؛ ولو كان التقييم اتسجل بالفعل فالتطبيق سيتعامل مع ذلك.');
     throw new Error('تعذر الاتصال بالإنترنت أو بالخادم. تأكد من الاتصال ثم أعد المحاولة.');
   }
   const data = await response.json().catch(() => ({}));
@@ -138,6 +139,8 @@ function AppScreens() {
   const [chatDrafts, setChatDrafts] = useState({});
   const [priceDrafts, setPriceDrafts] = useState({});
   const [ratingDrafts, setRatingDrafts] = useState({});
+  const [ratingSubmitting, setRatingSubmitting] = useState({});
+  const dismissedRatingsRef = useRef({});
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminExtras, setAdminExtras] = useState({ services: [], regions: [], pricing: { check: 0, commission: 0, minOffer: 1, maxOffer: 1000000 }, pricingHistory: [], settings: { siteName: 'صُنّاع', maintenance: false, maintenanceMessage: '', maxFanniSignupAttempts: 5 }, content: { announcement: '', faqs: [] }, auditLogs: [], report: null, loading: false, error: '' });
   const [adminServiceDraft, setAdminServiceDraft] = useState({ name: '', category: 'خدمات أخرى', emoji: '🔧' });
@@ -182,6 +185,7 @@ function AppScreens() {
     setRatingDismissalsLoaded(false);
     setRatingDismissalsLoadedFor('');
     if (!session || !['client', 'fanni'].includes(session.role)) {
+      dismissedRatingsRef.current = {};
       setDismissedRatings({});
       setRatingDismissalsLoadedFor(ratingStorageKey);
       setRatingDismissalsLoaded(true);
@@ -205,6 +209,7 @@ function AppScreens() {
         const previous = parseDismissals(previousRaw);
         const legacy = parseDismissals(legacyRaw);
         const saved = { ...legacy, ...previous, ...current };
+        dismissedRatingsRef.current = saved;
         setDismissedRatings(saved);
         if (Object.keys(saved).length && (!currentRaw || !previousRaw || !legacyRaw)) {
           await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(saved));
@@ -972,24 +977,31 @@ function AppScreens() {
 
   async function submitOrderRating(order) {
     const sn = getOrderSN(order), draft = ratingDrafts[getOrderSN(order)] || {};
-    if (ratingSubmittingRef.current.has(sn)) return;
+    if (!sn || ratingSubmittingRef.current.has(sn)) return;
     const stars = Number(draft.stars || 5), comment = String(draft.comment || '').trim(), blockFuture = Boolean(draft.blockFuture);
-    if (!sn || !Number.isInteger(stars) || stars < 1 || stars > 5 || (blockFuture && stars !== 1)) {
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5 || (blockFuture && stars !== 1)) {
       Alert.alert('راجع التقييم', 'اختار من نجمة إلى 5 نجوم. منع التعامل متاح مع تقييم نجمة واحدة فقط.'); return;
     }
+
     ratingSubmittingRef.current.add(sn);
+    setRatingSubmitting(current => ({ ...current, [sn]: true }));
+    const controller = new AbortController();
     const activePrompt = ratingPrompt && getOrderSN(ratingPrompt.order) === sn ? ratingPrompt : null;
-    if (activePrompt) setRatingPrompt(null);
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const result = await api(`/orders/${encodeURIComponent(sn)}/rating`, { method: 'POST', token: orderToken(session?.role || 'client'), body: { stars, comment, blockFuture } });
-      Alert.alert('تم حفظ التقييم', result.message || 'تم حفظ تقييمك بنجاح.');
+      const result = await api(`/orders/${encodeURIComponent(sn)}/rating`, {
+        method: 'POST',
+        token: orderToken(session?.role || 'client'),
+        body: { stars, comment, blockFuture },
+        signal: controller.signal,
+      });
       setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], stars: String(stars), comment: '', blockFuture: false, submitted: true } }));
       setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
       await saveRatingDismissal(sn);
       setReloadKey(v => v + 1);
+      Alert.alert('تم حفظ التقييم', result.message || 'تم حفظ تقييمك بنجاح.');
     } catch (err) {
-      // A 409 means the server already has this rating. Do not reopen the prompt:
-      // mark it dismissed locally and reload the order so the saved rating is reflected.
+      // A 409 means the server already has this rating. Do not reopen the prompt.
       if (err?.status === 409) {
         setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
         await saveRatingDismissal(sn);
@@ -997,17 +1009,21 @@ function AppScreens() {
         Alert.alert('التقييم محفوظ بالفعل', 'سبق تسجيل تقييمك لهذه المهمة، ولن يظهر مربع التقييم مرة أخرى.');
         return;
       }
+      // Keep the modal open so the user can see the error and retry deliberately.
       if (activePrompt) setRatingPrompt(activePrompt);
       Alert.alert('تعذر حفظ التقييم', err.message || 'تعذر حفظ التقييم. حاول مرة أخرى.');
     } finally {
+      clearTimeout(timeout);
       ratingSubmittingRef.current.delete(sn);
+      setRatingSubmitting(current => ({ ...current, [sn]: false }));
     }
   }
 
   async function saveRatingDismissal(sn) {
     if (!sn) return;
-    // Update from the latest React state so dismissals for different orders cannot overwrite each other.
-    setDismissedRatings(current => ({ ...current, [sn]: true }));
+    const next = { ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
+    dismissedRatingsRef.current = next;
+    setDismissedRatings(next);
     try {
       const raw = await SecureStore.getItemAsync(ratingStorageKey);
       let persisted = {};
@@ -1015,14 +1031,16 @@ function AppScreens() {
         const parsed = raw ? JSON.parse(raw) : {};
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) persisted = parsed;
       } catch (_) {}
-      const next = { ...persisted, ...dismissedRatings, [sn]: true };
-      // The role-only key survives logout/login even if the API returns a different user ID shape.
-      await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(next));
+      // Merge against the latest synchronous ref so overlapping writes cannot lose a skipped order.
+      const merged = { ...persisted, ...dismissedRatingsRef.current, [sn]: true };
+      dismissedRatingsRef.current = merged;
+      setDismissedRatings(merged);
+      await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(merged));
       if (previousRatingStorageKey !== ratingStorageKey) {
-        await SecureStore.setItemAsync(previousRatingStorageKey, JSON.stringify(next));
+        await SecureStore.setItemAsync(previousRatingStorageKey, JSON.stringify(merged));
       }
       if (legacyRatingStorageKey !== ratingStorageKey && legacyRatingStorageKey !== previousRatingStorageKey) {
-        await SecureStore.setItemAsync(legacyRatingStorageKey, JSON.stringify(next));
+        await SecureStore.setItemAsync(legacyRatingStorageKey, JSON.stringify(merged));
       }
     } catch (error) {
       console.warn('تعذر حفظ حالة تخطي التقييم:', error?.message || error);
@@ -1044,6 +1062,7 @@ function AppScreens() {
     const sn = getOrderSN(order);
     const draft = ratingDrafts[sn] || { stars: '5', comment: '', blockFuture: false };
     const stars = Number(draft.stars || 5);
+    const submitting = Boolean(ratingSubmitting[sn]);
     return <Modal visible transparent animationType="fade" onRequestClose={skipRatingPrompt}>
       <View style={styles.modalBackdrop}>
         <View style={styles.ratingModal}>
@@ -1054,8 +1073,8 @@ function AppScreens() {
           {stars === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], blockFuture: !current[sn]?.blockFuture } }))} style={styles.inlineCheck}>
             <Text style={styles.detail}>{draft.blockFuture ? '☑' : '☐'} {role === 'client' ? 'عدم استقبال عروض من الفني ده مرة تانية' : 'عدم إظهار طلبات العميل ده ليّ مرة تانية'}</Text>
           </TouchableOpacity> : null}
-          <Button title="إرسال التقييم" onPress={() => submitOrderRating(order)} />
-          <Button title="تخطي" secondary onPress={skipRatingPrompt} />
+          <Button title={submitting ? "جاري إرسال التقييم..." : "إرسال التقييم"} onPress={() => submitOrderRating(order)} disabled={submitting} />
+          <Button title="تخطي" secondary onPress={skipRatingPrompt} disabled={submitting} />
         </View>
       </View>
     </Modal>;
