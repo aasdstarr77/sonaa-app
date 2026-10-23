@@ -1641,19 +1641,35 @@ function AppScreens() {
 
   if (authRestoring) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.statusText}>جاري استعادة حسابك...</Text></View></SafeAreaView>;
 
-  if (screen === 'login') return <SafeAreaView style={styles.safe}>
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Button title="رجوع للرئيسية" secondary onPress={() => setScreen('home')} />
-      <View style={styles.loginHeading}>
-        <Text style={styles.title}>{authMode === 'client' ? 'دخول العميل' : 'دخول الفني'}</Text>
-        <Text style={styles.subtitle}>{authMode === 'client' ? 'سجّل دخولك لمتابعة طلباتك وخدماتك.' : 'سجّل دخولك لمتابعة فرص العمل وحسابك.'}</Text>
+  if (screen === 'login') return <SafeAreaView style={styles.loginSafe}>
+    <KeyboardAvoidingView style={styles.loginPage} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TouchableOpacity accessibilityRole="button" onPress={() => setScreen('home')} style={styles.loginBackButton}>
+        <Text style={styles.loginBackText}>رجوع للرئيسية</Text>
+      </TouchableOpacity>
+      <View style={styles.loginLogoCircle}>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.loginLogo} resizeMode="contain" />
       </View>
-      <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
-      <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" returnKeyType="go" onSubmitEditing={handleLogin} blurOnSubmit />
-      <TouchableOpacity onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }}><Text style={styles.detail}>نسيت كلمة المرور؟ تواصل مع الدعم</Text></TouchableOpacity>
-      <Button title={loginLoading ? 'جاري الدخول...' : authMode === 'client' ? 'دخول العميل' : 'دخول الفني'} onPress={handleLogin} disabled={loginLoading} />
-      {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
-      {authMode === 'fanni' && <Button title="تسجيل فني جديد" secondary onPress={() => setScreen('technicianRegister')} />}
+      <View style={styles.loginHeading}>
+        <Text style={styles.loginTitle}>{authMode === 'client' ? 'أهلًا بيك في صُنّاع' : 'أهلًا بيك يا فني صُنّاع'}</Text>
+        <Text style={styles.loginSubtitle}>{authMode === 'client' ? 'سجّل دخولك وخلّي طلباتك أسهل.' : 'سجّل دخولك وتابع فرص الشغل المتاحة ليك.'}</Text>
+      </View>
+      <View style={styles.loginForm}>
+        <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="اكتب رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
+        <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" returnKeyType="go" onSubmitEditing={handleLogin} blurOnSubmit />
+        <TouchableOpacity accessibilityRole="button" onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }} style={styles.recoveryLink}>
+          <Text style={styles.recoveryLinkText}>استعادة كلمة السر</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={handleLogin} disabled={loginLoading} style={[styles.loginGradientButton, loginLoading && styles.disabledButton]}>
+          <View pointerEvents="none" style={styles.loginGradientColors}>
+            <View style={[styles.loginGradientSegment, { backgroundColor: '#0A2A4A' }]} />
+            <View style={[styles.loginGradientSegment, { backgroundColor: '#104775' }]} />
+            <View style={[styles.loginGradientSegment, { backgroundColor: '#1565A0' }]} />
+          </View>
+          <Text style={styles.loginGradientButtonText}>{loginLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}</Text>
+        </TouchableOpacity>
+        {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
+        {authMode === 'fanni' && <Button title="إنشاء حساب فني جديد" secondary onPress={() => setScreen('technicianRegister')} />}
+      </View>
     </KeyboardAvoidingView>
   </SafeAreaView>;
 
@@ -2082,6 +2098,21 @@ const styles = StyleSheet.create({
   roleCardCopy: { flex: 1, gap: 3, justifyContent: 'center' },
   roleTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', textAlign: 'right' },
   roleDescription: { color: COLORS.muted, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 5, flexShrink: 1 },
+  loginSafe: { flex: 1, backgroundColor: '#FFFFFF' },
+  loginPage: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28, justifyContent: 'center', gap: 12 },
+  loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F5F7F9', borderWidth: 1, borderColor: '#E5EAF0' },
+  loginBackText: { color: '#0F4C75', fontSize: 13, fontWeight: '700' },
+  loginLogoCircle: { width: 116, height: 116, borderRadius: 58, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F0F4F7', shadowColor: '#0F4C75', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 5, marginBottom: 4 },
+  loginLogo: { width: 86, height: 86 },
+  loginTitle: { fontSize: 25, fontWeight: '900', color: '#0F4C75', textAlign: 'center' },
+  loginSubtitle: { color: '#64748B', marginTop: 5, textAlign: 'center', lineHeight: 22, fontSize: 14 },
+  loginForm: { width: '100%', gap: 5 },
+  recoveryLink: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 2, marginBottom: 4 },
+  recoveryLinkText: { color: '#0E9A9A', fontSize: 14, fontWeight: '800', textAlign: 'left' },
+  loginGradientButton: { minHeight: 52, borderRadius: 14, marginVertical: 5, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#0A2A4A', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  loginGradientColors: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  loginGradientSegment: { flex: 1 },
+  loginGradientButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'center' },
   loginHeading: { alignItems: 'flex-end', gap: 3, marginVertical: 8 },
   title: { fontSize: 25, fontWeight: 'bold', color: COLORS.navy, textAlign: 'right' },
   subtitle: { color: COLORS.muted, marginTop: 5, textAlign: 'right', lineHeight: 21 },
@@ -2096,7 +2127,7 @@ const styles = StyleSheet.create({
   disabledButton: { opacity: 0.55 },
   fieldWrap: { marginVertical: 5 },
   fieldLabel: { color: COLORS.navy, fontWeight: 'bold', marginTop: 7, marginBottom: 6, textAlign: 'right' },
-  input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#D5DFEC', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: COLORS.text, fontSize: 16, minHeight: 48 },
+  input: { backgroundColor: '#F5F7F9', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: COLORS.text, fontSize: 16, minHeight: 48 },
   multiline: { minHeight: 86, textAlignVertical: 'top' },
   note: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 19, marginVertical: 8 },
   notificationRow: { paddingVertical: 8, paddingHorizontal: 9, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 2, backgroundColor: '#FFFFFF', borderRadius: 10, marginTop: 4 },
