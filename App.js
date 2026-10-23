@@ -239,9 +239,18 @@ function AppScreens() {
           await SecureStore.deleteItemAsync('sonaa.auth.session.v1');
           return;
         }
+        let restoreTimer;
         try {
           const endpoint = saved.role === 'client' ? '/client/me' : '/fanni/me';
-          const result = await api(endpoint, { token: saved.token });
+          const result = await Promise.race([
+            api(endpoint, { token: saved.token }),
+            new Promise((_, reject) => {
+              restoreTimer = setTimeout(
+                () => reject(new Error('انتهت مهلة الاتصال أثناء استعادة الحساب.')),
+                15000
+              );
+            }),
+          ]);
           const user = result.client || result.user || saved.user;
           if (!user) throw new Error('استجابة التحقق من الجلسة غير مكتملة.');
           saved = { token: saved.token, user, role: saved.role };
@@ -253,6 +262,8 @@ function AppScreens() {
             return;
           }
           if (!saved.user) throw error;
+        } finally {
+          if (restoreTimer) clearTimeout(restoreTimer);
         }
         if (!mounted) return;
         setSession(saved);
