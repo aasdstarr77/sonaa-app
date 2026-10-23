@@ -17,27 +17,24 @@ jobs:
           java-version: '17'
       - name: Install dependencies
         run: npm install --legacy-peer-deps
-      - name: Generate branded icons
+      - name: Generate app icons and splash from official logo
         run: |
           mkdir -p assets
           python3 -m pip install --quiet Pillow
           python3 - <<'PY'
-          from PIL import Image, ImageDraw, ImageFont
+          from PIL import Image
           from pathlib import Path
-          out = Path("assets")
-          size = 1024
-          font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 500)
-          icon = Image.new("RGB", (size, size), "#F8FAFC")
-          ImageDraw.Draw(icon).ellipse((140,140,884,884), outline="#14B8A6", width=34)
-          ImageDraw.Draw(icon).text((512,480), "ص", font=font, fill="#0F172A", anchor="mm")
-          icon.save(out / "icon.png")
-          fg = Image.new("RGBA", (size,size), (0,0,0,0))
-          d=ImageDraw.Draw(fg)
-          d.ellipse((165,165,859,859), outline="#14B8A6", width=34)
-          d.text((512,480), "ص", font=font, fill="#0F172A", anchor="mm")
-          fg.save(out / "adaptive-icon.png")
-          fg.save(out / "splash-icon.png")
-          Image.new("RGB", (size,size), "#F8FAFC").save(out / "splash.png")
+          source = Path("assets/LOGO_UPLOAD_HERE/logo.png")
+          if not source.is_file():
+              raise SystemExit("Official logo missing: assets/LOGO_UPLOAD_HERE/logo.png")
+          logo = Image.open(source).convert("RGBA")
+          if logo.width < 128 or logo.height < 128:
+              raise SystemExit("Official logo image is unexpectedly small")
+          logo = logo.resize((1024, 1024), Image.Resampling.LANCZOS)
+          logo.convert("RGB").save("assets/icon.png", quality=95)
+          logo.save("assets/adaptive-icon.png")
+          logo.save("assets/splash-icon.png")
+          logo.convert("RGB").save("assets/splash.png", quality=95)
           PY
       - name: Prebuild Android
         run: npx expo prebuild --platform android --clean

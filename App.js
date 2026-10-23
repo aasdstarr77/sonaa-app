@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView,
+  View, Text, Image, FlatList, TouchableOpacity, ActivityIndicator, ScrollView,
   TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert, BackHandler, Linking, Modal
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
@@ -75,7 +75,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
   </View>;
 }
 
-function AppContent() {
+function AppScreens() {
   const [screen, setScreenState] = useState('home');
   const screenHistoryRef = useRef([]);
   const screenRef = useRef('home');
@@ -1990,9 +1990,7 @@ function AppContent() {
   return <SafeAreaView style={styles.safe}>
     <ScrollView contentContainerStyle={styles.homePage}>
       <View style={styles.welcomeHero}>
-        <View style={styles.logoGlow}>
-          <View style={styles.logoRing}><Text style={styles.logoLetter}>ص</Text></View>
-        </View>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.homeLogoImage} resizeMode="contain" />
         <Text style={styles.homeBrandTitle}>صُنّاع</Text>
         <Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>
         <Text style={styles.homeIntro}>مكان يجمع احتياجات العملاء بمهارات الفنيين.</Text>
@@ -2019,6 +2017,13 @@ function AppContent() {
 }
 
 const styles = StyleSheet.create({
+  appRoot: { flex: 1, backgroundColor: '#F8FAFC' },
+  brandHeaderSafe: { backgroundColor: '#F5008F' },
+  brandHeader: { minHeight: 66, paddingHorizontal: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-start', gap: 10, backgroundColor: '#F5008F' },
+  brandHeaderLogo: { width: 54, height: 54, borderRadius: 10 },
+  brandHeaderTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', textAlign: 'right' },
+  appScreenArea: { flex: 1 },
+  homeLogoImage: { width: 140, height: 140, alignSelf: 'center', borderRadius: 18, marginBottom: 8 },
   safe: { flex: 1, backgroundColor: COLORS.bg },
   page: { padding: 16, paddingBottom: 34, gap: 10 },
   homePage: { padding: 16, paddingBottom: 34, gap: 14 },
@@ -2134,6 +2139,18 @@ class StartupErrorBoundary extends React.Component {
     }
     return this.props.children;
   }
+}
+
+function AppContent() {
+  return <View style={styles.appRoot}>
+    <SafeAreaView style={styles.brandHeaderSafe}>
+      <View style={styles.brandHeader}>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
+        <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
+      </View>
+    </SafeAreaView>
+    <View style={styles.appScreenArea}><AppScreens /></View>
+  </View>;
 }
 
 export default function App() {
