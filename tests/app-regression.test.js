@@ -54,3 +54,15 @@ test('required runtime packages are declared', () => {
     assert.ok(packageJson.dependencies[name], 'missing dependency: ' + name);
   }
 });
+
+test('client order cards define order inside the client orders map callback', () => {
+  const clientScreenStart = app.indexOf("if (screen === 'client' && session?.role === 'client')");
+  assert.notEqual(clientScreenStart, -1, 'client screen renderer should exist');
+  const clientScreenEnd = app.indexOf("\n  if (screen === '", clientScreenStart + 10);
+  const clientScreen = app.slice(clientScreenStart, clientScreenEnd === -1 ? undefined : clientScreenEnd);
+  assert.match(
+    clientScreen,
+    /clientData\.orders\.filter\([\s\S]*?\)\.map\(\(order, i\) => \{[\s\S]*?const sn = getOrderSN\(order\)/,
+    'client order rendering must declare order in the map callback before reading it'
+  );
+});
