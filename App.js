@@ -1411,60 +1411,6 @@ function AppScreens({ onScreenChange }) {
     return () => clearInterval(timer);
   }, [screen, recoveryForm.id, recoveryForm.token]);
 
-  async function startPasswordRecovery() {
-    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
-    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
-    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
-    try {
-      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
-      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
-  }
-
-  async function refreshPasswordRecovery() {
-    if (!recoveryForm.id || !recoveryForm.token) return;
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
-      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
-    } catch (_) {}
-  }
-
-  async function sendRecoveryMessage() {
-    const text = recoveryForm.text.trim();
-    if (!text) return;
-    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
-      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
-      await refreshPasswordRecovery();
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
-  }
-
-  async function verifyRecoveryCode() {
-    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
-      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
-  }
-
-  async function resetRecoveredPassword() {
-    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
-    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
-      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
-      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
-      setScreen('login');
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
-  }
-
-  useEffect(() => {
-    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
-    const timer = setInterval(refreshPasswordRecovery, 3000);
-    return () => clearInterval(timer);
-  }, [screen, recoveryForm.id, recoveryForm.token]);
-
   async function adminRefreshExtras() { setReloadKey(v => v + 1); }
   async function adminAddService() {
     const name = adminServiceDraft.name.trim(), category = adminServiceDraft.category.trim();
@@ -1797,6 +1743,11 @@ function AppScreens({ onScreenChange }) {
         </> : null}
       </>}</> : null}
       {clientData.sn ? <View style={styles.codeRow}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ الكود" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
+      {(clientTab === 'current' || clientTab === 'previous') ? clientData.orders.filter(order => {
+        const previousStatuses = ['تم الانتهاء', 'منتهي', 'ملغي', 'مؤرشف', 'منتهي - اعتذار'];
+        const isPrevious = previousStatuses.includes(order?.status || order?.orderStatus);
+        return clientTab === 'previous' ? isPrevious : !isPrevious;
+      }).map((order, i) => {
         const sn = getOrderSN(order), expanded = Boolean(expandedClientOrders[sn]), rating = ratingDrafts[sn];
         return <View key={String(order._id || sn || i)} style={styles.dataCard}>
           <TouchableOpacity onPress={() => setExpandedClientOrders(current => ({ ...current, [sn]: !current[sn] }))}><Text style={styles.cardTitle}>{order.service || 'طلب خدمة'} — {sn}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض تفاصيل الطلب'}</Text></TouchableOpacity>
