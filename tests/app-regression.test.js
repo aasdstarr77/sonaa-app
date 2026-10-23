@@ -1,0 +1,56 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const app = fs.readFileSync(path.join(root, 'App.js'), 'utf8');
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+
+test('app points to the production Sonaa API', () => {
+  assert.match(app, /const API_BASE = 'https:\/\/sonaa-backend-v2\.vercel\.app\/api';/);
+});
+
+test('rating dismissal uses versioned encrypted storage and keeps migration keys', () => {
+  assert.match(app, /sonaa\.rating\.dismissed\.v3:/);
+  assert.match(app, /sonaa\.rating\.dismissed\.v1:/);
+  assert.match(app, /sonaa\.rating\.dismissed\.v2:/);
+  assert.match(app, /SecureStore\.getItemAsync\(ratingStorageKey\)/);
+  assert.match(app, /SecureStore\.setItemAsync\(ratingStorageKey, JSON\.stringify\(merged\)\)/);
+});
+
+test('skipping a rating persists the order dismissal before closing the prompt', () => {
+  const start = app.indexOf('async function skipRatingPrompt()');
+  assert.notEqual(start, -1, 'skipRatingPrompt function should exist');
+  const end = app.indexOf('\n  function renderRatingModal', start);
+  assert.notEqual(end, -1, 'rating modal renderer should follow skip function');
+  const body = app.slice(start, end);
+  assert.match(body, /await saveRatingDismissal\(sn\)/);
+  assert.match(body, /setRatingPrompt\(current => current && getOrderSN\(current\.order\) === sn \? null : current\)/);
+});
+
+test('rating dismissal state is loaded before being considered ready for the active account', () => {
+  assert.match(app, /ratingDismissalsLoadedFor/);
+  assert.match(app, /setRatingDismissalsLoaded\(false\)/);
+  assert.match(app, /setRatingDismissalsLoadedFor\(ratingStorageKey\)/);
+  assert.match(app, /setRatingDismissalsLoaded\(true\)/);
+});
+
+test('client and technician sessions are restored from SecureStore and validated', () => {
+  assert.match(app, /sonaa\.auth\.session\.v1/);
+  assert.match(app, /SecureStore\.getItemAsync\('sonaa\.auth\.session\.v1'\)/);
+  assert.match(app, /!saved\?\.token \|\| !\['client', 'fanni'\]\.includes\(saved\.role\)/);
+  assert.match(app, /SecureStore\.deleteItemAsync\('sonaa\.auth\.session\.v1'\)/);
+});
+
+test('foreground notifications are configured to show alerts and play sound', () => {
+  assert.match(app, /Notifications\.setNotificationHandler\(/);
+  assert.match(app, /shouldShowAlert: true/);
+  assert.match(app, /shouldPlaySound: true/);
+});
+
+test('required runtime packages are declared', () => {
+  for (const name of ['expo', 'react', 'react-native', 'expo-notifications', 'expo-secure-store']) {
+    assert.ok(packageJson.dependencies[name], 'missing dependency: ' + name);
+  }
+});

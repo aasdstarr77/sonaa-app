@@ -2,6 +2,10 @@ name: Build APK Final
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'tests/**'
+      - '.github/workflows/app-tests.yml'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 jobs:
   build:
