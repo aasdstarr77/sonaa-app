@@ -114,6 +114,10 @@ function AppScreens({ onScreenChange }) {
   const [clientServiceSearch, setClientServiceSearch] = useState('');
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [subservicePickerOpen, setSubservicePickerOpen] = useState(false);
+  const [requestStep, setRequestStep] = useState(1);
+  const [requestJobType, setRequestJobType] = useState('');
+  const [requestLocation, setRequestLocation] = useState('');
+  const [requestPhotos, setRequestPhotos] = useState([]);
   const [ratingPrompt, setRatingPrompt] = useState(null);
   const [dismissedRatings, setDismissedRatings] = useState({});
   const [ratingDismissalsLoaded, setRatingDismissalsLoaded] = useState(false);
@@ -695,20 +699,31 @@ function AppScreens({ onScreenChange }) {
   }
 
   async function createOrder() {
-    if (!form.service || form.area.trim().length < 2 || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب المنطقة والعنوان بالتفصيل.'); return; }
+    if (!form.service || requestLocation.trim().length < 2) {
+      Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب مكان المهمة.');
+      return;
+    }
     setLoginLoading(true);
     try {
-      const description = form.description.trim();
-      if (description.length < 10) {
+      const description = [requestJobType ? 'نوع الشغل: ' + requestJobType : '', form.description.trim()].filter(Boolean).join('\n\n');
+      if (description.replace(/نوع الشغل: [^\n]+\n\n?/, '').trim().length < 10) {
         Alert.alert('تفاصيل الخدمة مطلوبة', 'اكتب تفاصيل الشغل المطلوبة في 10 أحرف على الأقل عشان الفني يقدر يقدم لك عرضًا مضبوطًا.');
         setLoginLoading(false);
         return;
       }
-      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
+      // The API currently requires separate area and address fields. Keep the single
+      // location entry supplied by the customer in both fields for compatibility.
+      const location = requestLocation.trim();
+      const orderBody = { service: form.service, area: location, address: location, description, budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setClientTab('current');
-      setForm(current => ({ ...current, area: '', address: '', description: '', budget: '' }));
+      setForm(current => ({ ...current, service: '', area: '', address: '', description: '', budget: '' }));
+      setSelected(null);
+      setRequestStep(1);
+      setRequestJobType('');
+      setRequestLocation('');
+      setRequestPhotos([]);
       setReloadKey(value => value + 1);
       Alert.alert('تم استلام الطلب', `كود المتابعة: ${result.sn || result.order?.sn || '—'}\nسيتم مراجعته من الإدارة.`);
     } catch (err) { Alert.alert('تعذر إنشاء الطلب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
@@ -1743,24 +1758,37 @@ function AppScreens({ onScreenChange }) {
       <Text style={styles.sectionTitle}>طلبات العميل</Text>
       <View style={styles.tabRow}>{[{key:'new',label:'طلب جديد',count:0},{key:'current',label:'طلبات جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'طلبات سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع طلب',count:0},{key:'complaint',label:'شكوى',count:0}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pill, clientTab===t.key && styles.pillActive]}><Text style={[styles.pillText,clientTab===t.key && styles.pillTextActive]}>{t.label}{t.key!=='new' ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
-      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
-      {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
-        <Text style={styles.fieldLabel}>المهنة الرئيسية</Text>
-        <TouchableOpacity accessibilityRole="button" onPress={() => setServicePickerOpen(value => !value)} style={styles.dropdownButton}>
-          <Text style={styles.dropdownButtonText}>{selected?.label || 'اختر الخدمة المطلوبة'}</Text><Text style={styles.dropdownArrow}>{servicePickerOpen ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-        {servicePickerOpen ? <View style={styles.dropdownOptions}>{categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{category.emoji || '🛠️'} {category.label}</Text></TouchableOpacity>)}</View> : null}
-        <Text style={styles.fieldLabel}>الخدمة التفصيلية</Text>
-        <TouchableOpacity accessibilityRole="button" disabled={!selected} onPress={() => setSubservicePickerOpen(value => !value)} style={[styles.dropdownButton, !selected && styles.disabledButton]}>
-          <Text style={styles.dropdownButtonText}>{form.service || 'حدد نوع الخدمة بالضبط'}</Text><Text style={styles.dropdownArrow}>{subservicePickerOpen ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-        {subservicePickerOpen && selected ? <View style={styles.dropdownOptions}>{(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{service}</Text></TouchableOpacity>)}</View> : null}
-        <Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
-        <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
-        <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
-        <Text style={styles.note}>اكتب تفاصيل الشغل المطلوبة بوضوح؛ التفاصيل إلزامية وتساعد الفني على تقديم عرض مناسب.</Text>
-        <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: حسب المعاينة" />
-        <Button title={loginLoading ? 'جاري إرسال الطلب...' : 'إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} />
+      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text>
+      <View style={styles.requestProgress}>{['اختيار المهنة','نوع الشغل','وصف المهمة','مكان المهمة'].map((label,index)=><View key={label} style={[styles.requestProgressItem, requestStep===index+1 && styles.requestProgressItemActive]}><Text style={[styles.requestProgressText, requestStep===index+1 && styles.requestProgressTextActive]}>{index+1}</Text><Text style={styles.requestProgressLabel}>{label}</Text></View>)}</View>
+      {servicesLoading ? <ActivityIndicator color={COLORS.blue} /> : <>
+        {requestStep === 1 ? <>
+          <Text style={styles.note}>اختار المهنة المناسبة لطلبك</Text>
+          <View style={styles.professionGrid}>{categories.map(category=><TouchableOpacity key={category.label} onPress={()=>{setSelected(category);updateForm('service','');setRequestJobType('');setRequestStep(2);}} style={styles.professionTile}><View style={styles.professionIcon}><Text style={styles.professionEmoji}>{category.emoji||'🛠️'}</Text></View><Text style={styles.professionTitle}>{category.label}</Text><Text style={styles.professionCount}>{(category.services||[]).length} خدمة</Text></TouchableOpacity>)}</View>
+        </> : null}
+        {requestStep === 2 && selected ? <>
+          <View style={styles.professionHero}><View style={styles.professionIconLarge}><Text style={styles.professionEmojiLarge}>{selected.emoji||'🛠️'}</Text></View><Text style={styles.professionHeroTitle}>{selected.label}</Text><Text style={styles.detail}>اختار نوع الخدمة المناسبة من خدمات المهنة المتاحة.</Text></View>
+          <Text style={styles.fieldLabel}>الخدمة المطلوبة</Text>
+          {(selected.services||[]).map(service=><TouchableOpacity key={service} onPress={()=>{updateForm('service',service);setRequestJobType(service);}} style={[styles.jobTypeCard,form.service===service&&styles.jobTypeCardActive]}><Text style={styles.jobTypeRadio}>{form.service===service?'◉':'○'}</Text><Text style={styles.jobTypeText}>{service}</Text></TouchableOpacity>)}
+          <Button title="التالي" onPress={()=>{if(!form.service){Alert.alert('اختيار مطلوب','اختار نوع الخدمة الأول.');return;}setRequestStep(3);}}/>
+          <Button title="رجوع للمهن" secondary onPress={()=>setRequestStep(1)}/>
+        </> : null}
+        {requestStep === 3 ? <>
+          <Text style={styles.cardTitle}>وصف المهمة</Text>
+          <Text style={styles.detail}>وضح العطل أو الشغل المطلوب عشان الفني يقدر يقدّم عرض مناسب.</Text>
+          <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v=>updateForm('description',v)} multiline placeholder="اكتب تفاصيل المهمة هنا..." />
+          <Text style={styles.detail}>{form.description.length}/1000</Text>
+          <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v=>updateForm('budget',v)} placeholder="مثال: حسب المعاينة"/>
+          <View style={styles.roleActions}><Button title="السابق" secondary onPress={()=>setRequestStep(2)}/><Button title="التالي" onPress={()=>{if(form.description.trim().length<10){Alert.alert('تفاصيل ناقصة','اكتب 10 أحرف على الأقل.');return;}setRequestStep(4);}}/></View>
+        </> : null}
+        {requestStep === 4 ? <>
+          <Text style={styles.cardTitle}>مكان المهمة</Text>
+          <Text style={styles.detail}>اكتب المنطقة أو الحي وأقرب علامة مميزة. لا نستخدم خريطة أو تحديد موقع تلقائي.</Text>
+          <Field label="مكان المهمة *" value={requestLocation} onChangeText={setRequestLocation} placeholder="مثال: مدينة نصر، الحي السابع، بالقرب من..." />
+          <Text style={styles.fieldLabel}>صور للمهمة (اختياري)</Text>
+          <Text style={styles.note}>إضافة الصور الفعلية تحتاج ربط خدمة رفع وتخزين بالباك إند؛ الخادم الحالي لا يستقبل صورًا مع الطلب بعد.</Text>
+          <View style={styles.photoSlotGrid}>{[0,1,2,3,4].map(slot=><View key={slot} style={styles.photoSlot}><Text style={styles.photoSlotPlus}>＋</Text><Text style={styles.photoSlotLabel}>صورة {slot+1}</Text></View>)}</View>
+          <View style={styles.roleActions}><Button title="السابق" secondary onPress={()=>setRequestStep(3)}/><Button title={loginLoading?'جاري الإرسال...':'تأكيد الطلب'} onPress={createOrder} disabled={loginLoading}/></View>
+        </> : null}
       </>}</> : null}
       {clientData.sn ? <View style={styles.codeRow}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ الكود" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
         const sn = getOrderSN(order), expanded = Boolean(expandedClientOrders[sn]), rating = ratingDrafts[sn];
@@ -2188,6 +2216,30 @@ const styles = StyleSheet.create({
   ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
   ratingStar: { fontSize: 27, color: '#CBD5E1' },
   ratingStarActive: { color: COLORS.gold },
+  requestProgress: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 4, marginVertical: 12 },
+  requestProgressItem: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 8, borderRadius: 12, backgroundColor: '#EAF1F8' },
+  requestProgressItemActive: { backgroundColor: COLORS.navy },
+  requestProgressText: { color: COLORS.navy, fontWeight: '900', fontSize: 16 },
+  requestProgressTextActive: { color: COLORS.white },
+  requestProgressLabel: { color: COLORS.text, fontSize: 10, textAlign: 'center' },
+  professionGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, marginTop: 8 },
+  professionTile: { width: '31.5%', minHeight: 112, alignItems: 'center', justifyContent: 'center', backgroundColor: '#075A9C', borderRadius: 16, padding: 8, marginBottom: 2 },
+  professionIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F5B928', alignItems: 'center', justifyContent: 'center', marginBottom: 7 },
+  professionEmoji: { fontSize: 25 },
+  professionTitle: { color: COLORS.white, fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  professionCount: { color: '#D9EDFF', fontSize: 10, marginTop: 4, textAlign: 'center' },
+  professionHero: { alignItems: 'center', backgroundColor: '#EAF4FC', borderColor: '#C7DFF2', borderWidth: 1, borderRadius: 18, padding: 18, marginVertical: 8 },
+  professionIconLarge: { width: 74, height: 74, borderRadius: 37, backgroundColor: '#F5B928', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  professionEmojiLarge: { fontSize: 38 },
+  professionHeroTitle: { color: COLORS.navy, fontSize: 21, fontWeight: '900', textAlign: 'center' },
+  jobTypeCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#B7D5EC', borderRadius: 14, padding: 13, marginVertical: 4 },
+  jobTypeCardActive: { borderColor: COLORS.blue, backgroundColor: '#EFF7FF', borderWidth: 2 },
+  jobTypeRadio: { color: COLORS.blue, fontSize: 22, fontWeight: '900' },
+  jobTypeText: { color: COLORS.navy, textAlign: 'right', fontWeight: '700', flex: 1 },
+  photoSlotGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginVertical: 10 },
+  photoSlot: { width: '30%', minHeight: 76, borderWidth: 1, borderColor: '#7CB8E6', borderStyle: 'dashed', borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FCFF' },
+  photoSlotPlus: { color: COLORS.blue, fontSize: 28, lineHeight: 32 },
+  photoSlotLabel: { color: COLORS.navy, fontSize: 11, fontWeight: '700' },
   dropdownButton: { minHeight: 50, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginVertical: 5 },
   dropdownButtonText: { color: COLORS.text, textAlign: 'right', fontSize: 15, fontWeight: '700', flex: 1 },
   dropdownArrow: { color: COLORS.navy, fontSize: 14, marginLeft: 10 },
