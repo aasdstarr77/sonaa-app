@@ -114,10 +114,6 @@ function AppScreens({ onScreenChange }) {
   const [clientServiceSearch, setClientServiceSearch] = useState('');
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [subservicePickerOpen, setSubservicePickerOpen] = useState(false);
-  const [requestStep, setRequestStep] = useState(1);
-  const [requestJobType, setRequestJobType] = useState('');
-  const [requestLocation, setRequestLocation] = useState('');
-  const [requestPhotos, setRequestPhotos] = useState([]);
   const [ratingPrompt, setRatingPrompt] = useState(null);
   const [dismissedRatings, setDismissedRatings] = useState({});
   const [ratingDismissalsLoaded, setRatingDismissalsLoaded] = useState(false);
@@ -176,8 +172,13 @@ function AppScreens({ onScreenChange }) {
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
-  const ratingAccountId = String(session?.user?.phone || session?.user?._id || session?.user?.id || 'account').trim().replace(/\s+/g, '');
+  // Prefer the phone as the stable account identity: database IDs can differ
+  // between login/session restoration responses, but the account phone stays stable.
+  const ratingAccountId = String(
+    session?.user?.phone || session?.user?._id || session?.user?.id || 'account'
+  ).trim().replace(/\s+/g, '');
   const ratingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
+  // Keep reading/writing the old key too, so previously skipped prompts stay skipped.
   const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
   const previousRatingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
 
@@ -227,6 +228,7 @@ function AppScreens({ onScreenChange }) {
     return () => { active = false; };
   }, [ratingStorageKey, legacyRatingStorageKey, session?.role, session?.user?._id, session?.user?.id, session?.user?.phone]);
 
+  // Keep client/technician sessions across app restarts using encrypted device storage.
   useEffect(() => {
     let mounted = true;
     async function restoreSession() {
@@ -245,7 +247,10 @@ function AppScreens({ onScreenChange }) {
           const result = await Promise.race([
             api(endpoint, { token: saved.token }),
             new Promise((_, reject) => {
-              restoreTimer = setTimeout(() => reject(new Error('انتهت مهلة الاتصال أثناء استعادة الحساب.')), 15000);
+              restoreTimer = setTimeout(
+                () => reject(new Error('انتهت مهلة الاتصال أثناء استعادة الحساب.')),
+                15000
+              );
             }),
           ]);
           const user = result.client || result.user || saved.user;
@@ -253,6 +258,7 @@ function AppScreens({ onScreenChange }) {
           saved = { token: saved.token, user, role: saved.role };
           await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(saved));
         } catch (error) {
+          // Clear only rejected sessions. Network/server errors should not sign users out.
           if (error?.status === 401 || error?.status === 403) {
             await SecureStore.deleteItemAsync('sonaa.auth.session.v1');
             return;
@@ -276,18 +282,36 @@ function AppScreens({ onScreenChange }) {
     return () => { mounted = false; };
   }, []);
 
+  // Hardware Back returns one screen at a time and never logs a user out.
   useEffect(() => {
     const onHardwareBack = () => {
-      if (offerDraft) { setOfferDraft(null); return true; }
-      if (notificationsOpen) { setNotificationsOpen(false); return true; }
+      if (offerDraft) {
+        setOfferDraft(null);
+        return true;
+      }
+      if (notificationsOpen) {
+        setNotificationsOpen(false);
+        return true;
+      }
       let previous = screenHistoryRef.current.pop();
       if (screen === 'home') return false;
       while (previous && ['home', 'login', 'clientRegister', 'technicianRegister'].includes(previous) && session) {
         previous = screenHistoryRef.current.pop();
       }
-      if (previous) { screenRef.current = previous; setScreenState(previous); return true; }
-      if (session) { logout(); return true; }
-      if (screen !== 'home') { screenRef.current = 'home'; setScreenState('home'); return true; }
+      if (previous) {
+        screenRef.current = previous;
+        setScreenState(previous);
+        return true;
+      }
+      if (session) {
+        logout();
+        return true;
+      }
+      if (screen !== 'home') {
+        screenRef.current = 'home';
+        setScreenState('home');
+        return true;
+      }
       Alert.alert('صُنّاع', 'أنت بالفعل في الصفحة الرئيسية.');
       return true;
     };
@@ -305,7 +329,8 @@ function AppScreens({ onScreenChange }) {
         if (!Array.isArray(serviceResult.categories)) throw new Error('قائمة الخدمات من الخادم غير صحيحة');
         if (!mounted) return;
         setCategories(serviceResult.categories);
-        setSelected(current => current && serviceResult.categories.some(item => item.label === current.label) ? serviceResult.categories.find(item => item.label === current.label) : null);
+        setSelected(current => current && serviceResult.categories.some(item => item.label === current.label)
+          ? serviceResult.categories.find(item => item.label === current.label) : null);
       } catch (err) {
         if (mounted) { setServicesError(err.message || 'تعذر تحميل الخدمات'); setCategories([]); }
       } finally { if (mounted) setServicesLoading(false); }
@@ -477,7 +502,6 @@ function AppScreens({ onScreenChange }) {
   useEffect(() => {
     if (!session || session.role !== 'client' || screen !== 'client' || !ratingDismissalsLoaded || ratingDismissalsLoadedFor !== ratingStorageKey || ratingPrompt) return;
     const completedOrder = clientData.orders.find(order => {
-      if (!order || typeof order !== 'object') return false;
       const sn = getOrderSN(order);
       const alreadyRated = Boolean(order.myRating || order.clientRating || order.ratingByClient || order.clientReview || (order.ratings || []).some(item => ['client', 'customer'].includes(String(item.reviewerRole || item.role || '').toLowerCase())));
       const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(order.status || order.orderStatus || '').trim().toLowerCase());
@@ -492,7 +516,6 @@ function AppScreens({ onScreenChange }) {
   useEffect(() => {
     if (!session || session.role !== 'fanni' || screen !== 'technician' || !ratingDismissalsLoaded || ratingDismissalsLoadedFor !== ratingStorageKey || ratingPrompt) return;
     const completedOffer = techData.offers.find(item => {
-      if (!item || typeof item !== 'object') return false;
       const sn = getOrderSN(item);
       const alreadyRated = Boolean(item.myRating || item.fanniRating || item.ratingByFanni || item.technicianReview || (item.ratings || []).some(rating => ['fanni', 'technician'].includes(String(rating.reviewerRole || rating.role || '').toLowerCase())));
       const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.orderStatus || item.status || '').trim().toLowerCase());
@@ -672,29 +695,20 @@ function AppScreens({ onScreenChange }) {
   }
 
   async function createOrder() {
-    if (!form.service || requestLocation.trim().length < 2) {
-      Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب مكان المهمة.');
-      return;
-    }
+    if (!form.service || form.area.trim().length < 2 || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب المنطقة والعنوان بالتفصيل.'); return; }
     setLoginLoading(true);
     try {
-      const description = [requestJobType ? 'نوع الشغل: ' + requestJobType : '', form.description.trim()].filter(Boolean).join('\n\n');
-      if (description.replace(/نوع الشغل: [^\n]+\n\n?/, '').trim().length < 10) {
+      const description = form.description.trim();
+      if (description.length < 10) {
         Alert.alert('تفاصيل الخدمة مطلوبة', 'اكتب تفاصيل الشغل المطلوبة في 10 أحرف على الأقل عشان الفني يقدر يقدم لك عرضًا مضبوطًا.');
         setLoginLoading(false);
         return;
       }
-      const location = requestLocation.trim();
-      const orderBody = { service: form.service, area: location, address: location, description, budget: form.budget.trim() };
+      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setClientTab('current');
-      setForm(current => ({ ...current, service: '', area: '', address: '', description: '', budget: '' }));
-      setSelected(null);
-      setRequestStep(1);
-      setRequestJobType('');
-      setRequestLocation('');
-      setRequestPhotos([]);
+      setForm(current => ({ ...current, area: '', address: '', description: '', budget: '' }));
       setReloadKey(value => value + 1);
       Alert.alert('تم استلام الطلب', `كود المتابعة: ${result.sn || result.order?.sn || '—'}\nسيتم مراجعته من الإدارة.`);
     } catch (err) { Alert.alert('تعذر إنشاء الطلب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
@@ -723,22 +737,32 @@ function AppScreens({ onScreenChange }) {
     catch (err) { setClientComplaintTrack(c => ({ ...c, loading: false, error: err.message || 'تعذر متابعة الشكوى.' })); }
   }
 
-  function sendOffer(order) { setOfferDraft({ order, price: '', message: 'أستطيع تنفيذ الخدمة المطلوبة.' }); }
+  function sendOffer(order) {
+    setOfferDraft({ order, price: '', message: 'أستطيع تنفيذ الخدمة المطلوبة.' });
+  }
 
   async function submitOffer() {
-    const draftOrder = offerDraft?.order;
-    if (!draftOrder || !getOrderSN(draftOrder)) { setOfferDraft(null); Alert.alert('تعذر إرسال العرض', 'بيانات الطلب غير مكتملة. افتح الطلب من جديد وحاول مرة أخرى.'); return; }
     const amount = Number(offerDraft?.price);
     const message = String(offerDraft?.message || '').trim();
     const hasActiveAcceptedJob = techData.offers.some(item => item.accepted === true && item.orderStatus === 'تم اختيار فني');
-    if (hasActiveAcceptedJob) { Alert.alert('لديك مهمة جارية', 'لا يمكنك تقديم عرض جديد قبل إنهاء المهمة الحالية.'); return; }
+    if (hasActiveAcceptedJob) {
+      Alert.alert('لديك مهمة جارية', 'لا يمكنك تقديم عرض جديد قبل إنهاء المهمة الحالية.');
+      return;
+    }
     if (!Number.isInteger(amount) || amount < 10 || amount > 1000000 || message.length < 5 || message.length > 500) {
-      Alert.alert('بيانات العرض غير صحيحة', 'اكتب سعرًا صحيحًا من 10 إلى مليون جنيه ورسالة من 5 إلى 500 حرف.'); return;
+      Alert.alert('بيانات العرض غير صحيحة', 'اكتب سعرًا صحيحًا من 10 إلى مليون جنيه ورسالة من 5 إلى 500 حرف.');
+      return;
     }
     try {
-      await api(`/orders/${encodeURIComponent(getOrderSN(draftOrder))}/offer`, { method: 'POST', token: session.token, body: { price: amount, message } });
-      setOfferDraft(null); Alert.alert('تم إرسال العرض', 'تم إرسال عرضك بنجاح.'); setReloadKey(value => value + 1);
-    } catch (err) { Alert.alert('تعذر إرسال العرض', err.message || 'حاول مرة أخرى.'); }
+      await api(`/orders/${encodeURIComponent(offerDraft.order.sn)}/offer`, {
+        method: 'POST', token: session.token, body: { price: amount, message }
+      });
+      setOfferDraft(null);
+      Alert.alert('تم إرسال العرض', 'تم إرسال عرضك بنجاح.');
+      setReloadKey(value => value + 1);
+    } catch (err) {
+      Alert.alert('تعذر إرسال العرض', err.message || 'حاول مرة أخرى.');
+    }
   }
 
   async function cancelClientOrder(order) {
@@ -748,9 +772,14 @@ function AppScreens({ onScreenChange }) {
       { text: 'رجوع', style: 'cancel' },
       { text: 'تأكيد الإلغاء', style: 'destructive', onPress: async () => {
         try {
-          const result = await api(`/orders/${encodeURIComponent(sn)}/cancel`, { method: 'POST', token: orderToken('client'), body: {} });
-          Alert.alert('تم إلغاء الطلب', result.message || 'تم إلغاء الطلب بنجاح.'); setReloadKey(value => value + 1);
-        } catch (err) { Alert.alert('تعذر إلغاء الطلب', err.message || 'قد يكون الفني تم اختياره بالفعل.'); }
+          const result = await api(`/orders/${encodeURIComponent(sn)}/cancel`, {
+            method: 'POST', token: orderToken('client'), body: {}
+          });
+          Alert.alert('تم إلغاء الطلب', result.message || 'تم إلغاء الطلب بنجاح.');
+          setReloadKey(value => value + 1);
+        } catch (err) {
+          Alert.alert('تعذر إلغاء الطلب', err.message || 'قد يكون الفني تم اختياره بالفعل.');
+        }
       } },
     ]);
   }
@@ -763,11 +792,13 @@ function AppScreens({ onScreenChange }) {
       { text: 'رجوع', style: 'cancel' },
       { text: 'قبول العرض', onPress: async () => {
         try {
-          await api(`/orders/${encodeURIComponent(sn)}/accept`, { method: 'POST', token: session.token, body: { offerId } });
+          const result = await api(`/orders/${encodeURIComponent(sn)}/accept`, { method: 'POST', token: session.token, body: { offerId } });
           acceptedChatAutoOpenedRef.current[`client:${sn}`] = true;
           await refreshOrderChat({ ...order, status: 'تم اختيار فني', orderStatus: 'تم اختيار فني' }, 'client');
-          Alert.alert('تم قبول العرض', 'تم تأكيد اختيار الفني بنجاح.'); setReloadKey(v => v + 1);
-        } catch (err) { Alert.alert('تعذر قبول العرض', err.message || 'حاول مرة أخرى.'); }
+          Alert.alert('تم قبول العرض', 'تم تأكيد اختيار الفني بنجاح.');
+          setReloadKey(v => v + 1);
+        }
+        catch (err) { Alert.alert('تعذر قبول العرض', err.message || 'حاول مرة أخرى.'); }
       } },
     ]);
   }
@@ -785,12 +816,13 @@ function AppScreens({ onScreenChange }) {
           setExpandedTechnicianOrders(current => ({ ...current, [sn]: true }));
           setRatingPrompt({ role: 'fanni', order: { ...item, orderSn: sn, orderStatus: 'تم الانتهاء' } });
           setReloadKey(v => v + 1);
-        } catch (err) { Alert.alert('تعذر إنهاء الخدمة', err.message || 'حاول مرة أخرى.'); }
+        }
+        catch (err) { Alert.alert('تعذر إنهاء الخدمة', err.message || 'حاول مرة أخرى.'); }
       } },
     ]);
   }
 
-  function getOrderSN(order) { if (!order || typeof order !== 'object') return ''; return String(order.orderSn || order.sn || order.order?.sn || '').trim().toUpperCase(); }
+  function getOrderSN(order) { return String(order?.orderSn || order?.sn || order?.order?.sn || '').trim().toUpperCase(); }
 
   useEffect(() => {
     if (!session || screen !== 'client' || session.role !== 'client') return;
@@ -813,8 +845,7 @@ function AppScreens({ onScreenChange }) {
     if (!['client', 'technician'].includes(screen)) return;
     const role = screen === 'client' ? 'client' : 'fanni';
     const orders = role === 'client' ? clientData.orders : techData.offers;
-    for (const order of (Array.isArray(orders) ? orders : [])) {
-      if (!order || typeof order !== 'object') continue;
+    for (const order of orders) {
       const sn = getOrderSN(order);
       const status = String(role === 'client' ? (order.status || order.orderStatus || '') : (order.orderStatus || order.status || '')).trim();
       if (!sn || !['تم اختيار فني', 'تم الانتهاء'].includes(status)) continue;
@@ -826,7 +857,11 @@ function AppScreens({ onScreenChange }) {
   }, [session?.role, screen, clientData.orders, techData.offers]);
 
   function orderToken(role) { return role === 'client' ? (session?.token || clientData.clientToken || '') : (session?.token || ''); }
-  function refreshVisibleData() { setReloadKey(value => value + 1); }
+
+  // Refresh the currently visible screen by rerunning its existing data-loading effects.
+  function refreshVisibleData() {
+    setReloadKey(value => value + 1);
+  }
 
   async function refreshOrderChat(order, role) {
     const sn = getOrderSN(order);
@@ -843,7 +878,7 @@ function AppScreens({ onScreenChange }) {
     }
   }
 
-   async function toggleOrderChat(order, role) {
+  async function toggleOrderChat(order, role) {
     const sn = getOrderSN(order);
     if (!sn) { Alert.alert('تعذر فتح المحادثة', 'كود الطلب غير موجود.'); return; }
     const requestedOfferId = order?._id || order?.offerId || order?.id || '';
@@ -860,7 +895,8 @@ function AppScreens({ onScreenChange }) {
     const offerId = orderChats[getOrderSN(order)]?.targetOfferId || order?._id || order?.offerId || order?.id;
     if (!sn || !message) { Alert.alert('رسالة فارغة', 'اكتب الرسالة أولًا.'); return; }
     if (session?.role === 'fanni' && order?.accepted !== true && !['نعم', 'لا', 'حسب الاتفاق'].includes(message)) {
-      Alert.alert('الرد قبل قبول العرض', 'قبل اختيارك من العميل، الردود المتاحة هي: نعم، لا، حسب الاتفاق.'); return;
+      Alert.alert('الرد قبل قبول العرض', 'قبل اختيارك من العميل، الردود المتاحة هي: نعم، لا، حسب الاتفاق.');
+      return;
     }
     try {
       await api(`/orders/${encodeURIComponent(sn)}/chat`, { method: 'POST', token: orderToken(session?.role || 'client'), body: { text: message, ...(offerId && ((session?.role === 'fanni' && order?.accepted !== true) || (session?.role === 'client' && !['تم اختيار فني', 'تم الانتهاء'].includes(order?.status))) ? { offerId } : {}) } });
@@ -872,43 +908,61 @@ function AppScreens({ onScreenChange }) {
   async function requestOrderPriceChange(order) {
     const sn = getOrderSN(order), draft = priceDrafts[getOrderSN(order)] || {};
     const newPrice = Number(draft.price), reason = String(draft.reason || '').trim();
-    if (!sn || !Number.isFinite(newPrice) || newPrice <= 0 || reason.length < 5) { Alert.alert('بيانات تعديل السعر', 'اكتب السعر الجديد وسببًا واضحًا لا يقل عن 5 أحرف.'); return; }
+    if (!sn || !Number.isFinite(newPrice) || newPrice <= 0 || reason.length < 5) {
+      Alert.alert('بيانات تعديل السعر', 'اكتب السعر الجديد وسببًا واضحًا لا يقل عن 5 أحرف.'); return;
+    }
     try {
       const result = await api(`/orders/${encodeURIComponent(sn)}/price-change`, { method: 'POST', token: session.token, body: { newPrice, reason } });
       Alert.alert('تم إرسال الطلب', result.message || 'لن يتغير السعر قبل موافقة العميل.');
       setPriceDrafts(current => ({ ...current, [sn]: { price: '', reason: '' } }));
-      await refreshOrderChat(order, 'fanni'); setReloadKey(v => v + 1);
+      await refreshOrderChat(order, 'fanni');
+      setReloadKey(v => v + 1);
     } catch (err) { Alert.alert('تعذر تعديل السعر', err.message || 'حاول مرة أخرى.'); }
   }
 
   async function decideOrderPrice(order, request, approved) {
     const sn = getOrderSN(order), id = request?._id || request?.id;
     if (!sn || !id) { Alert.alert('تعذر تنفيذ القرار', 'بيانات طلب تعديل السعر غير مكتملة.'); return; }
-    Alert.alert(approved ? 'الموافقة على تعديل السعر' : 'رفض تعديل السعر', approved ? `هل توافق على تغيير السعر إلى ${request.newPrice} جنيه؟` : 'هل تريد رفض طلب تعديل السعر؟', [{ text: 'رجوع', style: 'cancel' }, { text: approved ? 'موافقة' : 'رفض', onPress: async () => {
-      try {
-        const result = await api(`/orders/${encodeURIComponent(sn)}/price-change/${encodeURIComponent(id)}/decision`, { method: 'POST', token: orderToken('client'), body: { approved } });
-        Alert.alert('تم تسجيل القرار', result.message || (approved ? 'تمت الموافقة.' : 'تم رفض الطلب.')); await refreshOrderChat(order, 'client'); setReloadKey(v => v + 1);
-      } catch (err) { Alert.alert('تعذر تسجيل القرار', err.message || 'حاول مرة أخرى.'); }
-    }}]);
+    Alert.alert(approved ? 'الموافقة على تعديل السعر' : 'رفض تعديل السعر',
+      approved ? `هل توافق على تغيير السعر إلى ${request.newPrice} جنيه؟` : 'هل تريد رفض طلب تعديل السعر؟',
+      [{ text: 'رجوع', style: 'cancel' }, { text: approved ? 'موافقة' : 'رفض', onPress: async () => {
+        try {
+          const result = await api(`/orders/${encodeURIComponent(sn)}/price-change/${encodeURIComponent(id)}/decision`, { method: 'POST', token: orderToken('client'), body: { approved } });
+          Alert.alert('تم تسجيل القرار', result.message || (approved ? 'تمت الموافقة.' : 'تم رفض الطلب.'));
+          await refreshOrderChat(order, 'client');
+          setReloadKey(v => v + 1);
+        } catch (err) { Alert.alert('تعذر تسجيل القرار', err.message || 'حاول مرة أخرى.'); }
+      }}]);
   }
 
+  // Poll only conversations the user has explicitly opened; never interrupt typing or flash a loader.
   useEffect(() => {
     if (!session || !['client', 'technician'].includes(screen)) return;
     const role = screen === 'client' ? 'client' : 'fanni';
     const sourceOrders = role === 'client' ? clientData.orders : techData.offers;
-    let mounted = true, inFlight = false;
+    let mounted = true;
+    let inFlight = false;
     const pollOpenChats = async () => {
-      if (inFlight) return; inFlight = true;
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const openChats = (Array.isArray(sourceOrders) ? sourceOrders : []).filter(order => order && typeof order === 'object').map(order => getOrderSN(order)).filter(sn => sn && orderChatsRef.current[sn]?.open);
+        const openChats = sourceOrders
+          .map(order => getOrderSN(order))
+          .filter(sn => sn && orderChatsRef.current[sn]?.open);
         await Promise.all(openChats.map(async sn => {
           try {
             const result = await api(`/orders/${encodeURIComponent(sn)}/chat`, { token: session.token });
             if (!mounted) return;
-            setOrderChats(current => current[sn]?.open ? { ...current, [sn]: { ...current[sn], loading: false, error: '', messages: toList(result, ['messages']), priceChangeRequests: toList(result, ['priceChangeRequests']) } } : current);
-          } catch {}
+            setOrderChats(current => current[sn]?.open
+              ? { ...current, [sn]: { ...current[sn], loading: false, error: '', messages: toList(result, ['messages']), priceChangeRequests: toList(result, ['priceChangeRequests']) } }
+              : current);
+          } catch {
+            // A transient polling failure should not close the chat or show repeated alerts.
+          }
         }));
-      } finally { inFlight = false; }
+      } finally {
+        inFlight = false;
+      }
     };
     const timer = setInterval(pollOpenChats, 3000);
     return () => { mounted = false; clearInterval(timer); };
@@ -916,11 +970,21 @@ function AppScreens({ onScreenChange }) {
 
   function setOrderRatingStars(order, stars) {
     const sn = getOrderSN(order);
-    setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], stars: String(stars), blockFuture: stars === 1 ? current[sn]?.blockFuture : false } }));
+    setRatingDrafts(current => ({
+      ...current,
+      [sn]: {
+        ...current[sn],
+        stars: String(stars),
+        blockFuture: stars === 1 ? current[sn]?.blockFuture : false,
+      },
+    }));
   }
+
   function renderRatingStars(order, selectedStars) {
     return <View style={styles.ratingStarsRow}>
-      {[1, 2, 3, 4, 5].map(value => <TouchableOpacity key={value} onPress={() => setOrderRatingStars(order, value)} style={styles.ratingStarButton}><Text style={[styles.ratingStar, selectedStars >= value && styles.ratingStarActive]}>★</Text></TouchableOpacity>)}
+      {[1, 2, 3, 4, 5].map(value => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`تقييم ${value} من 5`} onPress={() => setOrderRatingStars(order, value)} style={styles.ratingStarButton}>
+        <Text style={[styles.ratingStar, selectedStars >= value && styles.ratingStarActive]}>★</Text>
+      </TouchableOpacity>)}
     </View>;
   }
 
@@ -928,35 +992,51 @@ function AppScreens({ onScreenChange }) {
     const sn = getOrderSN(order), draft = ratingDrafts[getOrderSN(order)] || {};
     if (!sn || ratingSubmittingRef.current.has(sn)) return;
     const stars = Number(draft.stars || 5), comment = String(draft.comment || '').trim(), blockFuture = Boolean(draft.blockFuture);
-    if (!Number.isInteger(stars) || stars < 1 || stars > 5 || (blockFuture && stars !== 1)) { Alert.alert('راجع التقييم', 'اختار من نجمة إلى 5 نجوم.'); return; }
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5 || (blockFuture && stars !== 1)) {
+      Alert.alert('راجع التقييم', 'اختار من نجمة إلى 5 نجوم. منع التعامل متاح مع تقييم نجمة واحدة فقط.'); return;
+    }
+
     ratingSubmittingRef.current.add(sn);
     setRatingSubmitting(current => ({ ...current, [sn]: true }));
     const controller = new AbortController();
+    const activePrompt = ratingPrompt && getOrderSN(ratingPrompt.order) === sn ? ratingPrompt : null;
     const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const result = await api(`/orders/${encodeURIComponent(sn)}/rating`, { method: 'POST', token: orderToken(session?.role || 'client'), body: { stars, comment, blockFuture }, signal: controller.signal });
+      const result = await api(`/orders/${encodeURIComponent(sn)}/rating`, {
+        method: 'POST',
+        token: orderToken(session?.role || 'client'),
+        body: { stars, comment, blockFuture },
+        signal: controller.signal,
+      });
       setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], stars: String(stars), comment: '', blockFuture: false, submitted: true } }));
-      setRatingPrompt(null);
-      await saveRatingDismissal(sn); setReloadKey(v => v + 1);
+      setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
+      await saveRatingDismissal(sn);
+      setReloadKey(v => v + 1);
       Alert.alert('تم حفظ التقييم', result.message || 'تم حفظ تقييمك بنجاح.');
     } catch (err) {
-      if (err?.status === 409) { setRatingPrompt(null); await saveRatingDismissal(sn); Alert.alert('التقييم محفوظ بالفعل', 'تم تسجيل تقييمك من قبل.'); return; }
-      Alert.alert('تعذر حفظ التقييم', err.message || 'حاول مرة أخرى.');
+      // A 409 means the server already has this rating. Do not reopen the prompt.
+      if (err?.status === 409) {
+        setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
+        await saveRatingDismissal(sn);
+        setReloadKey(v => v + 1);
+        Alert.alert('التقييم محفوظ بالفعل', 'سبق تسجيل تقييمك لهذه المهمة، ولن يظهر مربع التقييم مرة أخرى.');
+        return;
+      }
+      // Keep the modal open so the user can see the error and retry deliberately.
+      if (activePrompt) setRatingPrompt(activePrompt);
+      Alert.alert('تعذر حفظ التقييم', err.message || 'تعذر حفظ التقييم. حاول مرة أخرى.');
     } finally {
-      clearTimeout(timeout); ratingSubmittingRef.current.delete(sn);
+      clearTimeout(timeout);
+      ratingSubmittingRef.current.delete(sn);
       setRatingSubmitting(current => ({ ...current, [sn]: false }));
     }
   }
 
   async function saveRatingDismissal(sn) {
     if (!sn) return;
-
-    // Update memory immediately, then merge with storage to avoid losing dismissals
-    // when multiple completed orders are skipped close together.
-    const inMemory = { ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
-    dismissedRatingsRef.current = inMemory;
-    setDismissedRatings(inMemory);
-
+    const next = { ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
+    dismissedRatingsRef.current = next;
+    setDismissedRatings(next);
     try {
       const raw = await SecureStore.getItemAsync(ratingStorageKey);
       let persisted = {};
@@ -964,13 +1044,11 @@ function AppScreens({ onScreenChange }) {
         const parsed = raw ? JSON.parse(raw) : {};
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) persisted = parsed;
       } catch (_) {}
-
-      const merged = { ...persisted, ...dismissedRatingsRef.current, ...dismissedRatings, [sn]: true };
+      // Merge against the latest synchronous ref so overlapping writes cannot lose a skipped order.
+      const merged = { ...persisted, ...dismissedRatingsRef.current, [sn]: true };
       dismissedRatingsRef.current = merged;
       setDismissedRatings(merged);
       await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(merged));
-
-      // Keep legacy account-scoped keys in sync for existing installations.
       if (previousRatingStorageKey !== ratingStorageKey) {
         await SecureStore.setItemAsync(previousRatingStorageKey, JSON.stringify(merged));
       }
@@ -981,51 +1059,1298 @@ function AppScreens({ onScreenChange }) {
       console.warn('تعذر حفظ حالة تخطي التقييم:', error?.message || error);
     }
   }
+
   async function skipRatingPrompt() {
     const prompt = ratingPrompt;
     if (!prompt) return;
     const sn = getOrderSN(prompt.order);
-    if (!sn) return;
-
-    setRatingDrafts(current => ({ ...current, [sn]: { ...(current[sn] || {}), skipped: true } }));
+    setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], skipped: true } }));
     await saveRatingDismissal(sn);
     setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
   }
+
   function renderRatingModal(role) {
-    if (!ratingPrompt || !ratingPrompt.order || ratingPrompt.role !== role) return null;
-    const order = ratingPrompt?.order || {}; const sn = getOrderSN(order);
+    if (!ratingPrompt || ratingPrompt.role !== role) return null;
+    const order = ratingPrompt.order;
+    const sn = getOrderSN(order);
     const draft = ratingDrafts[sn] || { stars: '5', comment: '', blockFuture: false };
-    const stars = Number(draft.stars || 5); const submitting = Boolean(ratingSubmitting[sn]);
+    const stars = Number(draft.stars || 5);
+    const submitting = Boolean(ratingSubmitting[sn]);
     return <Modal visible transparent animationType="fade" onRequestClose={skipRatingPrompt}>
-      <View style={styles.modalBackdrop}><View style={styles.ratingModal}><Text style={styles.title}>{role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text><Text style={styles.detail}>المهمة {sn} انتهت.</Text>{renderRatingStars(order, stars)}<Field label="تعليق (اختياري)" value={draft.comment || ''} onChangeText={value => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], comment: value } }))} multiline/><Button title={submitting ? "جاري الإرسال..." : "إرسال التقييم"} onPress={() => submitOrderRating(order)} disabled={submitting}/><Button title="تخطي" secondary onPress={skipRatingPrompt}/></View></View></Modal>;
+      <View style={styles.modalBackdrop}>
+        <View style={styles.ratingModal}>
+          <Text style={styles.title}>{role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text>
+          <Text style={styles.detail}>المهمة {sn} انتهت. اختار تقييمك، والتعليق اختياري.</Text>
+          {renderRatingStars(order, stars)}
+          <Field label="تعليق (اختياري)" value={draft.comment || ''} onChangeText={value => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], comment: value } }))} multiline placeholder="اكتب ملاحظتك هنا..." />
+          {stars === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], blockFuture: !current[sn]?.blockFuture } }))} style={styles.inlineCheck}>
+            <Text style={styles.detail}>{draft.blockFuture ? '☑' : '☐'} {role === 'client' ? 'عدم استقبال عروض من الفني ده مرة تانية' : 'عدم إظهار طلبات العميل ده ليّ مرة تانية'}</Text>
+          </TouchableOpacity> : null}
+          <Button title={submitting ? "جاري إرسال التقييم..." : "إرسال التقييم"} onPress={() => submitOrderRating(order)} disabled={submitting} />
+          <Button title="تخطي" secondary onPress={skipRatingPrompt} disabled={submitting} />
+        </View>
+      </View>
+    </Modal>;
   }
 
-  // ... باقي دوال الإدارة والدعم واللوج اوت (لو محتاجها قولي ابعتهالك) ...
+  async function sendAdminBroadcast() {
+    const title = broadcast.title.trim(), message = broadcast.message.trim();
+    if (title.length < 2 || title.length > 100 || message.length < 2 || message.length > 300) { Alert.alert('راجع الإشعار', 'العنوان من حرفين إلى 100 حرف، والرسالة من حرفين إلى 300 حرف.'); return; }
+    Alert.alert('تأكيد إرسال الإشعار', `إرسال الإشعار إلى: ${broadcast.audience === 'all' ? 'الجميع' : broadcast.audience === 'clients' ? 'العملاء' : broadcast.audience === 'fannis' ? 'الفنيين' : 'فنيي القاهرة'}؟`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'إرسال', onPress: async () => {
+        try { const result = await api('/admin/notifications/broadcast', { method: 'POST', token: session.token, body: { title, message, audience: broadcast.audience } }); Alert.alert('تم إرسال الإشعار', `${result.message || 'تم الإرسال'} — العدد: ${Number(result.sent || 0)}`); setBroadcast(current => ({ ...current, title: '', message: '' })); }
+        catch (err) { Alert.alert('تعذر إرسال الإشعار', err.message || 'راجع صلاحيات حساب الإدارة.'); }
+      } },
+    ]);
+  }
+
+  async function acceptTechnicianGuidelines() {
+    try {
+      const result = await api('/fanni/guidelines/accept', {
+        method: 'POST',
+        token: session?.token,
+        body: { accepted: true, version: '2026-10-20-v1' }
+      });
+      Alert.alert('تم تسجيل الموافقة', result.message || 'تم تسجيل موافقتك على ميثاق صُنّاع.');
+      setReloadKey(value => value + 1);
+    } catch (err) {
+      Alert.alert('تعذر تسجيل الموافقة', err.message || 'حاول مرة أخرى.');
+    }
+  }
+
+  async function submitTopup() {
+    const amount = Number(topup.amount);
+    if (!Number.isInteger(amount) || amount < 10 || !topup.fromPhone.trim() || !topup.method) { Alert.alert('بيانات غير صحيحة', 'اكتب مبلغًا صحيحًا ورقم المحوّل واختار المحفظة التي حولت منها.'); return; }
+    try {
+      const result = await api('/fanni/wallet/topup', { method: 'POST', token: session.token, body: { amount, fromPhone: topup.fromPhone.trim(), reference: topup.reference.trim(), method: topup.method } });
+      Alert.alert('تم إرسال طلب الشحن', result.message || 'طلبك قيد مراجعة الإدارة.');
+      setTopup({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
+      setReloadKey(value => value + 1);
+    } catch (err) { Alert.alert('تعذر إرسال الشحن', err.message || 'حاول مرة أخرى.'); }
+  }
+
+  async function loadSupportCases() {
+    if (!session || !['client', 'fanni'].includes(session.role)) return;
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role, { token: session.token });
+      setSupportCases(toList(result, ['supportCases', 'items']));
+    } catch (err) { setSupportError(err.message || 'تعذر تحميل محادثات الدعم'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function startSupportCase() {
+    const text = supportDraft.trim();
+    if (!text) { Alert.alert('رسالة فارغة', 'اكتب المشكلة أو الاستفسار الأول.'); return; }
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role, { method: 'POST', token: session.token, body: { subject: supportSubject.trim() || 'استفسار عام', text } });
+      const item = result.supportCase;
+      setSupportDraft('');
+      setSupportCase(item);
+      setSupportCases(current => [item, ...current.filter(x => String(x._id) !== String(item._id))]);
+      Alert.alert('تم فتح محادثة الدعم', 'رسالتك محفوظة داخل صُنّاع. لو احتاجت تدخلًا بشريًا، اضغط «طلب تدخل الدعم».');
+    } catch (err) { setSupportError(err.message || 'تعذر إرسال الرسالة'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function openSupportCase(item) {
+    setSupportCase(item);
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role + '/' + encodeURIComponent(item._id), { token: session.token });
+      setSupportCase(result.supportCase || item);
+    } catch (err) { setSupportError(err.message || 'تعذر فتح المحادثة'); }
+    finally { setSupportLoading(false); }
+  }
+
+  async function sendSupportMessage(needsHuman = false) {
+    const text = supportDraft.trim() || (needsHuman ? 'أحتاج تدخل موظف الدعم.' : '');
+    if (!supportCase?._id) return startSupportCase();
+    if (!text) { Alert.alert('رسالة فارغة', 'اكتب رسالتك أولًا.'); return; }
+    setSupportLoading(true); setSupportError('');
+    try {
+      const result = await api('/support/' + session.role + '/' + encodeURIComponent(supportCase._id) + '/messages', {
+        method: 'POST', token: session.token, body: { text, needsHuman }
+      });
+      const item = result.supportCase;
+      setSupportCase(item);
+      setSupportCases(current => [item, ...current.filter(x => String(x._id) !== String(item._id))]);
+      setSupportDraft('');
+      if (needsHuman) Alert.alert('تم طلب تدخل الدعم', 'تم وضع المحادثة في قائمة الحالات التي تحتاج تدخل الإدارة.');
+    } catch (err) { setSupportError(err.message || 'تعذر إرسال الرسالة'); }
+    finally { setSupportLoading(false); }
+  }
+
+  useEffect(() => {
+    if (!session || screen !== 'admin' || session.role !== 'admin') return;
+    let active = true;
+    async function loadAdminExtras() {
+      setAdminExtras(current => ({ ...current, loading: true, error: '' }));
+      const results = await Promise.allSettled([
+        api('/admin/services', { token: session.token }),
+        api('/admin/regions', { token: session.token }),
+        api('/admin/pricing', { token: session.token }),
+        api('/admin/settings', { token: session.token }),
+        api('/admin/content', { token: session.token }),
+        api('/admin/audit-logs', { token: session.token }),
+      ]);
+      if (!active) return;
+      const pick = (i, keys) => results[i].status === 'fulfilled' ? results[i].value : null;
+      const serviceData = pick(0, []);
+      const regionData = pick(1, []);
+      const pricingData = pick(2, []);
+      const settingsData = pick(3, []);
+      const contentData = pick(4, []);
+      const auditData = pick(5, []);
+      const failed = results.some(item => item.status === 'rejected');
+      const pricing = pricingData?.pricing || {};
+      const settings = settingsData?.settings || {};
+      const content = contentData?.content || {};
+      setAdminExtras(current => ({
+        ...current,
+        services: toList(serviceData, ['categories', 'items']),
+        regions: toList(regionData, ['regions', 'items']),
+        pricing: { check: Number(pricing.check ?? current.pricing.check), commission: Number(pricing.commission ?? current.pricing.commission), minOffer: Number(pricing.minOffer ?? current.pricing.minOffer), maxOffer: Number(pricing.maxOffer ?? current.pricing.maxOffer) },
+        pricingHistory: toList(pricingData, ['history']),
+        settings: { siteName: settings.siteName || current.settings.siteName, maintenance: Boolean(settings.maintenance), maintenanceMessage: settings.maintenanceMessage || '', maxFanniSignupAttempts: Number(settings.maxFanniSignupAttempts || current.settings.maxFanniSignupAttempts) },
+        content: { announcement: content.announcement || '', faqs: Array.isArray(content.faqs) ? content.faqs : [] },
+        auditLogs: toList(auditData, ['logs', 'items']),
+        loading: false,
+        error: failed ? 'تعذر تحميل بعض أقسام الإدارة؛ راجع صلاحيات الحساب واتصال الخادم.' : ''
+      }));
+      if (contentData?.content) setAdminAnnouncementDraft(contentData.content.announcement || '');
+    }
+    loadAdminExtras();
+    return () => { active = false; };
+  }, [session, screen, reloadKey]);
+
+  async function loadAdminSupportCases() {
+    if (!session || session.role !== 'admin') return;
+    try {
+      const result = await api('/support/admin', { token: session.token });
+      setAdminSupportCases(toList(result, ['supportCases', 'items']));
+      await loadAdminRecoveryCases();
+    } catch (err) { Alert.alert('تعذر تحميل الدعم', err.message || 'راجع صلاحيات الإدارة.'); }
+  }
+
+  async function loadAdminRecoveryCases() {
+    if (!session || session.role !== 'admin') return;
+    try {
+      const result = await api('/password-recovery/admin/requests', { token: session.token });
+      setAdminRecoveryCases(toList(result, ['recoveries', 'items']));
+    } catch (err) { setAdminRecoveryCases([]); }
+  }
+
+  async function openAdminRecovery(item) {
+    try {
+      const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(item.id || item._id), { token: session.token });
+      setAdminRecoverySelected(result.recovery || item);
+      setAdminRecoveryCode('');
+      setAdminRecoveryDraft('');
+    } catch (err) { Alert.alert('طلب الاستعادة', err.message || 'تعذر فتح الطلب.'); }
+  }
+
+  async function issueAdminRecoveryCode() {
+    if (!adminRecoverySelected) return;
+    Alert.alert('تأكيد التحقق', 'لا تصدر الرمز إلا بعد التأكد من ملكية الحساب عبر أسئلة الدعم.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'تم التحقق', onPress: async () => {
+        try {
+          const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(adminRecoverySelected.id || adminRecoverySelected._id) + '/issue-code', { method: 'POST', token: session.token, body: {} });
+          setAdminRecoverySelected(result.recovery);
+          setAdminRecoveryCode(String(result.code || ''));
+          await loadAdminRecoveryCases();
+        } catch (err) { Alert.alert('تعذر إصدار الرمز', err.message || 'حاول مرة أخرى.'); }
+      } }
+    ]);
+  }
+
+  async function replyAdminRecovery() {
+    const text = adminRecoveryDraft.trim();
+    if (!adminRecoverySelected || !text) { Alert.alert('رد الدعم', 'اكتب الرد أولًا.'); return; }
+    try {
+      const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(adminRecoverySelected.id || adminRecoverySelected._id) + '/reply', { method: 'POST', token: session.token, body: { text } });
+      setAdminRecoverySelected(result.recovery);
+      setAdminRecoveryDraft('');
+      setAdminRecoveryCode('');
+      await loadAdminRecoveryCases();
+      Alert.alert('تم إرسال الرد', 'تم إرسال الرسالة داخل محادثة استعادة الحساب.');
+    } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
+  }
+
+  async function replyAdminSupport(item) {
+    const text = adminSupportDraft.trim();
+    if (!item?._id || !text) { Alert.alert('رد الدعم', 'اكتب الرد الأول.'); return; }
+    try {
+      const result = await api('/support/admin/' + encodeURIComponent(item._id) + '/reply', {
+        method: 'POST', token: session.token, body: { text }
+      });
+      const updated = result.supportCase;
+      setAdminSupportSelected(updated);
+      setAdminSupportCases(current => [updated, ...current.filter(x => String(x._id) !== String(updated._id))]);
+      setAdminSupportDraft('');
+      Alert.alert('تم إرسال الرد', 'تم حفظ ردك داخل محادثة الدعم.');
+    } catch (err) { Alert.alert('تعذر إرسال الرد', err.message || 'حاول مرة أخرى.'); }
+  }
+
+  useEffect(() => {
+    if (screen !== 'admin' || adminData.tab !== 'support' || !session || session.role !== 'admin') return;
+    const timer = setInterval(async () => {
+      if (screenRef.current !== 'admin') return;
+      if (adminSupportSelected?._id) {
+        try {
+          const result = await api('/support/admin/' + encodeURIComponent(adminSupportSelected._id), { token: session.token });
+          if (result.supportCase) setAdminSupportSelected(result.supportCase);
+        } catch (_) {}
+      }
+      if (adminRecoverySelected?.id || adminRecoverySelected?._id) {
+        try {
+          const id = adminRecoverySelected.id || adminRecoverySelected._id;
+          const result = await api('/password-recovery/admin/requests/' + encodeURIComponent(id), { token: session.token });
+          if (result.recovery) setAdminRecoverySelected(result.recovery);
+        } catch (_) {}
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [screen, adminData.tab, session?.token, adminSupportSelected?._id, adminRecoverySelected?.id, adminRecoverySelected?._id]);
+
+  async function changeAccountPassword() {
+    if (!session) return;
+    const currentPassword = accountPasswordForm.currentPassword;
+    const newPassword = accountPasswordForm.newPassword;
+    const confirmPassword = accountPasswordForm.confirmPassword;
+    if (!currentPassword || newPassword.length < 8 || newPassword !== confirmPassword) {
+      setAccountPasswordForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' }));
+      return;
+    }
+    setAccountPasswordForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const role = session.role === 'client' ? 'client' : ((session.user?.role === 'admin' || session.user?.adminRole) ? 'admin' : 'fanni');
+      const result = await api('/password-recovery/change/' + role, { method: 'POST', token: session.token, body: { currentPassword, newPassword, confirmPassword } });
+      setAccountPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
+      Alert.alert('حسابي', result.message || 'تم تغيير كلمة المرور.');
+    } catch (err) {
+      setAccountPasswordForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' }));
+    }
+  }
+
+  async function startPasswordRecovery() {
+    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
+    try {
+      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
+      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
+  }
+
+  async function refreshPasswordRecovery() {
+    if (!recoveryForm.id || !recoveryForm.token) return;
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
+      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
+    } catch (_) {}
+  }
+
+  async function sendRecoveryMessage() {
+    const text = recoveryForm.text.trim();
+    if (!text) return;
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
+      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
+      await refreshPasswordRecovery();
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
+  }
+
+  async function verifyRecoveryCode() {
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
+      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
+  }
+
+  async function resetRecoveredPassword() {
+    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
+      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
+      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
+      setScreen('login');
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
+  }
+
+  useEffect(() => {
+    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
+    const timer = setInterval(refreshPasswordRecovery, 3000);
+    return () => clearInterval(timer);
+  }, [screen, recoveryForm.id, recoveryForm.token]);
+
+  async function startPasswordRecovery() {
+    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
+    try {
+      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
+      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
+  }
+
+  async function refreshPasswordRecovery() {
+    if (!recoveryForm.id || !recoveryForm.token) return;
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
+      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
+    } catch (_) {}
+  }
+
+  async function sendRecoveryMessage() {
+    const text = recoveryForm.text.trim();
+    if (!text) return;
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
+      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
+      await refreshPasswordRecovery();
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
+  }
+
+  async function verifyRecoveryCode() {
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
+      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
+  }
+
+  async function resetRecoveredPassword() {
+    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
+    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
+    try {
+      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
+      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
+      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
+      setScreen('login');
+    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
+  }
+
+  useEffect(() => {
+    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
+    const timer = setInterval(refreshPasswordRecovery, 3000);
+    return () => clearInterval(timer);
+  }, [screen, recoveryForm.id, recoveryForm.token]);
+
+  async function adminRefreshExtras() { setReloadKey(v => v + 1); }
+  async function adminAddService() {
+    const name = adminServiceDraft.name.trim(), category = adminServiceDraft.category.trim();
+    if (name.length < 2 || name.length > 100 || category.length < 2 || category.length > 100) { Alert.alert('بيانات الخدمة', 'اكتب اسم الخدمة والقسم بشكل صحيح.'); return; }
+    try { const result = await api('/admin/services', { method: 'POST', token: session.token, body: { name, category, emoji: adminServiceDraft.emoji || '🔧' } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة الخدمة.'); setAdminServiceDraft(v => ({ ...v, name: '' })); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر إضافة الخدمة', err.message || 'حاول مرة أخرى.'); }
+  }
+  function adminBeginServiceEdit(category, service) { setAdminServiceEdit({ category, oldName: service, name: service }); }
+  async function adminSaveServiceEdit() {
+    const { category, oldName, name } = adminServiceEdit, next = String(name || '').trim();
+    if (!category || !oldName || next.length < 2 || next.length > 100) { Alert.alert('تعديل الخدمة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
+    try { const result = await api('/admin/services/' + encodeURIComponent(oldName) + '?category=' + encodeURIComponent(category), { method: 'PATCH', token: session.token, body: { name: next, category } }); Alert.alert('تم التعديل', result.message || 'تم تحديث اسم الخدمة.'); setAdminServiceEdit({ category: '', oldName: '', name: '' }); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر التعديل', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminMoveCategory(index, direction) {
+    const list = adminExtras.services.slice(), next = index + direction;
+    if (next < 0 || next >= list.length) return;
+    [list[index], list[next]] = [list[next], list[index]];
+    try { await api('/admin/services/categories/order', { method: 'PATCH', token: session.token, body: { categories: list.map(item => String(item.label || item.name)) } }); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر ترتيب الأقسام', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminMoveService(category, serviceName, direction) {
+    const categoryItem = adminExtras.services.find(item => String(item.label || item.name) === category);
+    const list = (categoryItem?._detailed || (categoryItem?.services || []).map(name => ({ name }))).map(item => ({ name: item.name, sortOrder: 0, emoji: item.emoji || categoryItem?.emoji || '🔧', isActive: item.isActive !== false }));
+    const index = list.findIndex(item => item.name === serviceName), next = index + direction;
+    if (index < 0 || next < 0 || next >= list.length) return;
+    [list[index], list[next]] = [list[next], list[index]]; list.forEach((item, i) => { item.sortOrder = (i + 1) * 10; });
+    try { await api('/admin/services/order', { method: 'PATCH', token: session.token, body: { category, items: list } }); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر ترتيب الخدمات', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminToggleService(category, service, active) {
+    const action = active ? 'إظهار' : 'إخفاء';
+    Alert.alert(action + ' الخدمة', 'هل تريد ' + action + ' «' + service + '»؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'تأكيد', onPress: async () => { try { await api('/admin/services/' + encodeURIComponent(service) + '/' + (active ? 'show' : 'hide') + '?category=' + encodeURIComponent(category), { method: 'POST', token: session.token, body: { category } }); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر ' + action + ' الخدمة', err.message || 'حاول مرة أخرى.'); } } }]);
+  }
+  async function adminDeleteService(category, service) {
+    Alert.alert('حذف الخدمة', 'حذف «' + service + '» من قسم «' + category + '»؟ الطلبات القديمة تظل محفوظة.', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { try { await api('/admin/services/' + encodeURIComponent(service) + '?category=' + encodeURIComponent(category), { method: 'DELETE', token: session.token }); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر الحذف', err.message || 'حاول مرة أخرى.'); } } }]);
+  }
+  async function adminSavePricing() {
+    const p = adminExtras.pricing;
+    if (![p.check,p.commission,p.minOffer,p.maxOffer].every(v => Number.isFinite(Number(v))) || p.check < 0 || p.commission < 0 || p.commission > 100 || p.minOffer < 1 || p.maxOffer < p.minOffer) { Alert.alert('راجع الأسعار', 'تأكد من الرسوم والعمولة والحدود السعرية.'); return; }
+    try { const result = await api('/admin/pricing', { method: 'PUT', token: session.token, body: { check: Number(p.check), commission: Number(p.commission), minOffer: Number(p.minOffer), maxOffer: Number(p.maxOffer) } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ الأسعار والعمولات.'); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر حفظ الأسعار', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminAddRegion() {
+    const name = adminRegionDraft.trim().replace(/\\s+/g, ' ');
+    if (name.length < 2 || name.length > 100) { Alert.alert('اسم المنطقة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
+    try { const result = await api('/admin/regions', { method: 'POST', token: session.token, body: { name } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة المنطقة.'); setAdminRegionDraft(''); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر إضافة المنطقة', err.message || 'قد تكون المنطقة موجودة بالفعل.'); }
+  }
+  async function adminSaveSettings() {
+    const value = adminExtras.settings;
+    if (value.siteName.trim().length < 2 || !Number.isInteger(Number(value.maxFanniSignupAttempts)) || value.maxFanniSignupAttempts < 1 || value.maxFanniSignupAttempts > 100) { Alert.alert('راجع الإعدادات', 'اسم المنصة مطلوب وحد المحاولات من 1 إلى 100.'); return; }
+    try { const result = await api('/admin/settings', { method: 'PUT', token: session.token, body: { ...value, maxFanniSignupAttempts: Number(value.maxFanniSignupAttempts) } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ الإعدادات.'); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر حفظ الإعدادات', err.message || 'حاول مرة أخرى.'); }
+  }
+  function adminAddFaqDraft() {
+    const question = adminFaqDraft.question.trim(), answer = adminFaqDraft.answer.trim();
+    if (question.length < 2 || question.length > 250 || answer.length < 2 || answer.length > 1000) { Alert.alert('الأسئلة الشائعة', 'السؤال من 2 إلى 250 حرفًا والإجابة من 2 إلى 1000 حرف.'); return; }
+    setAdminExtras(c => ({ ...c, content: { ...c.content, faqs: [...c.content.faqs, { question, answer, active: true }] } }));
+    setAdminFaqDraft({ question: '', answer: '' });
+  }
+  async function adminSaveContent() {
+    const announcement = String(adminAnnouncementDraft || '').trim(), faqs = adminExtras.content.faqs;
+    if (announcement.length > 1000 || faqs.length > 100) { Alert.alert('محتوى المنصة', 'الإعلان حتى 1000 حرف والأسئلة حتى 100 سؤال.'); return; }
+    try { const result = await api('/admin/content', { method: 'PUT', token: session.token, body: { announcement, faqs } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ محتوى المنصة.'); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر حفظ المحتوى', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminGenerateReport() {
+    const filters = adminReportFilters;
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) { Alert.alert('فلاتر التقرير', 'تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.'); return; }
+    try { const result = await api('/admin/reports', { method: 'POST', token: session.token, body: filters }); setAdminExtras(c => ({ ...c, report: result })); }
+    catch (err) { Alert.alert('تعذر إنشاء التقرير', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminOrderAction(order, action) {
+    const sn = String(order?.sn || order?.orderSn || '').trim().toUpperCase();
+    if (!/^SN\d{6}$/.test(sn)) { Alert.alert('كود الطلب', 'كود الطلب غير صالح.'); return; }
+    const label = action === 'cancel' ? 'إلغاء' : 'أرشفة';
+    Alert.alert(label + ' الطلب ' + sn, 'هل تؤكد ' + label + ' الطلب؟ سيتم تسجيل الإجراء في سجل الإدارة.', [{ text: 'رجوع', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { const result = await api('/admin/orders/' + encodeURIComponent(sn) + '/' + action, { method: 'POST', token: session.token, body: { reason: 'إجراء إداري من تطبيق صُنّاع' } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث الطلب.'); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر ' + label + ' الطلب', err.message || 'راجع حالة الطلب.'); } } }]);
+  }
+  async function adminClientAction(phone, action) {
+    if (!phone) return Alert.alert('بيانات العميل', 'رقم الهاتف غير متاح.');
+    const labels = { block: 'تعليق الحساب', unblock: 'إعادة تفعيل الحساب', account: 'حذف الحساب' };
+    Alert.alert(labels[action], 'هل تريد ' + labels[action] + ' للعميل ' + phone + '؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { const method = action === 'account' ? 'DELETE' : 'POST'; const result = await api('/admin/clients/' + encodeURIComponent(phone) + (action === 'account' ? '/account' : '/' + action), { method, token: session.token, body: { ...(action === 'block' ? { reason: 'تعليق إداري من تطبيق صُنّاع' } : {}) } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث حساب العميل.'); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر تنفيذ الإجراء', err.message || 'راجع حالة حساب العميل والطلبات النشطة.'); } } }]);
+  }
+  async function adminSetTechnicianLevel(fanni, level) {
+    const id = fanni?._id || fanni?.id; if (!id) return;
+    try { const result = await api('/admin/fannis/' + encodeURIComponent(id) + '/level', { method: 'PATCH', token: session.token, body: { level, reason: 'تحديث المستوى من تطبيق الإدارة' } }); Alert.alert('تم تحديث المستوى', result.message || level); setReloadKey(v => v + 1); }
+    catch (err) { Alert.alert('تعذر تحديث المستوى', err.message || 'حاول مرة أخرى.'); }
+  }
+
+  async function adminLoadWalletTransactions() {
+    if (!adminWallet.fanniId) { Alert.alert('كشف المحفظة', 'اختار الفني أولًا.'); return; }
+    setAdminWallet(c => ({ ...c, loading: true, transactions: [] }));
+    try { const result = await api('/admin/wallet/transactions/' + encodeURIComponent(adminWallet.fanniId), { token: session.token }); setAdminWallet(c => ({ ...c, loading: false, transactions: toList(result, ['transactions','items','data']) })); }
+    catch (err) { setAdminWallet(c => ({ ...c, loading: false })); Alert.alert('تعذر تحميل كشف المحفظة', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminWalletAction(action) {
+    const id = adminWallet.fanniId, fanni = adminData.fannis.find(item => String(item._id || item.id) === String(id));
+    if (!id || !fanni) { Alert.alert('محفظة الفني', 'اختار الفني أولًا.'); return; }
+    const reason = adminWallet.reason.trim();
+    if (reason.length < 2) { Alert.alert('سبب الإجراء', 'اكتب سببًا واضحًا من حرفين على الأقل.'); return; }
+    const amount = Number(adminWallet.amount);
+    if (action === 'balance' && (adminWallet.amount.trim() === '' || !Number.isFinite(amount) || amount < 0)) { Alert.alert('الرصيد', 'اكتب رصيدًا صحيحًا غير سالب.'); return; }
+    Alert.alert('تأكيد إجراء المحفظة', action === 'balance' ? 'تعيين الرصيد إلى ' + amount + ' جنيه؟' : action === 'freeze' ? 'تجميد محفظة الفني؟' : 'إلغاء تجميد محفظة الفني؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { let result; if (action === 'balance') result = await api('/admin/fannis/' + encodeURIComponent(id) + '/set-balance', { method: 'POST', token: session.token, body: { amount, reason } }); else result = await api('/admin/wallet/freeze/' + encodeURIComponent(id), { method: 'POST', token: session.token, body: { action, reason } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث المحفظة.'); setAdminWallet(c => ({ ...c, reason: '' })); setReloadKey(v => v + 1); await adminLoadWalletTransactions(); } catch (err) { Alert.alert('تعذر إجراء المحفظة', err.message || 'حاول مرة أخرى.'); } } }]);
+  }
+
+  async function adminLoadAuditLogs() {
+    try { const result = await api('/admin/audit-logs', { token: session.token }); setAdminExtras(c => ({ ...c, auditLogs: toList(result, ['logs','items']) })); }
+    catch (err) { Alert.alert('تعذر تحميل سجل التدقيق', err.message || 'حاول مرة أخرى.'); }
+  }
+
+  async function copyOrderCode(code) {
+    try { await Clipboard.setStringAsync(String(code || '')); Alert.alert('تم النسخ', 'تم نسخ كود الطلب.'); }
+    catch { Alert.alert('تعذر النسخ', 'اضغط مطولًا على الكود لنسخه يدويًا.'); }
+  }
+
+  function openWhatsAppSupport() {
+    setSupportCase(null);
+    setSupportDraft('');
+    setSupportError('');
+    setScreen('support');
+  }
 
   async function performLogout() {
-    try { await SecureStore.deleteItemAsync('sonaa.auth.session.v1'); } catch {}
-    screenHistoryRef.current = []; screenRef.current = 'home'; setScreenState('home');
+    const activeSession = session;
+    const pushToken = pushTokenRef.current;
+    if (activeSession && pushToken && ['client', 'fanni', 'admin'].includes(activeSession.role)) {
+      try {
+        await api('/notifications/' + activeSession.role + '/push-token', {
+          method: 'DELETE', token: activeSession.token, body: { token: pushToken }
+        });
+      } catch (_) {}
+    }
+    pushTokenRef.current = null;
+    try { await SecureStore.deleteItemAsync('sonaa.auth.session.v1'); }
+    catch (error) { console.warn('تعذر مسح الجلسة المحفوظة:', error?.message || error); }
+    screenHistoryRef.current = [];
+    screenRef.current = 'home';
+    setScreenState('home');
     setSession(null); setUsername(''); setPassword('');
+    setClientData({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
+    setTechData({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
+    setAdminData({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
+    setNotifications({ items: [], unread: 0, loading: false, error: '' });
+    setAdminUsers([]);
   }
+
   function logout() {
-    Alert.alert('تأكيد الخروج', 'هل تريد تسجيل الخروج؟', [{ text: 'لا', style: 'cancel' }, { text: 'نعم', style: 'destructive', onPress: () => { void performLogout(); } }]);
+    Alert.alert('تأكيد تسجيل الخروج', 'هل تريد تسجيل الخروج من حسابك والعودة إلى الصفحة الرئيسية؟', [
+      { text: 'لا', style: 'cancel' },
+      { text: 'نعم', style: 'destructive', onPress: () => { void performLogout(); } }
+    ]);
   }
 
-  if (screen === 'login') return <SafeAreaView style={styles.loginSafe}><KeyboardAvoidingView style={styles.loginPage} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><TouchableOpacity onPress={() => setScreen('home')} style={styles.loginBackButton}><Text style={styles.loginBackText}>رجوع للرئيسية</Text></TouchableOpacity><View style={styles.loginLogoCircle}><Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.loginLogo} resizeMode="contain"/></View><View style={styles.loginHeading}><Text style={styles.loginTitle}>{authMode === 'client' ? 'أهلًا بيك في صُنّاع' : 'أهلًا بيك يا فني'}</Text></View><View style={styles.loginForm}><Field label="رقم الهاتف أو الإيميل" value={username} onChangeText={setUsername} placeholder="اكتب رقم الهاتف"/><Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry/><TouchableOpacity onPress={handleLogin} style={styles.loginGradientButton}><Text style={styles.loginGradientButtonText}>{loginLoading ? 'جاري...' : 'تسجيل الدخول'}</Text></TouchableOpacity></View></KeyboardAvoidingView></SafeAreaView>;
+  useEffect(() => {
+    let cancelled = false;
+    async function registerPushToken() {
+      if (!session || !['client', 'fanni', 'admin'].includes(session.role) || !Device.isDevice) return;
+      try {
+        const permission = await Notifications.getPermissionsAsync();
+        let status = permission.status;
+        if (status !== 'granted') {
+          const requested = await Notifications.requestPermissionsAsync();
+          status = requested.status;
+        }
+        if (status !== 'granted') return;
+        const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+        if (!projectId) {
+          console.warn('Expo push registration skipped: missing projectId');
+          return;
+        }
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'إشعارات صُنّاع',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#14B8A6',
+          });
+        }
+        const result = await Notifications.getExpoPushTokenAsync({ projectId });
+        if (cancelled || !result?.data) return;
+        pushTokenRef.current = result.data;
+        await api('/notifications/' + session.role + '/push-token', {
+          method: 'POST',
+          token: session.token,
+          body: { token: result.data, platform: Platform.OS }
+        });
+      } catch (error) {
+        console.warn('Expo push registration failed:', error?.message || error);
+      }
+    }
+    void registerPushToken();
+    return () => { cancelled = true; };
+  }, [session]);
+  const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
+  const toggleArray = (key, value) => updateForm(key, form[key].includes(value) ? form[key].filter(item => item !== value) : [...form[key], value]);
 
-  // باقي الشاشات client و technician و admin زي ما كانت
-  if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Text style={styles.title}>حساب العميل {session.user?.name}</Text><Button title="خروج" secondary onPress={logout}/><Text style={styles.detail}>طلباتك: {clientData.orders.length}</Text>{clientData.orders.filter(o=>!['تم الانتهاء','ملغي'].includes(o.status)).map((order,i)=>{const sn=getOrderSN(order);return <View key={sn||i} style={styles.dataCard}><Text style={styles.cardTitle}>{order.service} • {sn}</Text><Button title="إلغاء" secondary onPress={()=>cancelClientOrder(order)}/></View>})}</ScrollView>{renderRatingModal('client')}</SafeAreaView>;
+  if (authRestoring) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.statusText}>جاري استعادة حسابك...</Text></View></SafeAreaView>;
 
-  if (screen === 'technician' && session?.role === 'fanni') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Text style={styles.title}>حساب الفني {session.user?.name}</Text><Button title="خروج" secondary onPress={logout}/>{techData.offers.map((item,i)=>{const sn=getOrderSN(item);return <View key={sn||i} style={styles.dataCard}><Text style={styles.cardTitle}>{sn} • {item.orderStatus}</Text>{item.orderStatus==='تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={()=>completeTechnicianOrder(item)}/> : null}</View>})}</ScrollView>{renderRatingModal('fanni')}</SafeAreaView>;
+  if (screen === 'login') return <SafeAreaView style={styles.loginSafe}>
+    <KeyboardAvoidingView style={styles.loginPage} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TouchableOpacity accessibilityRole="button" onPress={() => setScreen('home')} style={styles.loginBackButton}>
+        <Text style={styles.loginBackText}>رجوع للرئيسية</Text>
+      </TouchableOpacity>
+      <View style={styles.loginLogoCircle}>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.loginLogo} resizeMode="contain" />
+      </View>
+      <View style={styles.loginHeading}>
+        <Text style={styles.loginTitle}>{authMode === 'client' ? 'أهلًا بيك في صُنّاع' : 'أهلًا بيك يا فني صُنّاع'}</Text>
+        <Text style={styles.loginSubtitle}>{authMode === 'client' ? 'سجّل دخولك وخلّي طلباتك أسهل.' : 'سجّل دخولك وتابع فرص الشغل المتاحة ليك.'}</Text>
+      </View>
+      <View style={styles.loginForm}>
+        <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="اكتب رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
+        <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" returnKeyType="go" onSubmitEditing={handleLogin} blurOnSubmit />
+        <TouchableOpacity accessibilityRole="button" onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }} style={styles.recoveryLink}>
+          <Text style={styles.recoveryLinkText}>استعادة كلمة السر</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" onPress={handleLogin} disabled={loginLoading} style={[styles.loginGradientButton, loginLoading && styles.disabledButton]}>
+          <View pointerEvents="none" style={styles.loginGradientColors}>
+            <View style={[styles.loginGradientSegment, { backgroundColor: '#0A2A4A' }]} />
+            <View style={[styles.loginGradientSegment, { backgroundColor: '#104775' }]} />
+            <View style={[styles.loginGradientSegment, { backgroundColor: '#1565A0' }]} />
+          </View>
+          <Text style={styles.loginGradientButtonText}>{loginLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}</Text>
+        </TouchableOpacity>
+        {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
+        {authMode === 'fanni' && <Button title="إنشاء حساب فني جديد" secondary onPress={() => setScreen('technicianRegister')} />}
+      </View>
+    </KeyboardAvoidingView>
+  </SafeAreaView>;
 
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Text style={styles.title}>صُنّاع</Text><Button title="دخول عميل" onPress={()=>{setAuthMode('client');setScreen('login')}}/><Button title="دخول فني" secondary onPress={()=>{setAuthMode('fanni');setScreen('login')}}/></ScrollView></SafeAreaView>;
+  if (screen === 'account') {
+    const isClientAccount = session?.role === 'client';
+    const history = isClientAccount ? clientData.orders : session?.role === 'fanni' ? techData.offers : [];
+    const completedHistory = (history || []).filter(item => ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.status || item.orderStatus || '').trim().toLowerCase()));
+    return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
+      <Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} />
+      <Text style={styles.title}>حسابي</Text>
+      <View style={styles.dataCard}>
+        <Text style={styles.sectionTitle}>بيانات الحساب</Text>
+        <Text style={styles.detail}>الاسم: {session?.user?.name || '—'}</Text>
+        <Text style={styles.detail}>رقم الهاتف: {session?.user?.phone || '—'}</Text>
+        <Text style={styles.detail}>نوع الحساب: {isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text>
+        {session?.user?.status ? <Text style={styles.detail}>حالة الحساب: {session.user.status}</Text> : null}
+        {session?.role === 'fanni' && Array.isArray(session?.user?.specialties) ? <Text style={styles.detail}>الخدمات والمهن: {session.user.specialties.join('، ') || '—'}</Text> : null}
+        {session?.role === 'fanni' && session?.user?.level ? <Text style={styles.detail}>المستوى المهني: {session.user.level}</Text> : null}
+        {session?.role === 'fanni' && session?.user?.walletBalance != null ? <Text style={styles.detail}>الرصيد: {String(session.user.walletBalance)}</Text> : null}
+        {session?.user?.adminRole ? <Text style={styles.detail}>المنصب الإداري: {session.user.adminRole}</Text> : null}
+      </View>
+      <Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} />
+      {['client', 'fanni'].includes(session?.role) ? <>
+        <Text style={styles.sectionTitle}>سجل الخدمات والتقييمات</Text>
+        <Text style={styles.detail}>التقييم التلقائي يظهر مرة واحدة فقط. لو تخطّيته، تقدر ترجع هنا وتقيّم العملية يدويًا.</Text>
+        {completedHistory.length ? completedHistory.map((item, index) => {
+          const sn = getOrderSN(item);
+          const alreadyRated = Boolean(item.myRating || item.clientRating || item.fanniRating || item.ratingByClient || item.ratingByFanni || (item.ratings || []).some(r => r.reviewerRole === session.role));
+          const rating = item.myRating || item.clientRating || item.fanniRating || {};
+          return <View key={sn || index} style={styles.dataCard}>
+            <Text style={styles.detail}>رقم العملية: {sn || '—'}</Text>
+            <Text style={styles.detail}>الخدمة: {item.service || item.serviceName || item.title || 'خدمة'}</Text>
+            <Text style={styles.detail}>{alreadyRated ? 'التقييم: ' + ('★'.repeat(Math.max(0, Math.min(5, Number(rating.stars || rating.rating) || 0))) + ' ' + String(rating.stars || rating.rating || 'تم التقييم')) : 'لم يتم التقييم'}</Text>
+            {!alreadyRated ? <Button title="تقييم العملية يدويًا" secondary onPress={() => { setScreen(session.role === 'client' ? 'client' : 'technician'); setRatingPrompt({ role: session.role, order: item }); }} /> : null}
+          </View>;
+        }) : <Text style={styles.detail}>لا توجد عمليات مكتملة لعرضها حاليًا.</Text>}
+      </> : null}
+    </ScrollView></SafeAreaView>;
+  }
+
+  if (screen === 'changePassword') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع إلى حسابي" secondary onPress={() => setScreen('account')} /><Text style={styles.title}>تغيير كلمة المرور</Text><Text style={styles.detail}>اكتب كلمة المرور الحالية ثم كلمة المرور الجديدة.</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
+  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيقوم الدعم بالتحقق من ملكية الحساب ثم إرسال رمز مؤقت داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
+  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيتحقق الدعم من ملكية الحساب ثم يرسل رمزًا مؤقتًا داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+
+  if (screen === 'clientRegister' || screen === 'technicianRegister') {
+    const isClient = screen === 'clientRegister';
+    return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
+      <Button title="رجوع" secondary onPress={() => setScreen('home')} />
+      <Text style={styles.title}>{isClient ? 'إنشاء حساب عميل' : 'تسجيل فني جديد'}</Text>
+      <Field label="الاسم" value={form.name} onChangeText={v => updateForm('name', v)} autoCapitalize="words" />
+      <Field label="رقم الهاتف" value={form.phone} onChangeText={v => updateForm('phone', v)} keyboardType="phone-pad" />
+      <Field label="كلمة السر (6 أحرف للفني، 8 للعميل على الأقل)" value={form.password} onChangeText={v => updateForm('password', v)} secureTextEntry />
+      <Field label="تأكيد كلمة السر" value={form.confirmPassword} onChangeText={v => updateForm('confirmPassword', v)} secureTextEntry />
+      {!isClient && <>
+        <Text style={styles.sectionTitle}>اختار الخدمات اللي بتقدمها</Text>
+        {categories.map(category => <View key={category.label} style={styles.selectionGroup}>
+          <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} خدمة {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
+          {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
+        </View>)}
+      </>}
+      <Button title={loginLoading ? 'جاري التسجيل...' : isClient ? 'إنشاء حساب' : 'إرسال طلب التسجيل'} onPress={isClient ? registerClient : registerTechnician} disabled={loginLoading} />
+    </ScrollView></SafeAreaView>;
+  }
+
+  if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
+      <Text style={styles.sectionTitle}>طلبات العميل</Text>
+      <View style={styles.tabRow}>{[{key:'new',label:'طلب جديد',count:0},{key:'current',label:'طلبات جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'طلبات سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع طلب',count:0},{key:'complaint',label:'شكوى',count:0}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pill, clientTab===t.key && styles.pillActive]}><Text style={[styles.pillText,clientTab===t.key && styles.pillTextActive]}>{t.label}{t.key!=='new' ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
+    <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
+      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
+      {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
+        <Text style={styles.fieldLabel}>المهنة الرئيسية</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={() => setServicePickerOpen(value => !value)} style={styles.dropdownButton}>
+          <Text style={styles.dropdownButtonText}>{selected?.label || 'اختر الخدمة المطلوبة'}</Text><Text style={styles.dropdownArrow}>{servicePickerOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {servicePickerOpen ? <View style={styles.dropdownOptions}>{categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{category.emoji || '🛠️'} {category.label}</Text></TouchableOpacity>)}</View> : null}
+        <Text style={styles.fieldLabel}>الخدمة التفصيلية</Text>
+        <TouchableOpacity accessibilityRole="button" disabled={!selected} onPress={() => setSubservicePickerOpen(value => !value)} style={[styles.dropdownButton, !selected && styles.disabledButton]}>
+          <Text style={styles.dropdownButtonText}>{form.service || 'حدد نوع الخدمة بالضبط'}</Text><Text style={styles.dropdownArrow}>{subservicePickerOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {subservicePickerOpen && selected ? <View style={styles.dropdownOptions}>{(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{service}</Text></TouchableOpacity>)}</View> : null}
+        <Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
+        <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
+        <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
+        <Text style={styles.note}>اكتب تفاصيل الشغل المطلوبة بوضوح؛ التفاصيل إلزامية وتساعد الفني على تقديم عرض مناسب.</Text>
+        <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: حسب المعاينة" />
+        <Button title={loginLoading ? 'جاري إرسال الطلب...' : 'إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} />
+      </>}</> : null}
+      {clientData.sn ? <View style={styles.codeRow}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ الكود" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
+        const sn = getOrderSN(order), expanded = Boolean(expandedClientOrders[sn]), rating = ratingDrafts[sn];
+        return <View key={String(order._id || sn || i)} style={styles.dataCard}>
+          <TouchableOpacity onPress={() => setExpandedClientOrders(current => ({ ...current, [sn]: !current[sn] }))}><Text style={styles.cardTitle}>{order.service || 'طلب خدمة'} — {sn}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض تفاصيل الطلب'}</Text></TouchableOpacity>
+          {expanded ? <><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text><Text style={styles.detail}>{order.description || 'لا توجد تفاصيل إضافية.'}</Text><Text style={styles.detail}>{order.acceptedOfferPrice ? `السعر المتفق عليه: ${order.acceptedOfferPrice} جنيه` : ''}</Text>
+            {order.status === 'تم اختيار فني' && order.assignedFanniName ? <Text style={styles.detail}>الفني المختار: {order.assignedFanniName}</Text> : null}
+            {order.status === 'تم اختيار فني' && order.assignedFanniPhone ? <><Text style={styles.detail}>رقم الفني: {order.assignedFanniPhone}</Text><Button title="اتصال بالفني" secondary onPress={() => Linking.openURL(`tel:${order.assignedFanniPhone}`)} /></> : null}
+            {!['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف','منتهي','منتهي - اعتذار'].includes(order.status) ? <Button title="إلغاء الطلب" secondary onPress={() => cancelClientOrder(order)} /> : null}
+            {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitle}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCard}><Text style={styles.cardTitle}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Text style={styles.detail}>استفسار سريع قبل قبول العرض:</Text><View style={styles.roleActions}>{['هل السعر شامل؟','متى تقدر تيجي؟','هل في تكلفة إضافية؟'].map(question=><Button key={question} title={question} secondary onPress={()=>sendOrderChat({...order,_id:offer._id||offer.id},question)}/>)}</View><Button title={orderChats[sn]?.open && String(orderChats[sn]?.targetOfferId)===String(offer._id||offer.id)?'إخفاء المحادثة':'محادثة قبل القبول'} secondary onPress={()=>toggleOrderChat({...order,_id:offer._id||offer.id,offerId:offer._id||offer.id},'client')}/><Button title="قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
+            <View style={styles.roleActions}>{(Array.isArray(order.offers) && order.offers.length > 0 || ['تم اختيار فني','تم الانتهاء'].includes(order.status || order.orderStatus)) ? <Button title={orderChats[sn]?.open?'إخفاء المحادثة':'محادثة الطلب'} secondary onPress={()=>toggleOrderChat(order,'client')}/> : null}{order.status==='تم الانتهاء'&&!rating?.submitted&&!rating?.skipped&&!dismissedRatings[sn]?<Button title="تقييم الفني" onPress={()=>setRatingDrafts(current=>({...current,[sn]:{stars:'5',comment:'',blockFuture:false}}))}/>:null}</View>
+            {order.status==='تم الانتهاء'&&rating&&!rating.submitted&&!rating.skipped?<View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم الفني</Text>{renderRatingStars(order, Number(rating.stars || 5))}<Field label="تعليق (اختياري)" value={rating.comment||''} onChangeText={value=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],comment:value}}))} multiline/>{Number(rating.stars)===1?<TouchableOpacity style={styles.inlineCheck} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],blockFuture:!current[sn]?.blockFuture}}))}><Text style={styles.detail}>{rating.blockFuture?'☑':'☐'} عدم استقبال عروض من الفني ده مرة تانية</Text></TouchableOpacity>:null}<Button title="حفظ التقييم" onPress={()=>submitOrderRating(order)}/></View>:null}
+            {(Array.isArray(order.offers) && order.offers.length > 0 || ['تم اختيار فني','تم الانتهاء'].includes(order.status || order.orderStatus)) && orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}<ScrollView ref={ref => { clientChatScrollRefs.current[sn] = ref; }} style={{ maxHeight: 280 }} onScroll={({ nativeEvent }) => { const { contentOffset, contentSize, layoutMeasurement } = nativeEvent; clientChatAtBottomRef.current[sn] = contentOffset.y + layoutMeasurement.height >= contentSize.height - 48; }} scrollEventThrottle={16} onContentSizeChange={() => { if (clientChatAtBottomRef.current[sn] !== false) clientChatScrollRefs.current[sn]?.scrollToEnd({ animated: true }); }} nestedScrollEnabled>{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}</ScrollView>{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={()=>sendOrderChat(order)} placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
+          </> : null}
+        </View>;
+      })) : null}
+      {clientTab === 'track' ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تتبع طلبك</Text><Field label="كود الطلب" value={clientTrackSN} onChangeText={setClientTrackSN} placeholder="SN123456" autoCapitalize="characters"/><Button title={clientTrackLoading ? 'جاري البحث...' : 'تتبع الطلب'} onPress={trackClientOrder} disabled={clientTrackLoading}/>{clientTrackError ? <Text style={styles.errorText}>{clientTrackError}</Text> : null}{clientTrackedOrder ? <View style={styles.offerCard}><Text style={styles.cardTitle}>{clientTrackedOrder.service || 'طلب خدمة'} — {getOrderSN(clientTrackedOrder)}</Text><Text style={styles.detail}>الحالة: {clientTrackedOrder.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المنطقة: {clientTrackedOrder.area || '—'}</Text><Text style={styles.detail}>{clientTrackedOrder.description || clientTrackedOrder.details || ''}</Text><Text style={styles.detail}>السعر المتفق عليه: {clientTrackedOrder.acceptedOfferPrice ?? 'غير محدد'} جنيه</Text>{(clientTrackedOrder.offers || []).map((offer, i) => <View key={String(offer._id || offer.id || i)} style={styles.priceRequest}><Text style={styles.cardTitle}>{offer.fanniName || offer.technicianName || 'فني'} — {offer.price ?? '—'} جنيه</Text><Text style={styles.detail}>{offer.message || ''}</Text>{!clientTrackedOrder.acceptedOfferId && !['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف'].includes(clientTrackedOrder.status) ? <Button title="قبول العرض" onPress={() => acceptClientOffer(clientTrackedOrder, offer)} /> : null}</View>)}</View> : null}</View> : null}
+      {clientTab === 'complaint' ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تقديم شكوى للإدارة</Text><Text style={styles.detail}>استخدم كود الطلب والاسم المسجل، ولا تكتب أرقام تليفونات داخل تفاصيل الشكوى.</Text><Field label="كود الطلب" value={clientComplaint.sn} onChangeText={v => setClientComplaint(c => ({ ...c, sn: v.toUpperCase(), error: '' }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل مع الطلب" value={clientComplaint.name} onChangeText={v => setClientComplaint(c => ({ ...c, name: v, error: '' }))} autoCapitalize="words"/><Field label="تفاصيل الشكوى (10 أحرف على الأقل)" value={clientComplaint.text} onChangeText={v => setClientComplaint(c => ({ ...c, text: v, error: '' }))} multiline/><Text style={styles.detail}>{clientComplaint.text.length}/1000</Text>{clientComplaint.error ? <Text style={styles.errorText}>{clientComplaint.error}</Text> : null}<Button title={clientComplaint.loading ? 'جاري الإرسال...' : 'إرسال الشكوى'} onPress={submitClientComplaint} disabled={clientComplaint.loading}/><View style={styles.offerCard}><Text style={styles.cardTitle}>متابعة شكوى سابقة</Text><Field label="كود الطلب" value={clientComplaintTrack.sn} onChangeText={v => setClientComplaintTrack(c => ({ ...c, sn: v.toUpperCase(), error: '', result: null }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل" value={clientComplaintTrack.name} onChangeText={v => setClientComplaintTrack(c => ({ ...c, name: v, error: '', result: null }))} autoCapitalize="words"/><Button title={clientComplaintTrack.loading ? 'جاري البحث...' : 'متابعة الشكوى'} onPress={trackClientComplaints} disabled={clientComplaintTrack.loading}/>{clientComplaintTrack.error ? <Text style={styles.errorText}>{clientComplaintTrack.error}</Text> : null}{clientComplaintTrack.result ? <Text style={styles.detail}>{JSON.stringify(clientComplaintTrack.result)}</Text> : null}</View></View> : null}
+      {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>الإشعارات {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?<ScrollView style={styles.notificationList} contentContainerStyle={styles.notificationListContent} nestedScrollEnabled showsVerticalScrollIndicator>{notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={[styles.notificationRow, !(item.read||item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title||'إشعار من صُنّاع'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>)}</ScrollView>:<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}</ScrollView>
+    <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
+    {renderRatingModal('client')}
+  </SafeAreaView>;
+
+  if (screen === 'technician' && session?.role === 'fanni') {
+    const user = techData.profile || session.user || {};
+    const tab = techData.tab;
+    const displayedOffers = techData.offers.filter(item => tab === 'completed' ? item.orderStatus === 'تم الانتهاء' : item.orderStatus !== 'تم الانتهاء');
+    const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => o.orderStatus !== 'تم الانتهاء').length})` }, { key: 'completed', label: `المكتملة (${techData.offers.filter(o => o.orderStatus === 'تم الانتهاء').length})` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }, { key: 'notifications', label: `الإشعارات${notifications.unread ? ` (${notifications.unread})` : ''}` }];
+    return <SafeAreaView style={styles.safe}>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
+      {user.status === 'معتمد' && (!user.technicianGuidelinesAcceptedAt || user.technicianGuidelinesVersion !== '2026-10-20-v1') ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ميثاق التعامل المهني مع العملاء</Text><Text style={styles.detail}>اقرأ التعليمات التالية ووافق عليها قبل استخدام لوحة الفني:</Text><Text style={styles.detail}>١. التزم بسعر العرض الذي وافق عليه العميل. أي زيادة تحتاج موافقة صريحة مسجلة داخل المنصة قبل التنفيذ.</Text><Text style={styles.detail}>٢. تعامل باحترام وصدق، دون ضغط أو تهديد أو تضليل.</Text><Text style={styles.detail}>٣. قبل قبول العرض، استخدم الردود المسموحة فقط: «نعم»، «لا»، «حسب الاتفاق». ممنوع تبادل بيانات الاتصال أو التحايل على المنصة قبل القبول.</Text><Text style={styles.detail}>٤. لا تضغط إنهاء المهمة إلا بعد إنجازها فعلًا.</Text><Text style={styles.detail}>٥. احمِ بيانات العميل ولا تستخدمها خارج الطلب.</Text><Text style={styles.detail}>٦. يحق للطرفين التقييم بعد الإكمال؛ ممنوع الإكراه على تقييم إيجابي أو التلاعب بالتقييمات.</Text><Text style={styles.detail}>٧. المخالفات قد تؤدي إلى مراجعة الطلب أو تعليق الحساب أو إيقافه.</Text><TouchableOpacity onPress={() => setGuidelinesChecked(value => !value)} style={styles.roleActions}><Text style={styles.detail}>{guidelinesChecked ? '☑' : '□'} قرأت التعليمات وأوافق على الالتزام بها.</Text></TouchableOpacity><Button title="موافق ثم تأكيد" onPress={() => guidelinesChecked ? acceptTechnicianGuidelines() : Alert.alert('الموافقة مطلوبة', 'لازم تقرأ الميثاق وتحدد الموافقة أولًا.')} /></View> : null}
+      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
+      {offerDraft ? <View style={styles.dataCard}>
+        <Text style={styles.cardTitle}>تقديم عرض على {offerDraft.order.service || 'الخدمة'} — {offerDraft.order.sn}</Text>
+        <Field label="السعر بالجنيه" value={offerDraft.price} onChangeText={value => setOfferDraft(current => ({ ...current, price: value }))} keyboardType="numeric" />
+        <Field label="رسالة للعميل" value={offerDraft.message} onChangeText={value => setOfferDraft(current => ({ ...current, message: value }))} multiline />
+        <Button title="إرسال العرض" onPress={submitOffer} />
+        <Button title="إلغاء" secondary onPress={() => setOfferDraft(null)} />
+      </View> : null}
+      <View style={{ flex: 1 }}>
+        {techData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الفني من الخادم...</Text></View> : <>
+          {techData.error ? <Text style={styles.errorText}>{techData.error}</Text> : null}
+          {tab === 'available' && <><View style={styles.dataCard}><Text style={styles.cardTitle}>البحث وتصفية فرص العمل</Text><Field label="ابحث بالخدمة أو المنطقة أو كود الطلب" value={technicianSearch} onChangeText={setTechnicianSearch} placeholder="مثال: سباكة أو مدينة نصر أو SN123456" /><Text style={styles.fieldLabel}>تصفية حسب الخدمة</Text><View style={styles.roleActions}><Button title="كل الخدمات" secondary={technicianServiceFilter !== 'الكل'} onPress={() => setTechnicianServiceFilter('الكل')} />{(user.specialties || []).map(service => <Button key={String(service)} title={String(service)} secondary={technicianServiceFilter !== service} onPress={() => setTechnicianServiceFilter(service)} />)}</View><Text style={styles.detail}>النتائج: {techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)) && (technicianServiceFilter === 'الكل' || String(item.service || item.specialty || '') === technicianServiceFilter || categories.some(category => category.label === technicianServiceFilter && Array.isArray(category.services) && category.services.includes(String(item.service || item.specialty || '')))); }).length} من {techData.orders.length}</Text></View><FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)) && (technicianServiceFilter === 'الكل' || String(item.service || item.specialty || '') === technicianServiceFilter || categories.some(category => category.label === technicianServiceFilter && Array.isArray(category.services) && category.services.includes(String(item.service || item.specialty || '')))); })} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{techData.orders.length ? 'مفيش فرص مطابقة للبحث أو التصفية.' : 'لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.'}</Text>} renderItem={({ item }) => {
+             const sn = getOrderSN(item);
+             const expanded = Boolean(expandedTechnicianOrders[sn]);
+             return <View style={styles.dataCard}>
+               <TouchableOpacity onPress={() => setExpandedTechnicianOrders(current => ({ ...current, [sn]: !current[sn] }))}>
+                 <Text style={styles.cardTitle}>{item.service || 'طلب خدمة'} — {sn || '—'}</Text>
+                 <Text style={styles.detail}>{item.status || 'متاح'} · {expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض التفاصيل'}</Text>
+               </TouchableOpacity>
+               {expanded ? <>
+                 <Text style={styles.detail}>{item.area || ''}</Text>
+                 <Text style={styles.detail}>{item.description || item.desc || 'لا توجد تفاصيل إضافية.'}</Text>
+                 <Text style={styles.detail}>ميزانية العميل: {item.budget || 'غير محددة'}</Text>
+                 <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
+               </> : null}
+             </View>;
+           }} /></>}
+          {(tab === 'offers' || tab === 'completed') && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={displayedOffers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{tab === 'completed' ? 'لا توجد طلبات مكتملة في السجل حتى الآن.' : 'لسه ماقدمتش عروض نشطة.'}</Text>} renderItem={({ item }) => {
+             const sn = getOrderSN(item);
+             const expanded = Boolean(expandedTechnicianOrders[sn]);
+             return <View style={styles.dataCard}>
+               <TouchableOpacity onPress={() => setExpandedTechnicianOrders(current => ({ ...current, [sn]: !current[sn] }))}>
+                 <Text style={styles.cardTitle}>{item.service || 'خدمة'} — {sn || '—'}</Text>
+                 <Text style={styles.detail}>{item.orderStatus || 'حالة غير محددة'} · {expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض التفاصيل'}</Text>
+               </TouchableOpacity>
+               {expanded ? <>
+                 <Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه</Text>
+                 <Text style={styles.detail}>{item.message || ''}</Text>{item.client && ['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus) ? <View style={styles.offerCard}><Text style={styles.cardTitle}>تفاصيل العميل والطلب</Text><Text style={styles.detail}>اسم العميل: {item.client.name || '—'}</Text><Text style={styles.detail}>المنطقة: {item.client.area || '—'}</Text><Text style={styles.detail}>العنوان بالتفصيل: {item.client.address || '—'}</Text><Text style={styles.detail}>تفاصيل المطلوب: {item.client.description || '—'}</Text><Text style={styles.detail}>ميزانية العميل: {item.client.budget || 'غير محددة'}</Text><Text style={styles.detail}>السعر المتفق عليه: {item.client.acceptedOfferPrice ?? item.price ?? '—'} جنيه</Text><Text style={styles.detail}>عمولة المنصة: {item.client.commissionAmount ?? '—'} جنيه</Text><Text style={styles.detail}>حالة العمولة: {item.client.commissionCharged ? 'تم الخصم' : 'لم يتم الخصم'}</Text>{item.client.phone && item.orderStatus === 'تم اختيار فني' ? <Button title={`اتصال بالعميل: ${item.client.phone}`} secondary onPress={() => Linking.openURL(`tel:${item.client.phone}`)} /> : null}</View> : null}<View style={styles.roleActions}><Button title={orderChats[getOrderSN(item)]?.open ? 'إخفاء المحادثة' : 'محادثة الطلب'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
+          {orderChats[getOrderSN(item)]?.open ? <View style={styles.chatPanel}>{orderChats[getOrderSN(item)]?.loading ? <ActivityIndicator color={COLORS.teal}/> : <><ScrollView ref={chatScrollRef} style={{ maxHeight: 280 }} onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })} nestedScrollEnabled>{(orderChats[getOrderSN(item)]?.messages || []).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'fanni' ? styles.chatMessageTechnician : styles.chatMessageClient]}><Text style={styles.detail}>{message.senderRole === 'fanni' ? 'أنت' : 'العميل'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}</ScrollView><Field label="رسالة للعميل" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value=>setChatDrafts(current=>({...current,[getOrderSN(item)]:value}))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={()=>sendOrderChat(item)} placeholder="اكتب رسالتك"/><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(item)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(item,'fanni')}/></>}</View> : null}
+          {item.orderStatus !== 'تم اختيار فني' && item.orderStatus !== 'تم الانتهاء' ? <View style={styles.roleActions}><Text style={styles.detail}>رد سريع على استفسار العميل:</Text>{['نعم','لا','حسب الاتفاق'].map(reply=><Button key={reply} title={reply} secondary onPress={()=>sendOrderChat(item,reply)}/>)}</View> : null}
+          {item.orderStatus === 'تم اختيار فني' ? <View style={styles.offerCard}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Field label="السعر الجديد بالجنيه" value={priceDrafts[getOrderSN(item)]?.price || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], price: value } }))} keyboardType="numeric" /><Field label="سبب التعديل" value={priceDrafts[getOrderSN(item)]?.reason || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], reason: value } }))} multiline /><Button title="إرسال طلب تعديل السعر" onPress={() => requestOrderPriceChange(item)} /></View> : null}
+          {item.orderStatus === 'تم الانتهاء' && !ratingDrafts[getOrderSN(item)]?.submitted && !ratingDrafts[getOrderSN(item)]?.skipped && !dismissedRatings[getOrderSN(item)] ? (
+            <View style={styles.offerCard}>
+              <Text style={styles.cardTitle}>تقييم العميل</Text>
+              {renderRatingStars(item, Number(ratingDrafts[getOrderSN(item)]?.stars || 5))}
+              <Field
+                label="تعليق (اختياري)"
+                value={ratingDrafts[getOrderSN(item)]?.comment || ''}
+                onChangeText={value => setRatingDrafts(current => ({
+                  ...current,
+                  [getOrderSN(item)]: { ...current[getOrderSN(item)], comment: value },
+                }))}
+                multiline
+              />
+              {Number(ratingDrafts[getOrderSN(item)]?.stars || 5) === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], blockFuture: !current[getOrderSN(item)]?.blockFuture } }))} style={styles.roleActions}><Text style={styles.detail}>{ratingDrafts[getOrderSN(item)]?.blockFuture ? '☑' : '□'} عدم إظهار طلبات العميل ده ليّ مرة تانية (اختياري)</Text></TouchableOpacity> : null}
+              <Button title="حفظ تقييم العميل" onPress={() => submitOrderRating(item)} />
+            </View>
+          ) : null}
+          {['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus || item.status) && orderChats[getOrderSN(item)]?.open ? (
+            <View style={styles.chatPanel}>
+              {orderChats[getOrderSN(item)]?.loading ? <ActivityIndicator color={COLORS.teal} /> : (
+                <View>
+                  {orderChats[getOrderSN(item)]?.error ? <Text style={styles.errorText}>{orderChats[getOrderSN(item)].error}</Text> : null}
+                  {(orderChats[getOrderSN(item)]?.messages || []).map((message, index) => (
+                    <View key={String(message._id || index)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}>
+                      <Text style={styles.detail}>{message.senderRole === 'client' ? 'العميل' : 'الفني'} • {dateLabel(message.createdAt)}</Text>
+                      <Text style={styles.chatMessageText}>{message.text}</Text>
+                    </View>
+                  ))}
+                  {(orderChats[getOrderSN(item)]?.priceChangeRequests || []).filter(request => request.status === 'قيد الموافقة').map(request => (
+                    <View key={String(request._id)} style={styles.priceRequest}>
+                      <Text style={styles.cardTitle}>طلب تعديل السعر</Text>
+                      <Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه • {request.status}</Text>
+                      <Text style={styles.detail}>{request.reason}</Text>
+                    </View>
+                  ))}
+                  <Field label="ردك داخل المنصة" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value => setChatDrafts(current => ({ ...current, [getOrderSN(item)]: value }))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={() => sendOrderChat(item)} />
+                  <View style={styles.roleActions}>
+                    <Button title="إرسال الرسالة" onPress={() => sendOrderChat(item)} />
+                    <Button title="تحديث المحادثة" secondary onPress={() => refreshOrderChat(item, 'fanni')} />
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : null}
+          </> : null}</View>; }} />}
+          {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على المحفظة فقط إلى الرقم التالي، ولا نقبل التحويل عبر إنستا باي.</Text><View style={styles.codeRow}><Text selectable style={styles.cardTitle}>01152822263</Text><Button title="نسخ الرقم" secondary onPress={()=>copyOrderCode('01152822263')}/></View><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Text style={styles.fieldLabel}>المحفظة التي حوّلت منها</Text><View style={styles.roleActions}>{[{value:'vodafone_cash',label:'فودافون كاش'},{value:'orange_cash',label:'أورنج كاش'},{value:'etisalat_cash',label:'اتصالات كاش'},{value:'we_pay',label:'وي باي'}].map(method=><Button key={method.value} title={method.label} secondary={topup.method!==method.value} onPress={()=>setTopup(t=>({...t,method:method.value}))}/>)}</View><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
+          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><View style={styles.roleActions}><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /><Button title="تغيير كلمة المرور" onPress={() => setScreen('account')} /></View></ScrollView>}
+          {tab === 'notifications' && <ScrollView contentContainerStyle={styles.page}><View style={styles.headerRow}><Text style={styles.sectionTitle}>إشعارات الفني</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>{notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={[styles.dataCard, !(item.read || item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title || 'إشعار'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</ScrollView>}
+        </>}
+      </View>
+      {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>إشعارات الفني {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?<ScrollView style={styles.notificationList} contentContainerStyle={styles.notificationListContent} nestedScrollEnabled showsVerticalScrollIndicator>{notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={[styles.notificationRow, !(item.read||item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title||'إشعار'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>)}</ScrollView>:<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}
+      <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
+      {renderRatingModal('fanni')}
+    </SafeAreaView>;
+  }
+
+  if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) {
+    const rolePath = session.role;
+    return <SafeAreaView style={styles.safe}>
+      <View style={styles.headerRow}>
+        <View style={styles.flex}><Text style={styles.title}>دعم صُنّاع</Text><Text style={styles.subtitle}>محادثة خاصة داخل التطبيق</Text></View>
+        <Button title="رجوع" secondary onPress={() => { screenHistoryRef.current.pop(); const target = rolePath === 'client' ? 'client' : 'technician'; screenRef.current = target; setScreenState(target); setSupportCase(null); }} />
+      </View>
+      <ScrollView contentContainerStyle={styles.page}>
+        <View style={styles.dataCard}>
+          <Text style={styles.cardTitle}>محادثة جديدة</Text>
+          <Text style={styles.detail}>اكتب مشكلتك هنا. رقمك الشخصي لا يظهر في هذه المحادثة.</Text>
+          <Field label="عنوان المشكلة (اختياري)" value={supportSubject} onChangeText={setSupportSubject} placeholder="مثال: مشكلة في الطلب" />
+          {!supportCase ? <>
+            <Field label="رسالتك" value={supportDraft} onChangeText={setSupportDraft} multiline placeholder="اشرح المشكلة أو الاستفسار..." />
+            <Button title="إرسال وفتح محادثة الدعم" onPress={startSupportCase} disabled={supportLoading} />
+          </> : null}
+        </View>
+        <Text style={styles.sectionTitle}>محادثاتي السابقة</Text>
+        {supportLoading ? <ActivityIndicator color={COLORS.teal} /> : null}
+        {supportError ? <Text style={styles.errorText}>{supportError}</Text> : null}
+        {supportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => openSupportCase(item)} style={[styles.dataCard, supportCase?._id === item._id && { borderColor: COLORS.teal }]}>
+          <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'}</Text>
+          <Text style={styles.detail}>الحالة: {item.status || 'جديدة'}{item.needsHuman ? ' • تحتاج تدخل الدعم' : ''}</Text>
+          <Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text>
+        </TouchableOpacity>)}
+        {supportCase ? <View style={styles.chatPanel}>
+          <Text style={styles.sectionTitle}>{supportCase.subject || 'محادثة الدعم'}</Text>
+          {(supportCase.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}>
+            <Text style={styles.detail}>{message.senderRole === 'admin' ? 'دعم صُنّاع' : message.senderRole === 'assistant' ? 'المساعد' : 'أنت'} • {dateLabel(message.createdAt)}</Text>
+            <Text style={styles.chatMessageText}>{message.text}</Text>
+          </View>)}
+          {['تم الحل', 'مغلقة'].includes(supportCase.status) ? <Text style={styles.detail}>تم إغلاق هذه الحالة. افتح محادثة جديدة إذا احتجت مساعدة أخرى.</Text> : <>
+            <Field label="اكتب ردك" value={supportDraft} onChangeText={setSupportDraft} multiline placeholder="اكتب رسالتك للدعم..." />
+            <View style={styles.roleActions}>
+              <Button title="إرسال" onPress={() => sendSupportMessage(false)} disabled={supportLoading} />
+              <Button title="طلب تدخل الدعم" secondary onPress={() => sendSupportMessage(true)} disabled={supportLoading} />
+            </View>
+          </>}
+        </View> : null}
+        <Button title="تحديث المحادثات" secondary onPress={loadSupportCases} disabled={supportLoading} />
+      </ScrollView>
+    </SafeAreaView>;
+  }
+
+  if (screen === 'admin' && session?.role === 'admin') {
+    const tab = adminData.tab;
+    const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'wallets', label: 'محافظ الفنيين' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
+    const pendingActionCount = key => {
+      const values = key === 'support' ? adminSupportCases : adminData[key] || [];
+      const statusOf = item => String(item?.status || item?.actualStatus || item?.state || '').trim().toLowerCase();
+      const closedStatuses = ['تم الحل', 'مغلقة', 'مغلق', 'تم الإغلاق', 'منتهية', 'مكتملة', 'مكتمل', 'محلولة', 'closed', 'resolved', 'complete', 'completed', 'approved', 'rejected', 'رفض', 'مرفوض', 'مرفوضة', 'تم الاعتماد', 'تم الرفض', 'مقبول', 'مقبولة'];
+      if (key === 'orders') return values.filter(item => ['قيد المراجعة', 'pending', 'awaiting review', 'بانتظار المراجعة', 'بانتظار النشر'].includes(statusOf(item))).length;
+      if (key === 'fannis') return values.filter(item => !item.isApproved && !item.isDisabled && ['قيد المراجعة', 'pending', 'بانتظار المراجعة', ''].includes(statusOf(item))).length;
+      if (key === 'topups') return values.filter(item => !closedStatuses.includes(statusOf(item)) && ['قيد المراجعة', 'pending', 'بانتظار المراجعة', 'جديد', ''].includes(statusOf(item))).length;
+      if (key === 'complaints') return values.filter(item => !closedStatuses.includes(statusOf(item))).length;
+      if (key === 'support') return values.filter(item => item.needsHuman && !closedStatuses.includes(statusOf(item))).length;
+      return 0;
+    };
+    return <SafeAreaView style={styles.safe}>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints','support'].includes(item.key) ? ` (${pendingActionCount(item.key)})` : ''}</Text></TouchableOpacity>)}</View>
+      {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
+        {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
+        {tab === 'wallets' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إدارة محافظ الفنيين</Text><Text style={styles.detail}>اختر فنيًا لعرض الحركات المالية، أو تجميد المحفظة، أو تسجيل تسوية موثقة.</Text>
+          {adminData.fannis.map((fanni,i)=><TouchableOpacity key={String(fanni._id||fanni.id||i)} onPress={()=>setAdminWallet(c=>({...c,fanniId:String(fanni._id||fanni.id),amount:String(fanni.walletBalance??fanni.balance??''),transactions:[]}))} style={[styles.dataCard,String(fanni._id||fanni.id)===adminWallet.fanniId&&{borderColor:COLORS.teal}]}><Text style={styles.cardTitle}>{fanni.name||'فني'} — {fanni.phone||''}</Text><Text style={styles.detail}>الرصيد: {Number(fanni.walletBalance??fanni.balance??0)} جنيه • المحفظة {fanni.isFrozen?'مجمّدة':'نشطة'}</Text></TouchableOpacity>)}
+          {adminWallet.fanniId ? <View style={styles.dataCard}><Text style={styles.sectionTitle}>إجراءات المحفظة</Text><Field label="الرصيد الجديد بعد التسوية (جنيه)" value={adminWallet.amount} onChangeText={v=>setAdminWallet(c=>({...c,amount:v}))} keyboardType="numeric" /><Field label="سبب الإجراء (مطلوب)" value={adminWallet.reason} onChangeText={v=>setAdminWallet(c=>({...c,reason:v}))} multiline />
+            <View style={styles.roleActions}><Button title="تسوية الرصيد" onPress={()=>adminWalletAction('balance')} /><Button title="تجميد المحفظة" secondary onPress={()=>adminWalletAction('freeze')} /><Button title="إلغاء التجميد" secondary onPress={()=>adminWalletAction('unfreeze')} /></View>
+            <Button title={adminWallet.loading?'جاري التحميل...':'عرض كشف الحركات المالية'} secondary onPress={adminLoadWalletTransactions} disabled={adminWallet.loading}/>
+            {adminWallet.loading?<ActivityIndicator color={COLORS.teal}/>:adminWallet.transactions.length?adminWallet.transactions.map((item,i)=><View key={String(item._id||item.id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type||item.action||item.status||'حركة مالية'} • {Number(item.amount||0)} جنيه</Text><Text style={styles.detail}>{item.reason||item.description||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt||item.date)}</Text></View>):<Text style={styles.emptyText}>حمّل كشف الحساب لعرض الحركات.</Text>}
+          </View> : null}
+        </ScrollView> : tab === 'services' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إدارة الخدمات والأقسام</Text><Text style={styles.detail}>هذه القائمة متصلة مباشرة بقائمة الخدمات الموجودة على الخادم.</Text>
+          <Field label="اسم الخدمة الجديدة" value={adminServiceDraft.name} onChangeText={v => setAdminServiceDraft(c => ({ ...c, name: v }))} />
+          <Field label="اسم القسم" value={adminServiceDraft.category} onChangeText={v => setAdminServiceDraft(c => ({ ...c, category: v }))} />
+          <Field label="رمز الخدمة" value={adminServiceDraft.emoji} onChangeText={v => setAdminServiceDraft(c => ({ ...c, emoji: v }))} />
+          <Button title="إضافة الخدمة" onPress={adminAddService} />
+          {adminExtras.services.map((category, index) => <View key={String(category.label || category.name || index)} style={styles.dataCard}><View style={styles.headerRow}><Text style={styles.cardTitle}>{category.emoji || '🔧'} {category.label || category.name}</Text><View style={styles.roleActions}><Button title="↑ قسم" secondary onPress={() => adminMoveCategory(index, -1)} disabled={index===0}/><Button title="↓ قسم" secondary onPress={() => adminMoveCategory(index, 1)} disabled={index===adminExtras.services.length-1}/></View></View><Text style={styles.detail}>الخدمات: {(category.services || []).length} • النشطة: {category.activeCount ?? '—'}</Text>{adminServiceEdit.category === (category.label || category.name) && (category._detailed || []).some(item => item.name === adminServiceEdit.oldName) ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تعديل: {adminServiceEdit.oldName}</Text><Field label="الاسم الجديد" value={adminServiceEdit.name} onChangeText={v => setAdminServiceEdit(c => ({ ...c, name: v }))} /><View style={styles.roleActions}><Button title="حفظ الاسم" onPress={adminSaveServiceEdit} /><Button title="إلغاء" secondary onPress={() => setAdminServiceEdit({ category: '', oldName: '', name: '' })} /></View></View> : null}{(category._detailed || (category.services || []).map(name => ({name}))).map((item, i, arr) => <View key={String(item._id || item.name || i)} style={styles.dataCard}><Text style={styles.detail}>{item.name} {item.isActive === false ? '• مخفية' : ''}</Text><View style={styles.roleActions}><Button title="↑" secondary onPress={() => adminMoveService(category.label || category.name, item.name, -1)} disabled={i===0}/><Button title="↓" secondary onPress={() => adminMoveService(category.label || category.name, item.name, 1)} disabled={i===arr.length-1}/><Button title="تعديل" secondary onPress={() => adminBeginServiceEdit(category.label || category.name, item.name)} /><Button title={item.isActive === false ? 'إظهار' : 'إخفاء'} secondary onPress={() => adminToggleService(category.label || category.name, item.name, item.isActive === false)} /><Button title="حذف" secondary onPress={() => adminDeleteService(category.label || category.name, item.name)} /></View></View>)}</View>)}
+          <Button title="تحديث قائمة الخدمات" secondary onPress={() => setReloadKey(v => v + 1)} />
+        </ScrollView> : tab === 'pricing' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>الأسعار والعمولات</Text>
+          <Field label="رسوم الفرصة / الكشف (جنيه)" value={String(adminExtras.pricing.check)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, check: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Field label="العمولة (%)" value={String(adminExtras.pricing.commission)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, commission: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Field label="أقل عرض (جنيه)" value={String(adminExtras.pricing.minOffer)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, minOffer: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Field label="أعلى عرض (جنيه)" value={String(adminExtras.pricing.maxOffer)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, maxOffer: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
+          <Button title="حفظ الأسعار والعمولات" onPress={adminSavePricing} />
+          <Text style={styles.sectionTitle}>آخر تغييرات الأسعار</Text>{adminExtras.pricingHistory.slice(0,20).map((item,i)=><View key={String(item._id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.reason || item.key || 'تغيير أسعار'}</Text><Text style={styles.detail}>{item.by || 'الإدارة'} • {dateLabel(item.createdAt)}</Text></View>)}
+        </ScrollView> : tab === 'regions' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إدارة المناطق</Text><Field label="اسم المنطقة الجديدة" value={adminRegionDraft} onChangeText={setAdminRegionDraft} /><Button title="إضافة المنطقة" onPress={adminAddRegion} />
+          {adminExtras.regions.map((region,i)=><View key={String(region._id||region.name||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{region.name}</Text><Text style={styles.detail}>{region.isActive === false ? 'غير نشطة' : 'نشطة'} • {dateLabel(region.createdAt)}</Text></View>)}
+        </ScrollView> : tab === 'content' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>محتوى المنصة والإعلان</Text><Field label="الإعلان الظاهر للعملاء والفنيين" value={adminAnnouncementDraft} onChangeText={setAdminAnnouncementDraft} multiline /><Text style={styles.detail}>{adminAnnouncementDraft.length}/1000</Text>
+          <Text style={styles.sectionTitle}>إضافة سؤال شائع</Text><Field label="السؤال" value={adminFaqDraft.question} onChangeText={v => setAdminFaqDraft(c => ({ ...c, question: v }))} /><Field label="الإجابة" value={adminFaqDraft.answer} onChangeText={v => setAdminFaqDraft(c => ({ ...c, answer: v }))} multiline /><Button title="إضافة السؤال للقائمة" onPress={adminAddFaqDraft} />
+          {adminExtras.content.faqs.map((faq,i)=><View key={String(i)} style={styles.dataCard}><Text style={styles.cardTitle}>{faq.question}</Text><Text style={styles.detail}>{faq.answer}</Text><Button title="حذف السؤال من القائمة" secondary onPress={()=>setAdminExtras(c=>({...c,content:{...c.content,faqs:c.content.faqs.filter((_,j)=>j!==i)}}))}/></View>)}
+          <Button title="حفظ محتوى المنصة" onPress={adminSaveContent} />
+        </ScrollView> : tab === 'settings' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>إعدادات النظام</Text><Field label="اسم المنصة" value={adminExtras.settings.siteName} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,siteName:v}}))} />
+          <View style={styles.dataCard}><Text style={styles.cardTitle}>وضع الصيانة</Text><Text style={styles.detail}>{adminExtras.settings.maintenance ? 'مفعل' : 'غير مفعل'}</Text><View style={styles.roleActions}><Button title="تفعيل" secondary={!adminExtras.settings.maintenance} onPress={()=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenance:true}}))}/><Button title="إيقاف" secondary={adminExtras.settings.maintenance} onPress={()=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenance:false}}))}/></View></View>
+          <Field label="رسالة الصيانة" value={adminExtras.settings.maintenanceMessage} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenanceMessage:v}}))} multiline />
+          <Field label="حد محاولات تسجيل الفني لكل IP" value={String(adminExtras.settings.maxFanniSignupAttempts)} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,maxFanniSignupAttempts:Number(v)}}))} keyboardType="numeric" />
+          <Button title="حفظ الإعدادات" onPress={adminSaveSettings} />
+        </ScrollView> : tab === 'reports' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>تقارير الإدارة</Text><Text style={styles.detail}>التواريخ بصيغة YYYY-MM-DD. اترك الحقول فارغة لإحصاء كل الفترات.</Text>
+          <Field label="من تاريخ (YYYY-MM-DD)" value={adminReportFilters.startDate} onChangeText={v=>setAdminReportFilters(c=>({...c,startDate:v}))} />
+          <Field label="إلى تاريخ (YYYY-MM-DD)" value={adminReportFilters.endDate} onChangeText={v=>setAdminReportFilters(c=>({...c,endDate:v}))} />
+          <Field label="تصفية حسب الخدمة (اختياري)" value={adminReportFilters.service} onChangeText={v=>setAdminReportFilters(c=>({...c,service:v}))} />
+          <Field label="تصفية حسب المنطقة (اختياري)" value={adminReportFilters.area} onChangeText={v=>setAdminReportFilters(c=>({...c,area:v}))} />
+          <Button title="إنشاء التقرير" onPress={adminGenerateReport} />
+          {adminExtras.report?.summary ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ملخص التقرير</Text>{[['إجمالي الطلبات',adminExtras.report.summary.totalOrders],['طلبات مكتملة',adminExtras.report.summary.completedOrders],['طلبات ملغاة',adminExtras.report.summary.cancelledOrders],['قيد المراجعة',adminExtras.report.summary.pendingOrders],['تستقبل عروضًا',adminExtras.report.summary.publishedOrders],['الفنيون المعتمدون',adminExtras.report.summary.approvedTechnicians],['العملاء النشطون',adminExtras.report.summary.activeClients]].map(([label,value])=><Text key={label} style={styles.detail}>{label}: {Number(value||0)}</Text>)}<Text style={styles.sectionTitle}>أكثر الخدمات طلبًا</Text>{(adminExtras.report.topServices||[]).map((item,i)=><Text key={String(i)} style={styles.detail}>{item.service}: {item.count}</Text>)}</View> : <Text style={styles.emptyText}>أنشئ تقريرًا لعرض الإحصائيات.</Text>}
+        </ScrollView> : tab === 'audit' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>سجل التدقيق الإداري</Text><Button title="تحديث السجل" secondary onPress={adminLoadAuditLogs} />{adminExtras.auditLogs.map((item,i)=><View key={String(item._id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.action || item.event || 'إجراء إداري'}</Text><Text style={styles.detail}>{item.adminName || item.by || item.actorName || 'الإدارة'} • {dateLabel(item.createdAt)}</Text><Text style={styles.detail}>{item.targetType || item.entityType || ''} {item.targetId || item.entityId || ''}</Text><Text style={styles.detail}>{item.reason || item.details || item.summary || ''}</Text></View>)}
+        </ScrollView> : tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'support' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>حالات دعم صُنّاع</Text>
+          <Text style={styles.detail}>الحالات التي تحتاج تدخلًا بشريًا تظهر أولًا. افتح الحالة لقراءة الرسائل والرد من داخل التطبيق.</Text>
+          <Text style={styles.sectionTitle}>طلبات استعادة كلمة المرور</Text>
+          {adminRecoveryCases.map(item => <TouchableOpacity key={String(item.id || item._id)} onPress={() => openAdminRecovery(item)} style={[styles.dataCard, adminRecoverySelected && String(adminRecoverySelected.id || adminRecoverySelected._id) === String(item.id || item._id) && { borderColor: COLORS.teal }]}><Text style={styles.cardTitle}>{item.accountName || 'حساب'} — {item.phone || ''}</Text><Text style={styles.detail}>{item.ownerRole === 'client' ? 'عميل' : item.ownerRole === 'admin' ? 'إدارة' : 'فني'} • {item.status || 'بانتظار الدعم'}</Text><Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text></TouchableOpacity>)}
+          {adminRecoverySelected ? <View style={styles.chatPanel}><Text style={styles.cardTitle}>محادثة استعادة كلمة المرور</Text>{(adminRecoverySelected.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}><Text style={styles.detail}>{message.senderRole === 'admin' ? 'الدعم' : 'المستخدم'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}<Text style={styles.detail}>تحقق من ملكية الحساب قبل إصدار الرمز.</Text><Button title="تأكيد التحقق وإصدار رمز" onPress={issueAdminRecoveryCode} />{adminRecoveryCode ? <View style={styles.dataCard}><Text style={styles.cardTitle}>رمز مؤقت — صالح 10 دقائق</Text><Text selectable style={styles.title}>{adminRecoveryCode}</Text><Button title="تجهيز إرسال الرمز في المحادثة" onPress={() => setAdminRecoveryDraft('رمز استعادة كلمة المرور: ' + adminRecoveryCode + ' — صالح لمدة 10 دقائق.')} /></View> : null}<Field label="رسالة الدعم" value={adminRecoveryDraft} onChangeText={setAdminRecoveryDraft} multiline placeholder="اكتب الرد أو جهز إرسال الرمز أعلاه..." /><View style={styles.roleActions}><Button title="إرسال الرد" onPress={replyAdminRecovery} /><Button title="تحديث الطلبات" secondary onPress={loadAdminRecoveryCases} /></View></View> : null}
+          {adminSupportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => setAdminSupportSelected(item)} style={[styles.dataCard, adminSupportSelected?._id === item._id && { borderColor: COLORS.teal }]}>
+            <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'} — {item.ownerName || (item.ownerRole === 'fanni' ? 'فني' : 'عميل')}</Text>
+            <Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.ownerRole === 'fanni' ? 'فني' : 'عميل'}{item.needsHuman ? ' • يحتاج تدخلًا' : ''}</Text>
+            <Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text>
+          </TouchableOpacity>)}
+          {adminSupportSelected ? <View style={styles.chatPanel}>
+            <Text style={styles.cardTitle}>{adminSupportSelected.subject || 'محادثة الدعم'}</Text>
+            {(adminSupportSelected.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}>
+              <Text style={styles.detail}>{message.senderRole === 'admin' ? 'الإدارة' : message.senderRole === 'assistant' ? 'المساعد' : message.senderRole === 'fanni' ? 'الفني' : 'العميل'} • {dateLabel(message.createdAt)}</Text>
+              <Text style={styles.chatMessageText}>{message.text}</Text>
+            </View>)}
+            {!['تم الحل','مغلقة'].includes(adminSupportSelected.status) ? <>
+              <Field label="رد الإدارة" value={adminSupportDraft} onChangeText={setAdminSupportDraft} multiline placeholder="اكتب ردك هنا..." />
+              <View style={styles.roleActions}><Button title="إرسال الرد" onPress={() => replyAdminSupport(adminSupportSelected)} /><Button title="تحديث القائمة" secondary onPress={loadAdminSupportCases} /></View>
+            </> : <Text style={styles.detail}>الحالة مغلقة.</Text>}
+          </View> : null}
+          <Button title="تحديث حالات الدعم" secondary onPress={loadAdminSupportCases} />
+        </ScrollView> : tab === 'notifications' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>إرسال إشعار داخل التطبيق</Text><Text style={styles.detail}>الإشعار يظهر للحسابات المستهدفة داخل تطبيق صُنّاع.</Text><Field label="عنوان الإشعار" value={broadcast.title} onChangeText={value => setBroadcast(current => ({ ...current, title: value }))} placeholder="مثال: تحديث مهم" /><Field label="نص الإشعار" value={broadcast.message} onChangeText={value => setBroadcast(current => ({ ...current, message: value }))} multiline placeholder="اكتب الرسالة هنا" /><Text style={styles.fieldLabel}>المستلمون</Text><View style={styles.roleActions}>{[{key:'all',label:'الجميع'},{key:'clients',label:'العملاء'},{key:'fannis',label:'الفنيون'},{key:'cairo_fannis',label:'فنيّو القاهرة'}].map(option => <Button key={option.key} title={option.label} secondary={broadcast.audience !== option.key} onPress={() => setBroadcast(current => ({ ...current, audience: option.key }))} />)}</View><Button title="إرسال الإشعار" onPress={sendAdminBroadcast} /></ScrollView> : tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.sectionTitle}>التسلسل الإداري والصلاحيات</Text>
+          <Text style={styles.detail}>المدير العام فقط يستطيع تعيين المناصب أو سحبها. الخادم هو الذي يفرض الصلاحيات فعليًا.</Text>
+          {adminUsersLoading ? <ActivityIndicator color={COLORS.teal} /> : adminUsers.map((u, i) => <View key={String(u.id || u._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{u.name || 'حساب إداري'}</Text><Text style={styles.detail}>{u.phone || ''} • {u.adminRole || (u.role === 'admin' ? 'مدير عام' : 'فني')}</Text>{u.role !== 'admin' ? <Button title="سحب المنصب الإداري" secondary onPress={() => revokeAdminRoleForUser(u)} /> : <Text style={styles.detail}>حساب المدير العام الأساسي.</Text>}</View>)}
+          <Text style={styles.sectionTitle}>ترقية فني معتمد إلى منصب إداري</Text>
+          {adminData.fannis.filter(f => (f.status === 'معتمد' || f.status === 'approved') && !f.adminRole).map((f, i) => <View key={String(f._id || f.id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{f.name || 'فني'} — {f.phone || ''}</Text><View style={styles.roleActions}>{['قراءة فقط', 'مشرف', 'مشرف أول', 'مدير'].map(role => <Button key={role} title={role} secondary onPress={() => changeAdminRoleForFanni(f, role)} />)}</View></View>)}
+        </ScrollView> : tab === 'levels' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا يوجد فنّيون لعرض مستوياتهم.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.name || 'فني'} — {item.level || 'مبتدئ'}</Text><Text style={styles.detail}>{item.phone || ''} • {item.status || item.actualStatus || ''}</Text><Text style={styles.detail}>الشارات: {(item.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات'}</Text><Button title="ترقية للمستوى التالي" onPress={() => updateProfessionalLevel(item)} /></View>} /> : <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || item.sn || item.phone || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>مفيش بيانات لعرضها حاليًا.</Text>} renderItem={({ item }) => {
+          const title = tab === 'orders' ? (item.sn || item.service || 'طلب خدمة') : (item.name || item.phone || (tab === 'fannis' ? 'فني' : 'عميل'));
+          const detail = tab === 'orders' ? [item.status, item.service, item.area, item.createdAt ? dateLabel(item.createdAt) : ''].filter(Boolean).join(' • ')
+            : tab === 'fannis' ? [item.phone, item.status || item.actualStatus, Array.isArray(item.specialties) ? item.specialties.join('، ') : item.skill].filter(Boolean).join(' • ')
+            : [item.phone, item.orderCount ? `عدد الطلبات: ${item.orderCount}` : '', item.lastOrder ? `آخر طلب: ${item.lastOrder}` : ''].filter(Boolean).join(' • ');
+          return <View style={styles.dataCard}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.detail}>{detail || 'لا توجد تفاصيل إضافية'}</Text>{tab === 'orders' && session.user?.role === 'admin' && item.status === 'قيد المراجعة' ? <Button title="نشر الطلب للفنيين" onPress={() => publishOrder(item)} /> : null}{tab === 'orders' && session.user?.role === 'admin' && !['تم الانتهاء','منتهي','تم اختيار فني','مؤرشف','ملغي'].includes(item.status) ? <Button title="إلغاء الطلب" secondary onPress={() => adminOrderAction(item, 'cancel')} /> : null}{tab === 'orders' && session.user?.role === 'admin' && !['قيد المراجعة','تم النشر','وصلتك عروض','تم اختيار فني','مؤرشف'].includes(item.status) ? <Button title="أرشفة الطلب" secondary onPress={() => adminOrderAction(item, 'archive')} /> : null}{tab === 'fannis' && !item.isApproved && !item.isDisabled ? <View style={styles.roleActions}><Button title="اعتماد الفني" onPress={() => moderateTechnician(item, 'approve')} /><Button title="رفض" secondary onPress={() => moderateTechnician(item, 'reject')} /></View> : tab === 'fannis' && item.isApproved ? <Button title="تعليق الفني" secondary onPress={() => moderateTechnician(item, 'disable')} /> : tab === 'fannis' && item.isDisabled ? <Button title="إعادة تفعيل الفني" onPress={() => moderateTechnician(item, 'enable')} /> : null}{tab === 'fannis' && session.user?.role === 'admin' ? <View style={styles.dataCard}><Text style={styles.detail}>تعيين المستوى المهني</Text><View style={styles.roleActions}>{['مبتدئ','ممارس','محترف','خبير'].map(level => <Button key={level} title={level} secondary onPress={() => adminSetTechnicianLevel(item, level)} />)}</View></View> : null}{tab === 'clients' && session.user?.role === 'admin' ? <View style={styles.roleActions}><Button title="تعليق العميل" secondary onPress={() => adminClientAction(item.phone, 'block')} /><Button title="إعادة التفعيل" onPress={() => adminClientAction(item.phone, 'unblock')} /><Button title="حذف الحساب" secondary onPress={() => adminClientAction(item.phone, 'account')} /></View> : null}</View>;
+        }} />}
+        <Button title="إعادة تحميل بيانات الإدارة" secondary onPress={() => setReloadKey(v => v + 1)} />
+      </View>}
+      <Text style={styles.note}>هذه نسخة ربط أولية للعرض والقراءة. أوامر الإدارة الحساسة تحتاج واجهات منفصلة واختبارات صلاحيات قبل تفعيلها.</Text>
+    </SafeAreaView>;
+  }
+
+  return <SafeAreaView style={styles.safe}>
+    <ScrollView contentContainerStyle={styles.homePage} showsVerticalScrollIndicator={false}>
+      <View style={styles.homeBrandArea}>
+        <View style={styles.homeLogoCircle}>
+          <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.homeLogoImage} resizeMode="contain" />
+        </View>
+        <Text style={styles.homeBrandTitle}>صُنّاع</Text>
+        <Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>
+        <Text style={styles.homeIntro}>خدماتك وشغلك في مكان واحد، بخطوات بسيطة.</Text>
+      </View>
+      <View style={styles.roleCards}>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} onPress={() => goLogin('client')} style={[styles.roleCard, styles.clientRoleCard]}>
+          <View style={styles.clientIconCircle}><Text style={styles.roleIcon}>⌂</Text></View>
+          <View style={styles.roleCardCopy}>
+            <Text style={styles.roleTitle}>الدخول كعميل</Text>
+            <Text style={styles.roleDescription}>ادخل كعميل واطلب الخدمة اللي محتاجها، وتابع عروض الفنيين وطلبك بسهولة.</Text>
+            <Text style={styles.roleActionHint}>اطلب خدمتك الآن ←</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} onPress={() => goLogin('fanni')} style={[styles.roleCard, styles.technicianRoleCard]}>
+          <View style={styles.technicianIconCircle}><Text style={styles.roleIcon}>⚒</Text></View>
+          <View style={styles.roleCardCopy}>
+            <Text style={styles.roleTitle}>الدخول كفني</Text>
+            <Text style={styles.roleDescription}>ادخل كفني، والشغل مستنيك! استقبل الطلبات، وقدّم عروضك، وتابع شغلك ومكسبك.</Text>
+            <Text style={styles.roleActionHint}>شوف فرص الشغل ←</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.homeFooter}><View style={styles.homeFooterDot} /><Text style={styles.homeFooterText}>اختار طريقة الدخول وابدأ مع صُنّاع</Text></View>
+    </ScrollView>
+  </SafeAreaView>;
 }
-export default function App(){const [s,setS]=useState('home');return <SafeAreaProvider><AppScreens onScreenChange={setS}/></SafeAreaProvider>;}
+
 const styles = StyleSheet.create({
-  safe:{flex:1,backgroundColor:COLORS.bg},loginSafe:{flex:1,backgroundColor:'#0F2D4A'},loginPage:{flex:1,padding:20,justifyContent:'center'},loginBackButton:{alignSelf:'flex-start',marginBottom:10},loginBackText:{color:'#fff',opacity:0.8},loginLogoCircle:{width:110,height:110,borderRadius:55,backgroundColor:'#fff',alignSelf:'center',justifyContent:'center',alignItems:'center',marginBottom:16},loginLogo:{width:90,height:90},fieldWrap:{marginBottom:12},fieldLabel:{color:COLORS.text,fontWeight:'600',marginBottom:6,textAlign:'right'},input:{backgroundColor:'#F8FAFC',borderWidth:1,borderColor:COLORS.border,borderRadius:10,padding:12,color:COLORS.text},multiline:{minHeight:90},button:{backgroundColor:COLORS.blue,borderRadius:12,padding:14,alignItems:'center',marginVertical:6},buttonSecondary:{backgroundColor:'#fff',borderWidth:1,borderColor:COLORS.border},buttonText:{color:'#fff',fontWeight:'700'},buttonSecondaryText:{color:COLORS.text},disabledButton:{opacity:0.6},page:{padding:16,paddingBottom:40},title:{fontSize:22,fontWeight:'800',color:COLORS.text,textAlign:'right'},detail:{color:COLORS.text,textAlign:'right',marginTop:4},cardTitle:{fontWeight:'800',color:COLORS.text,textAlign:'right'},dataCard:{backgroundColor:'#fff',borderRadius:12,padding:12,marginTop:10,borderWidth:1,borderColor:COLORS.border},modalBackdrop:{flex:1,backgroundColor:'rgba(0,0,0,0.5)',justifyContent:'center',padding:20},ratingModal:{backgroundColor:'#fff',borderRadius:16,padding:16},ratingStarsRow:{flexDirection:'row-reverse',justifyContent:'center',marginVertical:12},ratingStar:{fontSize:32,color:'#E2E8F0'},ratingStarActive:{color:COLORS.gold},chatBox:{marginTop:10,backgroundColor:'#F8FAFC',borderRadius:10,padding:8,borderWidth:1,borderColor:COLORS.border},
-  loginGradientButton:{backgroundColor:COLORS.navy,borderRadius:12,padding:14,alignItems:'center',marginTop:10},
-  loginGradientButtonText:{color:'#fff',fontWeight:'700'},
-  loginHeading:{alignItems:'center',marginBottom:20},
-  loginTitle:{color:'#fff',fontSize:22,fontWeight:'800'},
-  loginForm:{backgroundColor:'#fff',borderRadius:16,padding:16},
+  appRoot: { flex: 1, backgroundColor: '#FFFFFF' },
+  brandHeaderSafe: { backgroundColor: '#FFFFFF' },
+  brandHeader: { minHeight: 54, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EAF1F5' },
+
+  brandHeaderLogo: { width: 42, height: 42 },
+  brandHeaderTitle: { color: COLORS.navy, fontSize: 21, fontWeight: '900', marginLeft: 9 },
+  appScreenArea: { flex: 1 },
+  homeLogoImage: { width: 98, height: 98, alignSelf: 'center' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  page: { padding: 16, paddingBottom: 30, gap: 10, backgroundColor: '#F8FAFC' },
+  screenSection: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2EEEE', borderRadius: 18, padding: 13, marginVertical: 7 },
+  screenDivider: { height: 1, backgroundColor: '#EAF1F5', marginVertical: 8 },
+
+  homePage: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 22, gap: 20, justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  flex: { flex: 1 },
+  homeBrandArea: { alignItems: 'center', paddingBottom: 2 },
+  homeLogoCircle: { width: 124, height: 124, borderRadius: 62, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5F2F2', shadowColor: '#0F4C75', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5, marginBottom: 10 },
+  homeBrandTitle: { color: '#0F4C75', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 0.2 },
+  homeTagline: { color: '#0E9A9A', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 4, lineHeight: 23 },
+  homeIntro: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 21, marginTop: 7 },
+  roleCards: { flexDirection: 'column', gap: 13 },
+  roleCard: { width: '100%', minHeight: 132, flexDirection: 'row-reverse', alignItems: 'center', gap: 13, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 22, paddingHorizontal: 15, paddingVertical: 16, shadowColor: '#0F4C75', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
+  clientRoleCard: { borderRightWidth: 4, borderRightColor: '#0E9A9A' },
+  technicianRoleCard: { borderRightWidth: 4, borderRightColor: '#0F4C75' },
+  clientIconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#E9F8F7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C5EAE7' },
+  technicianIconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#EAF2F8', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D2E4F0' },
+  roleIcon: { fontSize: 29, color: '#0F4C75', fontWeight: '800' },
+  roleCardCopy: { flex: 1, gap: 3, justifyContent: 'center' },
+  roleTitle: { color: '#0F4C75', fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  roleDescription: { color: '#64748B', fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 4, flexShrink: 1 },
+  roleActionHint: { color: '#0E9A9A', fontSize: 12, fontWeight: '900', textAlign: 'right', marginTop: 6 },
+  homeFooter: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 0 },
+  homeFooterDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#0E9A9A' },
+  homeFooterText: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+  loginSafe: { flex: 1, backgroundColor: '#FFFFFF' },
+  loginPage: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28, justifyContent: 'center', gap: 12 },
+  loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F5F7F9', borderWidth: 1, borderColor: '#E5EAF0' },
+  loginBackText: { color: '#0F4C75', fontSize: 13, fontWeight: '700' },
+  loginLogoCircle: { width: 116, height: 116, borderRadius: 58, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F0F4F7', shadowColor: '#0F4C75', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 5, marginBottom: 4 },
+  loginLogo: { width: 86, height: 86 },
+  loginTitle: { fontSize: 25, fontWeight: '900', color: '#0F4C75', textAlign: 'center' },
+  loginSubtitle: { color: '#64748B', marginTop: 5, textAlign: 'center', lineHeight: 22, fontSize: 14 },
+  loginForm: { width: '100%', gap: 5 },
+  recoveryLink: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 2, marginBottom: 4 },
+  recoveryLinkText: { color: '#0E9A9A', fontSize: 14, fontWeight: '800', textAlign: 'left' },
+  loginGradientButton: { minHeight: 52, borderRadius: 14, marginVertical: 5, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#0A2A4A', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  loginGradientColors: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  loginGradientSegment: { flex: 1 },
+  loginGradientButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  loginHeading: { alignItems: 'flex-end', gap: 3, marginVertical: 8 },
+  title: { fontSize: 25, fontWeight: 'bold', color: COLORS.navy, textAlign: 'right' },
+  subtitle: { color: COLORS.muted, marginTop: 5, textAlign: 'right', lineHeight: 21 },
+  hero: { color: COLORS.navy, fontSize: 22, fontWeight: 'bold', textAlign: 'right', marginTop: 12 },
+  brand: { backgroundColor: COLORS.navy, color: COLORS.white, fontSize: 30, fontWeight: 'bold', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, overflow: 'hidden' },
+  homeHeader: { padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  homeButtons: { gap: 8, marginVertical: 12 },
+  button: { backgroundColor: COLORS.teal, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 48, maxWidth: '100%', flexShrink: 1, borderWidth: 1, borderColor: '#0B8585', shadowColor: COLORS.teal, shadowOpacity: 0.13, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+
+  buttonText: { color: COLORS.white, fontWeight: '800', fontSize: 13, textAlign: 'center', flexShrink: 1 },
+  buttonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CFE2E3', shadowOpacity: 0.03, elevation: 1 },
+
+  buttonSecondaryText: { color: COLORS.navy },
+  disabledButton: { opacity: 0.55 },
+  fieldWrap: { marginVertical: 5 },
+  fieldLabel: { color: COLORS.navy, fontWeight: 'bold', marginTop: 7, marginBottom: 6, textAlign: 'right' },
+  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE8EB', borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: COLORS.text, fontSize: 16, minHeight: 49 },
+
+  multiline: { minHeight: 86, textAlignVertical: 'top' },
+  note: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 19, marginVertical: 8 },
+  notificationRow: { paddingVertical: 8, paddingHorizontal: 9, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 2, backgroundColor: '#FFFFFF', borderRadius: 10, marginTop: 4 },
+  notificationUnread: { backgroundColor: '#FFF7D6', borderColor: '#F5B928', borderWidth: 1 },
+  homeSummary: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0FDFA', borderRadius: 12, padding: 12 },
+  bellButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#FFF4C2', borderWidth: 1, borderColor: '#F5B928', alignItems: 'center', justifyContent: 'center' },
+  bellText: { fontSize: 21 },
+  bellBadge: { position: 'absolute', top: -5, right: -5, minWidth: 17, textAlign: 'center', borderRadius: 9, overflow: 'hidden', color: '#FFFFFF', backgroundColor: '#B91C1C', fontSize: 10, fontWeight: '900', paddingHorizontal: 3 },
+  notificationPopup: { position: 'absolute', zIndex: 20, top: 70, right: 12, width: '88%', maxWidth: 360, maxHeight: '58%', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F5B928', borderRadius: 18, padding: 10, elevation: 14 },
+  notificationList: { maxHeight: 300, flexGrow: 0, flexShrink: 1 },
+  notificationListContent: { paddingBottom: 4 },
+  floatingControls: { position: 'absolute', left: 14, right: 14, bottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  floatingButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: COLORS.teal, shadowOpacity: 0.18, shadowRadius: 8 },
+
+  floatingIcon: { color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '900' },
+  whatsappButton: { backgroundColor: '#16A34A' },
+  floatingWhatsApp: { color: '#FFFFFF', fontSize: 24, fontWeight: '900' },
+  codeRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
+  roleActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: 7, marginTop: 8 },
+  chatPanel: { backgroundColor: '#F8FCFC', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 18, padding: 12, marginTop: 11, shadowColor: COLORS.navy, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
+
+  chatMessage: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 8, marginVertical: 4 },
+  chatMessageClient: { backgroundColor: '#EFF7FC', borderColor: '#D5E8F2', alignSelf: 'flex-start', maxWidth: '92%' },
+
+  chatMessageTechnician: { backgroundColor: '#E9F8F7', borderColor: '#B9E5E1', alignSelf: 'flex-end', maxWidth: '92%' },
+
+  chatMessageText: { color: COLORS.text, textAlign: 'right', lineHeight: 21, marginTop: 4 },
+  priceRequest: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 10, marginVertical: 6 },
+  inlineCheck: { paddingVertical: 8 },
+  tabRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 7, marginVertical: 8, paddingHorizontal: 12 },
+  tabPill: { flexShrink: 1, maxWidth: '100%' },
+  pill: { borderRadius: 18, borderWidth: 1, borderColor: '#D9E3F0', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 9, marginRight: 4, marginVertical: 3, maxWidth: '100%' },
+  pillActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal, shadowColor: COLORS.teal, shadowOpacity: 0.10, shadowRadius: 5, elevation: 1 },
+
+  pillText: { color: COLORS.text, fontSize: 12, fontWeight: '600' },
+  pillTextActive: { color: COLORS.white },
+  sectionTitle: { color: COLORS.navy, fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 12, marginBottom: 5 },
+  selectionGroup: { backgroundColor: COLORS.white, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 5 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(5, 15, 35, 0.62)', justifyContent: 'center', padding: 20 },
+  ratingModal: { alignSelf: 'center', width: '100%', maxWidth: 360, backgroundColor: COLORS.white, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: COLORS.gold, maxHeight: '82%' },
+  ratingStarsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 8 },
+  ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
+  ratingStar: { fontSize: 27, color: '#CBD5E1' },
+  ratingStarActive: { color: COLORS.gold },
+  dropdownButton: { minHeight: 50, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginVertical: 5 },
+  dropdownButtonText: { color: COLORS.text, textAlign: 'right', fontSize: 15, fontWeight: '700', flex: 1 },
+  dropdownArrow: { color: COLORS.navy, fontSize: 14, marginLeft: 10 },
+  dropdownOptions: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, marginBottom: 8, overflow: 'hidden' },
+  dropdownOption: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dropdownOptionText: { color: COLORS.text, textAlign: 'right', fontSize: 14 },
+  categoryToggle: { paddingVertical: 5 },
+  offerCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 17, padding: 14, marginTop: 9, shadowColor: COLORS.navy, shadowOpacity: 0.045, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+
+  groupTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginBottom: 5 },
+  choiceRow: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  choiceText: { color: COLORS.text, textAlign: 'right' },
+  headerRow: { padding: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  statusText: { marginTop: 12, color: '#64748B', textAlign: 'center' },
+  dataCard: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 19, padding: 15, marginVertical: 7, shadowColor: COLORS.navy, shadowOpacity: 0.045, shadowRadius: 9, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+
+  cardTitle: { color: COLORS.navy, fontSize: 16, fontWeight: 'bold', textAlign: 'right' },
+  detail: { color: COLORS.muted, marginTop: 6, textAlign: 'right', lineHeight: 20 },
+  errorText: { color: COLORS.red, textAlign: 'right', marginVertical: 8, lineHeight: 21, paddingHorizontal: 12 },
+  successText: { color: '#047857', fontWeight: '800', textAlign: 'right', marginVertical: 10, flexWrap: 'wrap' },
+  emptyText: { textAlign: 'center', color: COLORS.muted, padding: 28 },
+  list: { paddingHorizontal: 12, paddingBottom: 18 },
+  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between' },
+  categoryCard: { width: '48%', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 17, padding: 14, marginBottom: 10, shadowColor: COLORS.navy, shadowOpacity: 0.035, shadowRadius: 6, elevation: 1 },
+
+  categoryActive: { backgroundColor: '#E9F8F7', borderColor: COLORS.teal, borderWidth: 1.5 },
+
+  emoji: { fontSize: 27, textAlign: 'right' },
+  categoryTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginTop: 7 },
+  categoryTitleActive: { color: COLORS.navy },
+
+  serviceLine: { color: COLORS.text, textAlign: 'right', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
 });
+
+class StartupErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Sonaa startup render error:', error, info?.componentStack); }
+  render() {
+    if (this.state.error) {
+      return <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 24, justifyContent: 'center' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0F172A', textAlign: 'right', marginBottom: 12 }}>تعذر تشغيل شاشة صُنّاع</Text>
+        <Text selectable style={{ color: '#B91C1C', textAlign: 'left', marginBottom: 20 }}>{String(this.state.error?.message || this.state.error)}</Text>
+        <TouchableOpacity onPress={() => this.setState({ error: null })} style={{ backgroundColor: '#14B8A6', padding: 14, borderRadius: 12, alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>إعادة المحاولة</Text></TouchableOpacity>
+      </SafeAreaView>;
+    }
+    return this.props.children;
+  }
+}
+
+function AppContent() {
+  const [currentScreen, setCurrentScreen] = useState('home');
+  const [showSplash, setShowSplash] = useState(true);
+  const spin = useRef(new Animated.Value(0)).current;
+  const showBrandHeader = !['home', 'login'].includes(currentScreen);
+
+  useEffect(() => {
+    const animation = Animated.loop(Animated.timing(spin, {
+      toValue: 1,
+      duration: 1500,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }));
+    animation.start();
+    const timer = setTimeout(() => setShowSplash(false), 2600);
+    return () => {
+      animation.stop();
+      clearTimeout(timer);
+    };
+  }, [spin]);
+
+  const spinRotation = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return <View style={styles.appRoot}>
+    {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
+      <View style={styles.brandHeader}>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
+        <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
+      </View>
+    </SafeAreaView> : null}
+    <View style={styles.appScreenArea}><AppScreens onScreenChange={setCurrentScreen} /></View>
+    {showSplash ? <View style={splashStyles.overlay}>
+      <View style={splashStyles.logoFrame}>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={splashStyles.logo} resizeMode="contain" />
+        <View pointerEvents="none" style={splashStyles.wordOrbit}>
+          <Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>
+        </View>
+      </View>
+      <Text style={splashStyles.title}>صُنّاع</Text>
+      <Text style={splashStyles.caption}>كل خدمة أقرب ليك</Text>
+      <View style={splashStyles.loadingTrack}><View style={splashStyles.loadingFill} /></View>
+    </View> : null}
+  </View>;
+}
+
+const splashStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999,
+    elevation: 999,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  logoFrame: {
+    width: 178,
+    height: 178,
+    borderRadius: 89,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDEBEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F4C75',
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 7,
+    overflow: 'hidden',
+  },
+  logo: { width: 132, height: 132 },
+  wordOrbit: {
+    position: 'absolute',
+    width: 126,
+    height: 126,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinningWord: {
+    color: '#0E9A9A',
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+    textShadowColor: '#FFFFFF',
+    textShadowRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    overflow: 'hidden',
+    paddingHorizontal: 5,
+    borderRadius: 8,
+  },
+  title: { marginTop: 24, color: '#0F4C75', fontSize: 30, fontWeight: '900' },
+  caption: { marginTop: 7, color: '#0E9A9A', fontSize: 14, fontWeight: '700' },
+  loadingTrack: {
+    marginTop: 28,
+    width: 148,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: '#DDEBEC',
+    overflow: 'hidden',
+  },
+  loadingFill: {
+    width: '65%',
+    height: '100%',
+    backgroundColor: '#0E9A9A',
+    borderRadius: 3,
+  },
+});
+
+export default function App() {
+  return <SafeAreaProvider><StartupErrorBoundary><AppContent /></StartupErrorBoundary></SafeAreaProvider>;
+}
