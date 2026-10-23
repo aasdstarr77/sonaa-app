@@ -15,7 +15,7 @@ Notifications.setNotificationHandler({
 });
 
 const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
-const COLORS = { navy: '#0B1B3A', navy2: '#173C6C', blue: '#2563EB', gold: '#F5B928', teal: '#14B8A6', bg: '#F4F7FB', text: '#152544', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
+const COLORS = { navy: '#0F4C75', navy2: '#104775', blue: '#1565A0', gold: '#F5B928', teal: '#0E9A9A', bg: '#F8FAFC', text: '#152544', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
 
 async function api(path, options = {}) {
   const { token, body, headers, ...fetchOptions } = options;
@@ -76,8 +76,9 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
   </View>;
 }
 
-function AppScreens() {
+function AppScreens({ onScreenChange }) {
   const [screen, setScreenState] = useState('home');
+  useEffect(() => { onScreenChange?.(screen); }, [screen, onScreenChange]);
   const screenHistoryRef = useRef([]);
   const screenRef = useRef('home');
   const pushTokenRef = useRef(null);
@@ -2043,61 +2044,69 @@ function AppScreens() {
   }
 
   return <SafeAreaView style={styles.safe}>
-    <ScrollView contentContainerStyle={styles.homePage}>
-      <View style={styles.welcomeHero}>
-        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.homeLogoImage} resizeMode="contain" />
+    <ScrollView contentContainerStyle={styles.homePage} showsVerticalScrollIndicator={false}>
+      <View style={styles.homeBrandArea}>
+        <View style={styles.homeLogoCircle}>
+          <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.homeLogoImage} resizeMode="contain" />
+        </View>
         <Text style={styles.homeBrandTitle}>صُنّاع</Text>
         <Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>
-        <Text style={styles.homeIntro}>مكان يجمع احتياجات العملاء بمهارات الفنيين.</Text>
+        <Text style={styles.homeIntro}>خدماتك وشغلك في مكان واحد، بخطوات بسيطة.</Text>
       </View>
       <View style={styles.roleCards}>
-        <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('client')} style={styles.roleCard}>
-          <View style={styles.clientIconCircle}><Text style={styles.roleIcon}>👤</Text></View>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} onPress={() => goLogin('client')} style={[styles.roleCard, styles.clientRoleCard]}>
+          <View style={styles.clientIconCircle}><Text style={styles.roleIcon}>⌂</Text></View>
           <View style={styles.roleCardCopy}>
             <Text style={styles.roleTitle}>الدخول كعميل</Text>
-            <Text style={styles.roleDescription}>اطلب الخدمة اللي محتاجها وتابع طلبك بسهولة.</Text>
+            <Text style={styles.roleDescription}>ادخل كعميل واطلب الخدمة اللي محتاجها، وتابع عروض الفنيين وطلبك بسهولة.</Text>
+            <Text style={styles.roleActionHint}>اطلب خدمتك الآن ←</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" onPress={() => goLogin('fanni')} style={styles.roleCard}>
-          <View style={styles.technicianIconCircle}><Text style={styles.roleIcon}>🛠️</Text></View>
+        <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} onPress={() => goLogin('fanni')} style={[styles.roleCard, styles.technicianRoleCard]}>
+          <View style={styles.technicianIconCircle}><Text style={styles.roleIcon}>⚒</Text></View>
           <View style={styles.roleCardCopy}>
             <Text style={styles.roleTitle}>الدخول كفني</Text>
-            <Text style={styles.roleDescription}>تابع فرص الشغل وطلبات الخدمات من حسابك.</Text>
+            <Text style={styles.roleDescription}>ادخل كفني، والشغل مستنيك! استقبل الطلبات، وقدّم عروضك، وتابع شغلك ومكسبك.</Text>
+            <Text style={styles.roleActionHint}>شوف فرص الشغل ←</Text>
           </View>
         </TouchableOpacity>
       </View>
-      <View style={styles.dataCard}><Text style={styles.sectionTitle}>خدمات متنوعة في مكان واحد</Text><Text style={styles.detail}>اختار إنك عميل لطلب خدمة، أو فني لمتابعة فرص العمل. هتلاقي قائمة المهن والخدمات كاملة داخل الحساب عند الحاجة.</Text><View style={styles.homeSummary}><Text style={styles.emoji}>🛠️</Text><Text style={styles.cardTitle}>مهن وخدمات متعددة</Text></View></View>
+      <View style={styles.homeFooter}><View style={styles.homeFooterDot} /><Text style={styles.homeFooterText}>اختار طريقة الدخول وابدأ مع صُنّاع</Text></View>
     </ScrollView>
   </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
-  appRoot: { flex: 1, backgroundColor: '#F8FAFC' },
-  brandHeaderSafe: { backgroundColor: '#F4F7FB' },
-  brandHeader: { minHeight: 56, paddingLeft: 12, paddingRight: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#F4F7FB' },
-  brandHeaderLogo: { width: 46, height: 46, borderRadius: 8 },
-  brandHeaderTitle: { color: COLORS.navy, fontSize: 22, fontWeight: '900', marginLeft: 10 },
+  appRoot: { flex: 1, backgroundColor: '#FFFFFF' },
+  brandHeaderSafe: { backgroundColor: '#FFFFFF' },
+  brandHeader: { minHeight: 52, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#FFFFFF' },
+  brandHeaderLogo: { width: 42, height: 42 },
+  brandHeaderTitle: { color: COLORS.navy, fontSize: 21, fontWeight: '900', marginLeft: 9 },
   appScreenArea: { flex: 1 },
-  homeLogoImage: { width: 140, height: 140, alignSelf: 'center', borderRadius: 18, marginBottom: 8 },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  page: { padding: 16, paddingBottom: 34, gap: 10 },
-  homePage: { padding: 16, paddingBottom: 34, gap: 14 },
+  homeLogoImage: { width: 98, height: 98, alignSelf: 'center' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  page: { padding: 16, paddingBottom: 30, gap: 10 },
+  homePage: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 22, gap: 20, justifyContent: 'center', backgroundColor: '#FFFFFF' },
   flex: { flex: 1 },
-  welcomeHero: { alignItems: 'center', backgroundColor: COLORS.navy, borderWidth: 1, borderColor: '#29466E', borderRadius: 28, padding: 24, shadowColor: COLORS.navy, shadowOpacity: 0.34, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 12, overflow: 'hidden' },
-  logoGlow: { width: 112, height: 112, borderRadius: 56, borderWidth: 2, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', shadowColor: COLORS.teal, shadowOpacity: 0.85, shadowRadius: 22, shadowOffset: { width: 0, height: 8 }, elevation: 16, marginBottom: 14 },
-  logoRing: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.navy, shadowOpacity: 0.16, shadowRadius: 7, elevation: 5 },
-  logoLetter: { color: COLORS.navy, fontSize: 48, fontWeight: '900' },
-  homeBrandTitle: { color: COLORS.white, fontSize: 34, fontWeight: '900', textAlign: 'center', letterSpacing: 0.4 },
-  homeTagline: { color: COLORS.gold, fontSize: 16, fontWeight: '800', textAlign: 'center', marginTop: 7, lineHeight: 25 },
-  homeIntro: { color: '#D9E5F6', fontSize: 14, textAlign: 'center', lineHeight: 24, marginTop: 10 },
+  homeBrandArea: { alignItems: 'center', paddingBottom: 2 },
+  homeLogoCircle: { width: 124, height: 124, borderRadius: 62, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5F2F2', shadowColor: '#0F4C75', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5, marginBottom: 10 },
+  homeBrandTitle: { color: '#0F4C75', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 0.2 },
+  homeTagline: { color: '#0E9A9A', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 4, lineHeight: 23 },
+  homeIntro: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 21, marginTop: 7 },
   roleCards: { flexDirection: 'column', gap: 13 },
-  roleCard: { width: '100%', minHeight: 118, flexDirection: 'row-reverse', alignItems: 'center', gap: 13, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DCE5F1', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 18, shadowColor: COLORS.navy, shadowOpacity: 0.14, shadowRadius: 14, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
-  clientIconCircle: { width: 62, height: 62, borderRadius: 22, backgroundColor: '#E8F1FF', alignItems: 'center', justifyContent: 'center', marginBottom: 0, borderWidth: 1, borderColor: '#C7DAF8', shadowColor: '#2563EB', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3 },
-  technicianIconCircle: { width: 62, height: 62, borderRadius: 22, backgroundColor: '#FFF2CC', alignItems: 'center', justifyContent: 'center', marginBottom: 0, borderWidth: 1, borderColor: '#F2D88C', shadowColor: '#F5B928', shadowOpacity: 0.16, shadowRadius: 8, elevation: 3 },
-  roleIcon: { fontSize: 30 },
+  roleCard: { width: '100%', minHeight: 132, flexDirection: 'row-reverse', alignItems: 'center', gap: 13, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 22, paddingHorizontal: 15, paddingVertical: 16, shadowColor: '#0F4C75', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
+  clientRoleCard: { borderRightWidth: 4, borderRightColor: '#0E9A9A' },
+  technicianRoleCard: { borderRightWidth: 4, borderRightColor: '#0F4C75' },
+  clientIconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#E9F8F7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C5EAE7' },
+  technicianIconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#EAF2F8', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D2E4F0' },
+  roleIcon: { fontSize: 29, color: '#0F4C75', fontWeight: '800' },
   roleCardCopy: { flex: 1, gap: 3, justifyContent: 'center' },
-  roleTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', textAlign: 'right' },
-  roleDescription: { color: COLORS.muted, fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 5, flexShrink: 1 },
+  roleTitle: { color: '#0F4C75', fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  roleDescription: { color: '#64748B', fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 4, flexShrink: 1 },
+  roleActionHint: { color: '#0E9A9A', fontSize: 12, fontWeight: '900', textAlign: 'right', marginTop: 6 },
+  homeFooter: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 0 },
+  homeFooterDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#0E9A9A' },
+  homeFooterText: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
   loginSafe: { flex: 1, backgroundColor: '#FFFFFF' },
   loginPage: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28, justifyContent: 'center', gap: 12 },
   loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F5F7F9', borderWidth: 1, borderColor: '#E5EAF0' },
@@ -2214,14 +2223,16 @@ class StartupErrorBoundary extends React.Component {
 }
 
 function AppContent() {
+  const [currentScreen, setCurrentScreen] = useState('home');
+  const showBrandHeader = !['home', 'login'].includes(currentScreen);
   return <View style={styles.appRoot}>
-    <SafeAreaView style={styles.brandHeaderSafe}>
+    {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
       <View style={styles.brandHeader}>
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
-         <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
+        <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
       </View>
-    </SafeAreaView>
-    <View style={styles.appScreenArea}><AppScreens /></View>
+    </SafeAreaView> : null}
+    <View style={styles.appScreenArea}><AppScreens onScreenChange={setCurrentScreen} /></View>
   </View>;
 }
 
