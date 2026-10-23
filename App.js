@@ -1617,7 +1617,7 @@ function AppScreens() {
         <Text style={styles.subtitle}>{authMode === 'client' ? 'سجّل دخولك لمتابعة طلباتك وخدماتك.' : 'سجّل دخولك لمتابعة فرص العمل وحسابك.'}</Text>
       </View>
       <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
-      <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" />
+      <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" returnKeyType="go" onSubmitEditing={handleLogin} blurOnSubmit />
       <TouchableOpacity onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }}><Text style={styles.detail}>نسيت كلمة المرور؟ تواصل مع الدعم</Text></TouchableOpacity>
       <Button title={loginLoading ? 'جاري الدخول...' : authMode === 'client' ? 'دخول العميل' : 'دخول الفني'} onPress={handleLogin} disabled={loginLoading} />
       {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
@@ -1888,9 +1888,20 @@ function AppScreens() {
     const tab = adminData.tab;
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
     const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'wallets', label: 'محافظ الفنيين' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
+    const pendingActionCount = key => {
+      const values = key === 'support' ? adminSupportCases : adminData[key] || [];
+      const statusOf = item => String(item?.status || item?.actualStatus || item?.state || '').trim().toLowerCase();
+      const closedStatuses = ['تم الحل', 'مغلقة', 'مغلق', 'تم الإغلاق', 'منتهية', 'مكتملة', 'مكتمل', 'محلولة', 'closed', 'resolved', 'complete', 'completed', 'approved', 'rejected', 'رفض', 'مرفوض', 'مرفوضة', 'تم الاعتماد', 'تم الرفض', 'مقبول', 'مقبولة'];
+      if (key === 'orders') return values.filter(item => ['قيد المراجعة', 'pending', 'awaiting review', 'بانتظار المراجعة', 'بانتظار النشر'].includes(statusOf(item))).length;
+      if (key === 'fannis') return values.filter(item => !item.isApproved && !item.isDisabled && ['قيد المراجعة', 'pending', 'بانتظار المراجعة', ''].includes(statusOf(item))).length;
+      if (key === 'topups') return values.filter(item => !closedStatuses.includes(statusOf(item)) && ['قيد المراجعة', 'pending', 'بانتظار المراجعة', 'جديد', ''].includes(statusOf(item))).length;
+      if (key === 'complaints') return values.filter(item => !closedStatuses.includes(statusOf(item))).length;
+      if (key === 'support') return values.filter(item => item.needsHuman && !closedStatuses.includes(statusOf(item))).length;
+      return 0;
+    };
     return <SafeAreaView style={styles.safe}>
       <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
-      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints'].includes(item.key) ? ` (${(adminData[item.key] || []).length})` : item.key === 'support' ? ` (${adminSupportCases.length})` : ''}</Text></TouchableOpacity>)}</View>
+      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints','support'].includes(item.key) ? ` (${pendingActionCount(item.key)})` : ''}</Text></TouchableOpacity>)}</View>
       {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
         {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
         {tab === 'wallets' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
