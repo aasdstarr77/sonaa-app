@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing } from 'react-native';
 import {
   View, Text, Image, FlatList, TouchableOpacity, ActivityIndicator, ScrollView,
   TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert, BackHandler, Linking, Modal
@@ -2241,7 +2242,30 @@ class StartupErrorBoundary extends React.Component {
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState('home');
+  const [showSplash, setShowSplash] = useState(true);
+  const spin = useRef(new Animated.Value(0)).current;
   const showBrandHeader = !['home', 'login'].includes(currentScreen);
+
+  useEffect(() => {
+    const animation = Animated.loop(Animated.timing(spin, {
+      toValue: 1,
+      duration: 1500,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }));
+    animation.start();
+    const timer = setTimeout(() => setShowSplash(false), 2600);
+    return () => {
+      animation.stop();
+      clearTimeout(timer);
+    };
+  }, [spin]);
+
+  const spinRotation = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   return <View style={styles.appRoot}>
     {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
       <View style={styles.brandHeader}>
@@ -2250,8 +2274,83 @@ function AppContent() {
       </View>
     </SafeAreaView> : null}
     <View style={styles.appScreenArea}><AppScreens onScreenChange={setCurrentScreen} /></View>
+    {showSplash ? <View style={splashStyles.overlay}>
+      <View style={splashStyles.logoFrame}>
+        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={splashStyles.logo} resizeMode="contain" />
+        <View pointerEvents="none" style={splashStyles.wordOrbit}>
+          <Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>
+        </View>
+      </View>
+      <Text style={splashStyles.title}>صُنّاع</Text>
+      <Text style={splashStyles.caption}>كل خدمة أقرب ليك</Text>
+      <View style={splashStyles.loadingTrack}><View style={splashStyles.loadingFill} /></View>
+    </View> : null}
   </View>;
 }
+
+const splashStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999,
+    elevation: 999,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  logoFrame: {
+    width: 178,
+    height: 178,
+    borderRadius: 89,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDEBEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F4C75',
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 7,
+    overflow: 'hidden',
+  },
+  logo: { width: 132, height: 132 },
+  wordOrbit: {
+    position: 'absolute',
+    width: 126,
+    height: 126,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinningWord: {
+    color: '#0E9A9A',
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+    textShadowColor: '#FFFFFF',
+    textShadowRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    overflow: 'hidden',
+    paddingHorizontal: 5,
+    borderRadius: 8,
+  },
+  title: { marginTop: 24, color: '#0F4C75', fontSize: 30, fontWeight: '900' },
+  caption: { marginTop: 7, color: '#0E9A9A', fontSize: 14, fontWeight: '700' },
+  loadingTrack: {
+    marginTop: 28,
+    width: 148,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: '#DDEBEC',
+    overflow: 'hidden',
+  },
+  loadingFill: {
+    width: '65%',
+    height: '100%',
+    backgroundColor: '#0E9A9A',
+    borderRadius: 3,
+  },
+});
 
 export default function App() {
   return <SafeAreaProvider><StartupErrorBoundary><AppContent /></StartupErrorBoundary></SafeAreaProvider>;
