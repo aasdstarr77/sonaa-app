@@ -757,6 +757,8 @@ function AppScreens({ onScreenChange }) {
   }
 
   async function submitOffer() {
+    const draftOrder = offerDraft?.order;
+    if (!draftOrder || !getOrderSN(draftOrder)) { setOfferDraft(null); Alert.alert('تعذر إرسال العرض', 'بيانات الطلب غير مكتملة. افتح الطلب من جديد وحاول مرة أخرى.'); return; }
     const amount = Number(offerDraft?.price);
     const message = String(offerDraft?.message || '').trim();
     const hasActiveAcceptedJob = techData.offers.some(item => item.accepted === true && item.orderStatus === 'تم اختيار فني');
@@ -769,7 +771,7 @@ function AppScreens({ onScreenChange }) {
       return;
     }
     try {
-      await api(`/orders/${encodeURIComponent(offerDraft.order.sn)}/offer`, {
+      await api(`/orders/${encodeURIComponent(getOrderSN(draftOrder))}/offer`, {
         method: 'POST', token: session.token, body: { price: amount, message }
       });
       setOfferDraft(null);
@@ -1085,8 +1087,8 @@ function AppScreens({ onScreenChange }) {
   }
 
   function renderRatingModal(role) {
-    if (!ratingPrompt || ratingPrompt.role !== role) return null;
-    const order = ratingPrompt.order;
+    if (!ratingPrompt || !ratingPrompt.order || ratingPrompt.role !== role) return null;
+    const order = ratingPrompt?.order || {};
     const sn = getOrderSN(order);
     const draft = ratingDrafts[sn] || { stars: '5', comment: '', blockFuture: false };
     const stars = Number(draft.stars || 5);
@@ -1818,11 +1820,11 @@ function AppScreens({ onScreenChange }) {
     const displayedOffers = techData.offers.filter(item => tab === 'completed' ? item.orderStatus === 'تم الانتهاء' : item.orderStatus !== 'تم الانتهاء');
     const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => o.orderStatus !== 'تم الانتهاء').length})` }, { key: 'completed', label: `المكتملة (${techData.offers.filter(o => o.orderStatus === 'تم الانتهاء').length})` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }, { key: 'notifications', label: `الإشعارات${notifications.unread ? ` (${notifications.unread})` : ''}` }];
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع</Text><Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text><Text style={styles.detail}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
       {user.status === 'معتمد' && (!user.technicianGuidelinesAcceptedAt || user.technicianGuidelinesVersion !== '2026-10-20-v1') ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ميثاق التعامل المهني مع العملاء</Text><Text style={styles.detail}>اقرأ التعليمات التالية ووافق عليها قبل استخدام لوحة الفني:</Text><Text style={styles.detail}>١. التزم بسعر العرض الذي وافق عليه العميل. أي زيادة تحتاج موافقة صريحة مسجلة داخل المنصة قبل التنفيذ.</Text><Text style={styles.detail}>٢. تعامل باحترام وصدق، دون ضغط أو تهديد أو تضليل.</Text><Text style={styles.detail}>٣. قبل قبول العرض، استخدم الردود المسموحة فقط: «نعم»، «لا»، «حسب الاتفاق». ممنوع تبادل بيانات الاتصال أو التحايل على المنصة قبل القبول.</Text><Text style={styles.detail}>٤. لا تضغط إنهاء المهمة إلا بعد إنجازها فعلًا.</Text><Text style={styles.detail}>٥. احمِ بيانات العميل ولا تستخدمها خارج الطلب.</Text><Text style={styles.detail}>٦. يحق للطرفين التقييم بعد الإكمال؛ ممنوع الإكراه على تقييم إيجابي أو التلاعب بالتقييمات.</Text><Text style={styles.detail}>٧. المخالفات قد تؤدي إلى مراجعة الطلب أو تعليق الحساب أو إيقافه.</Text><TouchableOpacity onPress={() => setGuidelinesChecked(value => !value)} style={styles.roleActions}><Text style={styles.detail}>{guidelinesChecked ? '☑' : '□'} قرأت التعليمات وأوافق على الالتزام بها.</Text></TouchableOpacity><Button title="موافق ثم تأكيد" onPress={() => guidelinesChecked ? acceptTechnicianGuidelines() : Alert.alert('الموافقة مطلوبة', 'لازم تقرأ الميثاق وتحدد الموافقة أولًا.')} /></View> : null}
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
-      {offerDraft ? <View style={styles.dataCard}>
-        <Text style={styles.cardTitle}>تقديم عرض على {offerDraft.order.service || 'الخدمة'} — {offerDraft.order.sn}</Text>
+      {offerDraft?.order ? <View style={styles.dataCard}>
+        <Text style={styles.cardTitle}>تقديم عرض على {offerDraft.order?.service || 'الخدمة'} — {getOrderSN(offerDraft.order) || '—'}</Text>
         <Field label="السعر بالجنيه" value={offerDraft.price} onChangeText={value => setOfferDraft(current => ({ ...current, price: value }))} keyboardType="numeric" />
         <Field label="رسالة للعميل" value={offerDraft.message} onChangeText={value => setOfferDraft(current => ({ ...current, message: value }))} multiline />
         <Button title="إرسال العرض" onPress={submitOffer} />
@@ -2333,7 +2335,7 @@ function AppContent() {
         </View>
       </View>
       <Text style={splashStyles.title}>صُنّاع</Text>
-      <Text style={splashStyles.caption}>كل خدمة أقرب ليك</Text>
+      <Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>
       <View style={splashStyles.loadingTrack}><View style={splashStyles.loadingFill} /></View>
     </View> : null}
   </View>;
