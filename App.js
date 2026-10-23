@@ -90,7 +90,6 @@ function AppScreens() {
   };
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [areas, setAreas] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -100,7 +99,7 @@ function AppScreens() {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [authMode, setAuthMode] = useState('fanni');
-  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', budget: '', specialties: [], areas: [] });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', address: '', description: '', budget: '', specialties: [] });
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
   const [technicianSearch, setTechnicianSearch] = useState('');
@@ -275,6 +274,7 @@ function AppScreens() {
         return true;
       }
       let previous = screenHistoryRef.current.pop();
+      if (screen === 'home') return false;
       while (previous && ['home', 'login', 'clientRegister', 'technicianRegister'].includes(previous) && session) {
         previous = screenHistoryRef.current.pop();
       }
@@ -305,13 +305,12 @@ function AppScreens() {
     async function loadPublicData() {
       setServicesLoading(true); setServicesError('');
       try {
-        const [serviceResult, areaResult] = await Promise.all([api('/services'), api('/areas')]);
+        const serviceResult = await api('/services');
         if (!Array.isArray(serviceResult.categories)) throw new Error('قائمة الخدمات من الخادم غير صحيحة');
         if (!mounted) return;
         setCategories(serviceResult.categories);
         setSelected(current => current && serviceResult.categories.some(item => item.label === current.label)
           ? serviceResult.categories.find(item => item.label === current.label) : null);
-        setAreas(toList(areaResult, ['areas']));
       } catch (err) {
         if (mounted) { setServicesError(err.message || 'تعذر تحميل الخدمات'); setCategories([]); }
       } finally { if (mounted) setServicesLoading(false); }
@@ -665,10 +664,10 @@ function AppScreens() {
 
   async function registerTechnician() {
     if (form.password !== form.confirmPassword) { Alert.alert('كلمة السر', 'كلمتا السر غير متطابقتين.'); return; }
-    if (!form.specialties.length || !form.areas.length) { Alert.alert('بيانات ناقصة', 'اختار خدمة واحدة على الأقل ومنطقة واحدة على الأقل.'); return; }
+    if (!form.specialties.length) { Alert.alert('بيانات ناقصة', 'اختار خدمة واحدة على الأقل.'); return; }
     setLoginLoading(true);
     try {
-      const result = await api('/fanni/register', { method: 'POST', body: { name: form.name.trim(), phone: form.phone.trim(), password: form.password, specialties: form.specialties, areas: form.areas } });
+      const result = await api('/fanni/register', { method: 'POST', body: { name: form.name.trim(), phone: form.phone.trim(), password: form.password, specialties: form.specialties } });
       Alert.alert('تم إرسال التسجيل', result.message || 'حسابك قيد مراجعة الإدارة.');
       setUsername(form.phone); setPassword(''); setScreen('login'); setAuthMode('fanni');
     } catch (err) { Alert.alert('تعذر تسجيل الفني', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
@@ -676,7 +675,7 @@ function AppScreens() {
   }
 
   async function createOrder() {
-    if (!form.service || form.area.trim().length < 2 || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب المنطقة أو الحي والعنوان بالتفصيل.'); return; }
+    if (!form.service || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب العنوان بالتفصيل.'); return; }
     setLoginLoading(true);
     try {
       const description = form.description.trim();
@@ -685,7 +684,7 @@ function AppScreens() {
         setLoginLoading(false);
         return;
       }
-      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
+      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, address: form.address.trim(), description, budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setClientTab('current');
@@ -1640,7 +1639,6 @@ function AppScreens() {
         <Text style={styles.detail}>نوع الحساب: {isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text>
         {session?.user?.status ? <Text style={styles.detail}>حالة الحساب: {session.user.status}</Text> : null}
         {session?.role === 'fanni' && Array.isArray(session?.user?.specialties) ? <Text style={styles.detail}>الخدمات والمهن: {session.user.specialties.join('، ') || '—'}</Text> : null}
-        {session?.role === 'fanni' && Array.isArray(session?.user?.areas) ? <Text style={styles.detail}>مناطق العمل: {session.user.areas.join('، ') || '—'}</Text> : null}
         {session?.role === 'fanni' && session?.user?.level ? <Text style={styles.detail}>المستوى المهني: {session.user.level}</Text> : null}
         {session?.role === 'fanni' && session?.user?.walletBalance != null ? <Text style={styles.detail}>الرصيد: {String(session.user.walletBalance)}</Text> : null}
         {session?.user?.adminRole ? <Text style={styles.detail}>المنصب الإداري: {session.user.adminRole}</Text> : null}
@@ -1685,8 +1683,6 @@ function AppScreens() {
           <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} خدمة {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
           {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
         </View>)}
-        <Text style={styles.sectionTitle}>مناطق العمل</Text>
-        <View style={styles.selectionGroup}><ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>{areas.map(area => <TouchableOpacity key={area} onPress={() => toggleArray('areas', area)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.areas.includes(area) ? '☑' : '□'} {area}</Text></TouchableOpacity>)}</ScrollView></View>
       </>}
       <Button title={loginLoading ? 'جاري التسجيل...' : isClient ? 'إنشاء حساب' : 'إرسال طلب التسجيل'} onPress={isClient ? registerClient : registerTechnician} disabled={loginLoading} />
     </ScrollView></SafeAreaView>;
@@ -1707,7 +1703,6 @@ function AppScreens() {
           <Text style={styles.dropdownButtonText}>{form.service || 'حدد نوع الخدمة بالضبط'}</Text><Text style={styles.dropdownArrow}>{subservicePickerOpen ? '▲' : '▼'}</Text>
         </TouchableOpacity>
         {subservicePickerOpen && selected ? <View style={styles.dropdownOptions}>{(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={styles.dropdownOption}><Text style={styles.dropdownOptionText}>{service}</Text></TouchableOpacity>)}</View> : null}
-        <Field label="الحي أو المنطقة *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="اكتب الحي أو المنطقة بنفسك، مثال: المعادي" />
         <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
         <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
         <Text style={styles.note}>اكتب تفاصيل الشغل المطلوبة بوضوح؛ التفاصيل إلزامية وتساعد الفني على تقديم عرض مناسب.</Text>
@@ -1834,7 +1829,7 @@ function AppScreens() {
           ) : null}
           </> : null}</View>; }} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على المحفظة فقط إلى الرقم التالي، ولا نقبل التحويل عبر إنستا باي.</Text><View style={styles.codeRow}><Text selectable style={styles.cardTitle}>01152822263</Text><Button title="نسخ الرقم" secondary onPress={()=>copyOrderCode('01152822263')}/></View><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Text style={styles.fieldLabel}>المحفظة التي حوّلت منها</Text><View style={styles.roleActions}>{[{value:'vodafone_cash',label:'فودافون كاش'},{value:'orange_cash',label:'أورنج كاش'},{value:'etisalat_cash',label:'اتصالات كاش'},{value:'we_pay',label:'وي باي'}].map(method=><Button key={method.value} title={method.label} secondary={topup.method!==method.value} onPress={()=>setTopup(t=>({...t,method:method.value}))}/>)}</View><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
-          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>المناطق: {(user.areas || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><View style={styles.roleActions}><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /><Button title="تغيير كلمة المرور" onPress={() => setScreen('account')} /></View></ScrollView>}
+          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><View style={styles.roleActions}><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /><Button title="تغيير كلمة المرور" onPress={() => setScreen('account')} /></View></ScrollView>}
           {tab === 'notifications' && <ScrollView contentContainerStyle={styles.page}><View style={styles.headerRow}><Text style={styles.sectionTitle}>إشعارات الفني</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>{notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={[styles.dataCard, !(item.read || item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title || 'إشعار'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</ScrollView>}
         </>}
       </View>
@@ -2021,6 +2016,7 @@ const styles = StyleSheet.create({
   brandHeaderSafe: { backgroundColor: '#F4F7FB' },
   brandHeader: { minHeight: 56, paddingLeft: 12, paddingRight: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#F4F7FB' },
   brandHeaderLogo: { width: 46, height: 46, borderRadius: 8 },
+  brandHeaderTitle: { color: COLORS.navy, fontSize: 22, fontWeight: '900', marginLeft: 10 },
   appScreenArea: { flex: 1 },
   homeLogoImage: { width: 140, height: 140, alignSelf: 'center', borderRadius: 18, marginBottom: 8 },
   safe: { flex: 1, backgroundColor: COLORS.bg },
@@ -2145,6 +2141,7 @@ function AppContent() {
     <SafeAreaView style={styles.brandHeaderSafe}>
       <View style={styles.brandHeader}>
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
+         <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
       </View>
     </SafeAreaView>
     <View style={styles.appScreenArea}><AppScreens /></View>
