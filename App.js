@@ -506,6 +506,7 @@ function AppScreens({ onScreenChange }) {
   useEffect(() => {
     if (!session || session.role !== 'client' || screen !== 'client' || !ratingDismissalsLoaded || ratingDismissalsLoadedFor !== ratingStorageKey || ratingPrompt) return;
     const completedOrder = clientData.orders.find(order => {
+      if (!order || typeof order !== 'object') return false;
       const sn = getOrderSN(order);
       const alreadyRated = Boolean(order.myRating || order.clientRating || order.ratingByClient || order.clientReview || (order.ratings || []).some(item => ['client', 'customer'].includes(String(item.reviewerRole || item.role || '').toLowerCase())));
       const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(order.status || order.orderStatus || '').trim().toLowerCase());
@@ -520,6 +521,7 @@ function AppScreens({ onScreenChange }) {
   useEffect(() => {
     if (!session || session.role !== 'fanni' || screen !== 'technician' || !ratingDismissalsLoaded || ratingDismissalsLoadedFor !== ratingStorageKey || ratingPrompt) return;
     const completedOffer = techData.offers.find(item => {
+      if (!item || typeof item !== 'object') return false;
       const sn = getOrderSN(item);
       const alreadyRated = Boolean(item.myRating || item.fanniRating || item.ratingByFanni || item.technicianReview || (item.ratings || []).some(rating => ['fanni', 'technician'].includes(String(rating.reviewerRole || rating.role || '').toLowerCase())));
       const completed = ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.orderStatus || item.status || '').trim().toLowerCase());
@@ -839,7 +841,7 @@ function AppScreens({ onScreenChange }) {
     ]);
   }
 
-  function getOrderSN(order) { return String(order?.orderSn || order?.sn || order?.order?.sn || '').trim().toUpperCase(); }
+  function getOrderSN(order) { if (!order || typeof order !== 'object') return ''; return String(order.orderSn || order.sn || order.order?.sn || '').trim().toUpperCase(); }
 
   useEffect(() => {
     if (!session || screen !== 'client' || session.role !== 'client') return;
@@ -862,7 +864,8 @@ function AppScreens({ onScreenChange }) {
     if (!['client', 'technician'].includes(screen)) return;
     const role = screen === 'client' ? 'client' : 'fanni';
     const orders = role === 'client' ? clientData.orders : techData.offers;
-    for (const order of orders) {
+    for (const order of (Array.isArray(orders) ? orders : [])) {
+      if (!order || typeof order !== 'object') continue;
       const sn = getOrderSN(order);
       const status = String(role === 'client' ? (order.status || order.orderStatus || '') : (order.orderStatus || order.status || '')).trim();
       if (!sn || !['تم اختيار فني', 'تم الانتهاء'].includes(status)) continue;
@@ -963,7 +966,8 @@ function AppScreens({ onScreenChange }) {
       if (inFlight) return;
       inFlight = true;
       try {
-        const openChats = sourceOrders
+        const openChats = (Array.isArray(sourceOrders) ? sourceOrders : [])
+          .filter(order => order && typeof order === 'object')
           .map(order => getOrderSN(order))
           .filter(sn => sn && orderChatsRef.current[sn]?.open);
         await Promise.all(openChats.map(async sn => {
