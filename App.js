@@ -1820,7 +1820,8 @@ function AppScreens({ onScreenChange }) {
              const sn = getOrderSN(item);
              return <View style={styles.orderCardPremium}>
                <Text style={styles.cardTitlePremium}>{item.service || 'طلب خدمة'} — {sn}</Text>
-               <Text style={styles.detail}>{item.area || ''} • {item.budget || 'ميزانية غير محددة'}</Text>
+               <Text style={styles.detail}>المنطقة: {item.area || 'غير محددة'} • ميزانية العميل: {item.budget !== undefined && item.budget !== null && String(item.budget).trim() !== '' ? `حوالي ${item.budget} جنيه` : 'غير محددة'}</Text>
+               <Text style={styles.detail}>يمكنك تقديم عرضك بالسعر المناسب لك.</Text>
                <Text style={styles.detail}>تقييم العميل: ★ {Number(item.clientRatingAverage || 0).toFixed(1)} ({Number(item.clientRatingCount || 0)} تقييم) • ✓ {Number(item.clientCompletedJobs || 0)} مهمة مكتملة</Text>
                <View style={styles.serviceDescriptionBox}><Text style={styles.serviceDescriptionLabel}>تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description || 'لم يضف العميل تفاصيل إضافية.'}</Text></View>
                {(() => {

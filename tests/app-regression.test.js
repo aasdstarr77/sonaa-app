@@ -152,6 +152,12 @@ test('client and technician notifications continue polling while their app scree
 });
 
 
+test('technician order cards label area and client budget and invite technicians to submit an offer', () => {
+  assert.ok(app.includes('المنطقة: {item.area || \'غير محددة\'} • ميزانية العميل:'));
+  assert.ok(app.includes('`حوالي ${item.budget} جنيه`'));
+  assert.ok(app.includes('يمكنك تقديم عرضك بالسعر المناسب لك.'));
+});
+
 test('client service description is prominent and readable on technician job cards and accepted job details', () => {
   assert.ok(app.includes('serviceDescriptionBox: { backgroundColor: \'#EFF6FF\''));
   assert.ok(app.includes('serviceDescriptionText: { color: \'#0F172A\', fontSize: 18, fontWeight: \'600\', lineHeight: 28'));
