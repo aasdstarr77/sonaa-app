@@ -260,3 +260,16 @@ test('wallet transfer notice is limited to technician wallet and explains accept
   assert.ok(walletBody.includes('لا نقبل التحويل من إنستا باي إلى إنستا باي'));
   assert.ok(app.includes('walletNotice:'));
 });
+
+
+test('client request form Enter advances from detailed description to budget and submits from budget', () => {
+  const descriptionField = app.match(/<Field inputRef=\{clientDescriptionInputRef\}[^\n]+/);
+  const budgetField = app.match(/<Field inputRef=\{clientBudgetInputRef\}[^\n]+/);
+  assert.ok(descriptionField, 'detailed description field should exist');
+  assert.ok(descriptionField[0].includes('returnKeyType="next"'), 'description should show the next keyboard action');
+  assert.ok(descriptionField[0].includes('onSubmitEditing={() => clientBudgetInputRef.current?.focus()}'), 'Enter should focus the budget field');
+  assert.ok(descriptionField[0].includes('blurOnSubmit'), 'Enter should submit the multiline field rather than insert a newline');
+  assert.ok(budgetField, 'budget field should exist');
+  assert.ok(budgetField[0].includes('returnKeyType="go"'), 'budget should show the submit keyboard action');
+  assert.ok(budgetField[0].includes('onSubmitEditing={createOrder}'), 'Enter in the final field should submit the order');
+});
