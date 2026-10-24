@@ -969,13 +969,27 @@ function AppScreens({ onScreenChange }) {
       inFlight = true;
       try {
         const openChats = sourceOrders
-          .map(order => getOrderSN(order))
-          .filter(sn => sn && orderChatsRef.current[sn]?.open);
-        await Promise.all(openChats.map(async sn => {
+          .map(order => {
+            const sn = getOrderSN(order);
+            const chat = sn ? orderChatsRef.current[sn] : null;
+            if (!sn || !chat?.open) return null;
+            const accepted = ['تم اختيار فني', 'تم الانتهاء'].includes(order?.status || order?.orderStatus);
+            const offerId = (role === 'client' && accepted
+              ? (order?.acceptedOfferId || order?.acceptedOffer?._id || order?.offerId)
+              : '') || chat.targetOfferId || order?._id || order?.offerId || order?.id || '';
+            return { sn, offerId, accepted };
+          })
+          .filter(Boolean);
+        const uniqueChats = [...new Map(openChats.map(chat => [chat.sn, chat])).values()];
+        await Promise.all(uniqueChats.map(async ({ sn, offerId, accepted }) => {
           try {
-            const result = await api(`/orders/${encodeURIComponent(sn)}/chat`, { token: session.token });
+            const query = role === 'client' && !accepted && offerId
+              ? '?offerId=' + encodeURIComponent(offerId)
+              : '';
+            const result = await api(`/orders/${encodeURIComponent(sn)}/chat${query}`, { token: session.token });
             if (!mounted) return;
-            setOrderChats(current => current[sn]?.open
+            setOrderChats(current => current[sn]?.open &&
+              (!offerId || String(current[sn]?.targetOfferId || '') === String(offerId))
               ? { ...current, [sn]: { ...current[sn], loading: false, error: '', messages: toList(result, ['messages']), priceChangeRequests: toList(result, ['priceChangeRequests']) } }
               : current);
           } catch {}
