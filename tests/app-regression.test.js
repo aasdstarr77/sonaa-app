@@ -167,7 +167,7 @@ test('client service description is prominent and readable on technician job car
 
 test('client orders and technician offers are deduplicated by serial number on every refresh', () => {
   assert.ok(app.includes('function uniqueByOrderSN(items)'));
-  assert.equal((app.match(/orders: uniqueByOrderSN\\(toList\\(result, \\[\\'orders\\'\\]\\)\\)/g) || []).length, 2);
+  assert.equal(app.split("orders: uniqueByOrderSN(toList(result, ['orders']))").length - 1, 2);
   assert.ok(app.includes("offers: results[1].status === 'fulfilled' ? uniqueByOrderSN(toList(results[1].value, ['offers'])) : current.offers"));
   assert.ok(app.includes("function uniqueByOrderSN(items)"));
   assert.ok(app.includes("const sn = getOrderSN(item)"));
