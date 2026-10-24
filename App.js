@@ -80,12 +80,12 @@ function Button({ title, onPress, secondary = false, disabled = false }) {
     <Text style={[styles.buttonText, secondary ? styles.buttonSecondaryText : styles.buttonPrimaryText]}>{title}</Text>
   </TouchableOpacity>;
 }
-function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none', returnKeyType = 'default', onSubmitEditing, blurOnSubmit = false }) {
+function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none', returnKeyType = 'default', returnKeyLabel, onSubmitEditing, blurOnSubmit = false, inputRef }) {
   return <View style={styles.fieldWrap}>
     <Text style={styles.fieldLabel}>{label}</Text>
-    <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder || label} placeholderTextColor="#94A3B8"
+    <TextInput ref={inputRef} value={value} onChangeText={onChangeText} placeholder={placeholder || label} placeholderTextColor="#94A3B8"
       secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
-      multiline={multiline} returnKeyType={returnKeyType} onSubmitEditing={onSubmitEditing} blurOnSubmit={blurOnSubmit} textAlign="right" style={[styles.input, multiline && styles.multiline]} />
+      multiline={multiline} returnKeyType={returnKeyType} returnKeyLabel={returnKeyLabel} onSubmitEditing={onSubmitEditing} blurOnSubmit={blurOnSubmit} textAlign="right" style={[styles.input, multiline && styles.multiline]} />
   </View>;
 }
 
@@ -115,6 +115,10 @@ function AppScreens({ onScreenChange }) {
   const [loginLoading, setLoginLoading] = useState(false);
   const [authMode, setAuthMode] = useState('fanni');
   const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', budget: '', specialties: [] });
+  const registrationNameRef = useRef(null);
+  const registrationPhoneRef = useRef(null);
+  const registrationPasswordRef = useRef(null);
+  const registrationConfirmPasswordRef = useRef(null);
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
   const [assignedDetails, setAssignedDetails] = useState({});
@@ -1730,10 +1734,18 @@ function AppScreens({ onScreenChange }) {
     return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
       <Button title="‹ رجوع" secondary onPress={() => setScreen('home')} />
       <Text style={styles.title}>{isClient ? 'إنشاء حساب عميل' : 'تسجيل فني جديد'}</Text>
-      <Field label="الاسم" value={form.name} onChangeText={v => updateForm('name', v)} autoCapitalize="words" />
-      <Field label="رقم الهاتف" value={form.phone} onChangeText={v => updateForm('phone', v)} keyboardType="phone-pad" />
-      <Field label="كلمة السر" value={form.password} onChangeText={v => updateForm('password', v)} secureTextEntry />
-      <Field label="تأكيد كلمة السر" value={form.confirmPassword} onChangeText={v => updateForm('confirmPassword', v)} secureTextEntry />
+      <Field label="الاسم" value={form.name} onChangeText={v => updateForm('name', v)} autoCapitalize="words"
+        inputRef={registrationNameRef} returnKeyType="next" returnKeyLabel="التالي"
+        onSubmitEditing={() => registrationPhoneRef.current?.focus()} blurOnSubmit={false} />
+      <Field label="رقم الهاتف" value={form.phone} onChangeText={v => updateForm('phone', v)} keyboardType="phone-pad"
+        inputRef={registrationPhoneRef} returnKeyType="next" returnKeyLabel="التالي"
+        onSubmitEditing={() => registrationPasswordRef.current?.focus()} blurOnSubmit={false} />
+      <Field label="كلمة السر" value={form.password} onChangeText={v => updateForm('password', v)} secureTextEntry
+        inputRef={registrationPasswordRef} returnKeyType="next" returnKeyLabel="التالي"
+        onSubmitEditing={() => registrationConfirmPasswordRef.current?.focus()} blurOnSubmit={false} />
+      <Field label="تأكيد كلمة السر" value={form.confirmPassword} onChangeText={v => updateForm('confirmPassword', v)} secureTextEntry
+        inputRef={registrationConfirmPasswordRef} returnKeyType="go" returnKeyLabel="تسجيل"
+        onSubmitEditing={isClient ? registerClient : registerTechnician} blurOnSubmit />
       {!isClient && <>
         <Text style={styles.sectionTitle}>اختار الخدمات اللي بتقدمها</Text>
         {categories.map(category => <View key={category.label} style={styles.selectionGroup}>
