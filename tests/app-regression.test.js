@@ -135,7 +135,7 @@ test('accepted technician jobs load private client details through the authorize
   assert.ok(app.includes('/assigned-details'));
   assert.ok(app.includes('📞 اتصال بالعميل'));
   assert.ok(app.includes('العنوان بالتفصيل:'));
-  assert.ok(app.includes('تفاصيل الشغل:'));
+  assert.ok(app.includes('تفاصيل الشغل من العميل'));
 });
 
 test('technician price increase and client approval controls are wired to existing backend routes', () => {
