@@ -157,6 +157,7 @@ function AppScreens({ onScreenChange }) {
   const [ratingSubmitting, setRatingSubmitting] = useState({});
   const dismissedRatingsRef = useRef({});
   const ratingHandledRef = useRef(new Set());
+  const ratingStatusSnapshotRef = useRef({ client: {}, fanni: {} });
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminExtras, setAdminExtras] = useState({ services: [], regions: [], pricing: { check: 0, commission: 0, minOffer: 1, maxOffer: 1000000 }, pricingHistory: [], settings: { siteName: 'صُنّاع', maintenance: false, maintenanceMessage: '', maxFanniSignupAttempts: 5 }, content: { announcement: '', faqs: [] }, auditLogs: [], report: null, loading: false, error: '' });
   const [adminServiceDraft, setAdminServiceDraft] = useState({ name: '', category: 'خدمات أخرى', emoji: '🔧' });
@@ -875,6 +876,32 @@ function AppScreens({ onScreenChange }) {
   }, [session, screen]);
 
   useEffect(() => {
+    const isCompletedStatus = value => ['تم الانتهاء', 'منتهي', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(value || '').trim().toLowerCase());
+    const snapshots = ratingStatusSnapshotRef.current;
+    const nextSnapshots = { client: {}, fanni: {} };
+    let candidate = null;
+    for (const role of ['client', 'fanni']) {
+      const items = role === 'client' ? clientData.orders : techData.offers;
+      for (const order of items) {
+        const sn = getOrderSN(order);
+        if (!sn) continue;
+        const status = String(role === 'client' ? (order.status || order.orderStatus || '') : (order.orderStatus || order.status || '')).trim();
+        const previousStatus = snapshots[role]?.[sn];
+        const alreadyRated = role === 'client'
+          ? Boolean(order.myRating || order.clientRating || order.ratingByClient || (order.ratings || []).some(r => r.reviewerRole === 'client'))
+          : Boolean(order.myRating || order.fanniRating || order.ratingByFanni || (order.ratings || []).some(r => r.reviewerRole === 'fanni'));
+        const activeRole = (role === 'client' && screen === 'client' && session?.role === 'client') || (role === 'fanni' && screen === 'technician' && session?.role === 'fanni');
+        if (!candidate && activeRole && previousStatus && !isCompletedStatus(previousStatus) && isCompletedStatus(status) && !alreadyRated && !ratingHandledRef.current.has(`${ratingStorageKey}:${sn}`)) {
+          candidate = { role, order };
+        }
+        nextSnapshots[role][sn] = status;
+      }
+    }
+    ratingStatusSnapshotRef.current = nextSnapshots;
+    if (candidate) setRatingPrompt(current => current || candidate);
+  }, [session?.role, screen, clientData.orders, techData.offers, ratingStorageKey]);
+
+  useEffect(() => {
     if (!session || !['client', 'fanni'].includes(session.role)) return;
     if (!['client', 'technician'].includes(screen)) return;
     const role = screen === 'client' ? 'client' : 'fanni';
@@ -1029,10 +1056,10 @@ function AppScreens({ onScreenChange }) {
     }));
   }
 
-  function renderRatingStars(order, selectedStars) {
-    return <View style={styles.ratingStarsRow}>
-      {[1, 2, 3, 4, 5].map(value => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`تقييم ${value} من 5`} onPress={() => setOrderRatingStars(order, value)} style={styles.ratingStarButton}>
-        <Text style={[styles.ratingStar, selectedStars >= value && styles.ratingStarActive]}>★</Text>
+  function renderRatingStars(order, selectedStars, compact = false) {
+    return <View style={[styles.ratingStarsRow, compact && styles.ratingStarsRowCompact]}>
+      {[1, 2, 3, 4, 5].map(value => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`تقييم ${value} من 5`} onPress={() => setOrderRatingStars(order, value)} style={[styles.ratingStarButton, compact && styles.ratingStarButtonCompact]}>
+        <Text style={[styles.ratingStar, compact && styles.ratingStarCompact, selectedStars >= value && styles.ratingStarActive]}>★</Text>
       </TouchableOpacity>)}
     </View>;
   }
@@ -1115,18 +1142,6 @@ function AppScreens({ onScreenChange }) {
     }
   }
 
-  async function skipRatingPrompt() {
-    const prompt = ratingPrompt;
-    if (!prompt) return;
-    const sn = getOrderSN(prompt.order);
-    if (!sn) { setRatingPrompt(null); return; }
-    ratingHandledRef.current.add(`${ratingStorageKey}:${sn}`);
-    dismissedRatingsRef.current = { ...dismissedRatingsRef.current, [sn]: true };
-    setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], skipped: true } }));
-    setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
-    await saveRatingDismissal(sn);
-  }
-
   function renderRatingModal(role) {
     if (!ratingPrompt || ratingPrompt.role !== role) return null;
     const order = ratingPrompt.order;
@@ -1135,18 +1150,17 @@ function AppScreens({ onScreenChange }) {
     const draft = ratingDrafts[sn] || { stars: '5', comment: '', blockFuture: false };
     const stars = Number(draft.stars || 5);
     const submitting = Boolean(ratingSubmitting[sn]);
-    return <Modal visible transparent animationType="fade" onRequestClose={skipRatingPrompt}>
+    return <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
       <View style={styles.modalBackdrop}>
         <View style={styles.ratingModal}>
-          <Text style={styles.title}> {role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text>
-          <Text style={styles.detail}>المهمة {sn} انتهت. اختار تقييمك، والتعليق اختياري.</Text>
-          {renderRatingStars(order, stars)}
-          <Field label="تعليق (اختياري)" value={draft.comment || ''} onChangeText={value => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], comment: value } }))} multiline placeholder="اكتب ملاحظتك هنا..." />
-          {stars === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], blockFuture: !current[sn]?.blockFuture } }))} style={styles.inlineCheck}>
-            <Text style={styles.detail}>{draft.blockFuture ? '☑' : '☐'} {role === 'client' ? 'عدم استقبال عروض من الفني ده مرة تانية' : 'عدم إظهار طلبات العميل ده ليّ مرة تانية'}</Text>
-          </TouchableOpacity> : null}
-          <Button title={submitting ? "جاري إرسال التقييم..." : "إرسال التقييم"} onPress={() => submitOrderRating(order)} disabled={submitting} />
-          <Button title="تخطي" secondary onPress={skipRatingPrompt} disabled={submitting} />
+          <Text style={styles.title}>{role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text>
+          <Text style={styles.detail}>انتهت الخدمة {sn}. اختار عدد النجوم واضغط «تقييم».</Text>
+          <View style={styles.ratingSubmitRow}>
+            <TouchableOpacity accessibilityRole="button" onPress={() => submitOrderRating(order)} disabled={submitting} style={[styles.ratingSubmitButton, submitting && styles.disabledButton]}>
+              <Text style={styles.ratingSubmitButtonText}>{submitting ? '...' : 'تقييم'}</Text>
+            </TouchableOpacity>
+            {renderRatingStars(order, stars, true)}
+          </View>
         </View>
       </View>
     </Modal>;
@@ -2137,8 +2151,14 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', padding: 20 },
   ratingModal: { alignSelf: 'center', width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', maxHeight: '82%' },
   ratingStarsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 10 },
+  ratingStarsRowCompact: { marginVertical: 0, gap: 2, flexShrink: 1 },
   ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
+  ratingStarButtonCompact: { width: 30, height: 38, borderRadius: 8, backgroundColor: 'transparent' },
   ratingStar: { fontSize: 24, color: '#CBD5E1' },
+  ratingStarCompact: { fontSize: 25 },
+  ratingSubmitRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
+  ratingSubmitButton: { backgroundColor: '#0D9488', minWidth: 64, height: 42, borderRadius: 12, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  ratingSubmitButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   ratingStarActive: { color: '#F59E0B' },
   offerCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 8 },
   categoryToggle: { paddingVertical: 5 },
