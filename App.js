@@ -505,7 +505,7 @@ function AppScreens({ onScreenChange }) {
       setClientData(current => ({ ...current, loading: true, error: '' }));
       try {
         const result = await api('/client/orders', { token: session.token });
-        if (mounted) setClientData(current => ({ ...current, orders: toList(result, ['orders']), loading: false }));
+        if (mounted) setClientData(current => ({ ...current, orders: uniqueByOrderSN(toList(result, ['orders'])), loading: false }));
       } catch (err) {
         if (mounted) setClientData(current => ({ ...current, loading: false, error: err.message || 'تعذر تحميل الطلبات' }));
       }
@@ -818,6 +818,29 @@ function AppScreens({ onScreenChange }) {
   }
 
   function getOrderSN(order) { return String(order?.orderSn || order?.sn || order?.order?.sn || '').trim().toUpperCase(); }
+  function uniqueByOrderSN(items) {
+    const result = [];
+    const indexBySN = new Map();
+    for (const item of Array.isArray(items) ? items : []) {
+      const sn = getOrderSN(item);
+      if (!sn) {
+        result.push(item);
+        continue;
+      }
+      if (!indexBySN.has(sn)) {
+        indexBySN.set(sn, result.length);
+        result.push(item);
+        continue;
+      }
+      const index = indexBySN.get(sn);
+      const previous = result[index];
+      const nonEmptyFields = Object.fromEntries(
+        Object.entries(item || {}).filter(([, value]) => value !== undefined && value !== null && value !== '')
+      );
+      result[index] = { ...previous, ...nonEmptyFields };
+    }
+    return result;
+  }
 
   useEffect(() => {
     if (!session || screen !== 'technician' || session.role !== 'fanni') return;
@@ -840,7 +863,7 @@ function AppScreens({ onScreenChange }) {
   useEffect(() => {
     if (!session || screen !== 'client' || session.role !== 'client') return;
     let active = true, busy = false;
-    const refreshClientOrders = async () => { if (busy) return; busy = true; try { const result = await api('/client/orders', { token: session.token }); if (active) setClientData(current => ({ ...current, orders: toList(result, ['orders']), loading: false, error: '' })); } catch {} finally { busy = false; } };
+    const refreshClientOrders = async () => { if (busy) return; busy = true; try { const result = await api('/client/orders', { token: session.token }); if (active) setClientData(current => ({ ...current, orders: uniqueByOrderSN(toList(result, ['orders'])), loading: false, error: '' })); } catch {} finally { busy = false; } };
     const timer = setInterval(refreshClientOrders, 5000);
     return () => { active = false; clearInterval(timer); };
   }, [session, screen]);
@@ -848,7 +871,7 @@ function AppScreens({ onScreenChange }) {
   useEffect(() => {
     if (!session || screen !== 'technician' || session.role !== 'fanni') return;
     let active = true, busy = false;
-    const refreshTechnicianData = async () => { if (busy) return; busy = true; try { const results = await Promise.allSettled([api('/orders/available', { token: session.token }), api('/orders/my-offers', { token: session.token }), api('/fanni/wallet/history', { token: session.token })]); if (active) setTechData(current => ({ ...current, orders: results[0].status === 'fulfilled' ? toList(results[0].value, ['orders']) : current.orders, offers: results[1].status === 'fulfilled' ? toList(results[1].value, ['offers']) : current.offers, wallet: results[2].status === 'fulfilled' ? toList(results[2].value, ['history', 'transactions', 'requests']) : current.wallet })); } catch {} finally { busy = false; } };
+    const refreshTechnicianData = async () => { if (busy) return; busy = true; try { const results = await Promise.allSettled([api('/orders/available', { token: session.token }), api('/orders/my-offers', { token: session.token }), api('/fanni/wallet/history', { token: session.token })]); if (active) setTechData(current => ({ ...current, orders: results[0].status === 'fulfilled' ? toList(results[0].value, ['orders']) : current.orders, offers: results[1].status === 'fulfilled' ? uniqueByOrderSN(toList(results[1].value, ['offers'])) : current.offers, wallet: results[2].status === 'fulfilled' ? toList(results[2].value, ['history', 'transactions', 'requests']) : current.wallet })); } catch {} finally { busy = false; } };
     const timer = setInterval(refreshTechnicianData, 5000);
     return () => { active = false; clearInterval(timer); };
   }, [session, screen]);
@@ -1727,7 +1750,7 @@ function AppScreens({ onScreenChange }) {
         </View>
       </View>
 
-      <View style={styles.tabRowPremium}>{[{key:'new',label:'طلب جديد',icon:'＋'},{key:'current',label:'جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع'},{key:'complaint',label:'شكوى'}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pillPremium, clientTab===t.key && styles.pillPremiumActive]}><Text style={[styles.pillPremiumText,clientTab===t.key && styles.pillPremiumTextActive]}>{t.icon ? t.icon + ' ' : ''}{t.label}{t.count ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
+      <View style={styles.tabRowPremium}>{[{key:'new',label:'طلب جديد',icon:'＋'},{key:'current',label:'الطلبات الجارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع'},{key:'complaint',label:'شكوى'}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pillPremium, clientTab===t.key && styles.pillPremiumActive]}><Text style={[styles.pillPremiumText,clientTab===t.key && styles.pillPremiumTextActive]}>{t.icon ? t.icon + ' ' : ''}{t.label}{t.count ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
 
     <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]} showsVerticalScrollIndicator={false}>
       {clientTab === 'new' ? <><View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>اطلب خدمتك الآن 🚀</Text><Text style={styles.welcomeSub}>اختار المهنة والخدمة والفني المناسب هيجيلك</Text></View>
