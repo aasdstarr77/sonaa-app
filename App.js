@@ -227,7 +227,6 @@ function AppScreens({ onScreenChange }) {
           const serialized = JSON.stringify(saved);
           await Promise.all([
             SecureStore.setItemAsync(ratingStorageKey, serialized),
-            SecureStore.setItemAsync(previousRatingStorageKey, serialized),
             SecureStore.setItemAsync(oldestRatingStorageKey, serialized),
             SecureStore.setItemAsync(legacyRatingStorageKey, serialized),
           ]);
@@ -1074,7 +1073,6 @@ function AppScreens({ onScreenChange }) {
       const serialized = JSON.stringify(merged);
       await Promise.all([
         SecureStore.setItemAsync(ratingStorageKey, serialized),
-        SecureStore.setItemAsync(previousRatingStorageKey, serialized),
         SecureStore.setItemAsync(oldestRatingStorageKey, serialized),
         SecureStore.setItemAsync(legacyRatingStorageKey, serialized),
       ]);
@@ -1803,6 +1801,7 @@ function AppScreens({ onScreenChange }) {
              return <View style={styles.orderCardPremium}>
                <Text style={styles.cardTitlePremium}>{item.service || 'طلب خدمة'} — {sn}</Text>
                <Text style={styles.detail}>{item.area || ''} • {item.budget || 'ميزانية غير محددة'}</Text>
+               <Text style={styles.detail}>تقييم العميل: ★ {Number(item.clientRatingAverage || 0).toFixed(1)} ({Number(item.clientRatingCount || 0)} تقييم) • ✓ {Number(item.clientCompletedJobs || 0)} مهمة مكتملة</Text>
                <Text style={styles.detailSmall}>{item.description || ''}</Text>
                <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
              </View>;
