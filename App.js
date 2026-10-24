@@ -16,7 +16,7 @@ Notifications.setNotificationHandler({
 });
 
 const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
-const COLORS = { navy: '#0F4C75', navy2: '#104775', blue: '#1565A0', gold: '#F5B928', teal: '#0E9A9A', bg: '#F8FAFC', text: '#152544', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#B91C1C' };
+const COLORS = { navy: '#0F172A', navy2: '#1E3A5F', blue: '#2563EB', gold: '#F59E0B', teal: '#0D9488', tealLight: '#CCFBF1', bg: '#F8FAFC', bgSoft: '#F1F5F9', text: '#0F172A', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#DC2626' };
 
 async function api(path, options = {}) {
   const { token, body, headers, ...fetchOptions } = options;
@@ -64,8 +64,8 @@ function dateLabel(value) {
   }
 }
 function Button({ title, onPress, secondary = false, disabled = false }) {
-  return <TouchableOpacity disabled={disabled} onPress={onPress} style={[styles.button, secondary && styles.buttonSecondary, disabled && styles.disabledButton]}>
-    <Text style={[styles.buttonText, secondary && styles.buttonSecondaryText]}>{title}</Text>
+  return <TouchableOpacity disabled={disabled} onPress={onPress} activeOpacity={0.85} style={[styles.button, secondary ? styles.buttonSecondary : styles.buttonPrimary, disabled && styles.disabledButton]}>
+    <Text style={[styles.buttonText, secondary ? styles.buttonSecondaryText : styles.buttonPrimaryText]}>{title}</Text>
   </TouchableOpacity>;
 }
 function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none', returnKeyType = 'default', onSubmitEditing, blurOnSubmit = false }) {
@@ -172,13 +172,8 @@ function AppScreens({ onScreenChange }) {
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
-  // Prefer the phone as the stable account identity: database IDs can differ
-  // between login/session restoration responses, but the account phone stays stable.
-  const ratingAccountId = String(
-    session?.user?.phone || session?.user?._id || session?.user?.id || 'account'
-  ).trim().replace(/\s+/g, '');
+  const ratingAccountId = String(session?.user?.phone || session?.user?._id || session?.user?.id || 'account').trim().replace(/\s+/g, '');
   const ratingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
-  // Keep reading/writing the old key too, so previously skipped prompts stay skipped.
   const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
   const previousRatingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
 
@@ -228,7 +223,6 @@ function AppScreens({ onScreenChange }) {
     return () => { active = false; };
   }, [ratingStorageKey, legacyRatingStorageKey, session?.role, session?.user?._id, session?.user?.id, session?.user?.phone]);
 
-  // Keep client/technician sessions across app restarts using encrypted device storage.
   useEffect(() => {
     let mounted = true;
     async function restoreSession() {
@@ -258,7 +252,6 @@ function AppScreens({ onScreenChange }) {
           saved = { token: saved.token, user, role: saved.role };
           await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(saved));
         } catch (error) {
-          // Clear only rejected sessions. Network/server errors should not sign users out.
           if (error?.status === 401 || error?.status === 403) {
             await SecureStore.deleteItemAsync('sonaa.auth.session.v1');
             return;
@@ -282,7 +275,6 @@ function AppScreens({ onScreenChange }) {
     return () => { mounted = false; };
   }, []);
 
-  // Hardware Back returns one screen at a time and never logs a user out.
   useEffect(() => {
     const onHardwareBack = () => {
       if (offerDraft) {
@@ -461,7 +453,8 @@ function AppScreens({ onScreenChange }) {
   }, [session, screen, reloadKey]);
 
   useEffect(() => {
-    if (!session || !['client', 'technician'].includes(screen)) return;
+    if (!session || !['client', 'fanni'].includes(session.role)) return;
+    if (!['client', 'technician'].includes(screen)) return;
     let mounted = true;
     let inFlight = false;
     const role = screen === 'client' ? 'client' : 'fanni';
@@ -868,7 +861,6 @@ function AppScreens({ onScreenChange }) {
 
   function orderToken(role) { return role === 'client' ? (session?.token || clientData.clientToken || '') : (session?.token || ''); }
 
-  // Refresh the currently visible screen by rerunning its existing data-loading effects.
   function refreshVisibleData() {
     setReloadKey(value => value + 1);
   }
@@ -945,7 +937,6 @@ function AppScreens({ onScreenChange }) {
       }}]);
   }
 
-  // Poll only conversations the user has explicitly opened; never interrupt typing or flash a loader.
   useEffect(() => {
     if (!session || !['client', 'technician'].includes(screen)) return;
     const role = screen === 'client' ? 'client' : 'fanni';
@@ -966,9 +957,7 @@ function AppScreens({ onScreenChange }) {
             setOrderChats(current => current[sn]?.open
               ? { ...current, [sn]: { ...current[sn], loading: false, error: '', messages: toList(result, ['messages']), priceChangeRequests: toList(result, ['priceChangeRequests']) } }
               : current);
-          } catch {
-            // A transient polling failure should not close the chat or show repeated alerts.
-          }
+          } catch {}
         }));
       } finally {
         inFlight = false;
@@ -1030,7 +1019,6 @@ function AppScreens({ onScreenChange }) {
       setReloadKey(v => v + 1);
       Alert.alert('تم حفظ التقييم', result.message || 'تم حفظ تقييمك بنجاح.');
     } catch (err) {
-      // A 409 means the server already has this rating. Do not reopen the prompt.
       if (err?.status === 409) {
         setRatingPrompt(current => current && getOrderSN(current.order) === sn ? null : current);
         await saveRatingDismissal(sn);
@@ -1038,7 +1026,6 @@ function AppScreens({ onScreenChange }) {
         Alert.alert('التقييم محفوظ بالفعل', 'سبق تسجيل تقييمك لهذه المهمة، ولن يظهر مربع التقييم مرة أخرى.');
         return;
       }
-      // Keep the modal open so the user can see the error and retry deliberately.
       if (activePrompt) setRatingPrompt(activePrompt);
       Alert.alert('تعذر حفظ التقييم', err.message || 'تعذر حفظ التقييم. حاول مرة أخرى.');
     } finally {
@@ -1060,7 +1047,6 @@ function AppScreens({ onScreenChange }) {
         const parsed = raw ? JSON.parse(raw) : {};
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) persisted = parsed;
       } catch (_) {}
-      // Merge against the latest synchronous ref so overlapping writes cannot lose a skipped order.
       const merged = { ...persisted, ...dismissedRatingsRef.current, [sn]: true };
       dismissedRatingsRef.current = merged;
       setDismissedRatings(merged);
@@ -1097,7 +1083,7 @@ function AppScreens({ onScreenChange }) {
     return <Modal visible transparent animationType="fade" onRequestClose={skipRatingPrompt}>
       <View style={styles.modalBackdrop}>
         <View style={styles.ratingModal}>
-          <Text style={styles.title}>{role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text>
+          <Text style={styles.title}> {role === 'client' ? 'قيّم الفني' : 'قيّم العميل'}</Text>
           <Text style={styles.detail}>المهمة {sn} انتهت. اختار تقييمك، والتعليق اختياري.</Text>
           {renderRatingStars(order, stars)}
           <Field label="تعليق (اختياري)" value={draft.comment || ''} onChangeText={value => setRatingDrafts(current => ({ ...current, [sn]: { ...current[sn], comment: value } }))} multiline placeholder="اكتب ملاحظتك هنا..." />
@@ -1408,60 +1394,6 @@ function AppScreens({ onScreenChange }) {
     return () => clearInterval(timer);
   }, [screen, recoveryForm.id, recoveryForm.token]);
 
-  async function startPasswordRecovery() {
-    const phone = recoveryForm.phone.replace(/[^0-9]/g, '');
-    if (!/^01[0-9]{9}$/.test(phone)) { setRecoveryForm(v => ({ ...v, error: 'اكتب رقم الهاتف المسجل بالحساب بشكل صحيح.' })); return; }
-    setRecoveryForm(v => ({ ...v, loading: true, error: '', info: '' }));
-    try {
-      const result = await api('/password-recovery/request', { method: 'POST', body: { role: recoveryForm.role, phone } });
-      setRecoveryForm(v => ({ ...v, phone, token: result.recoveryToken, id: result.requestId, info: result.message, loading: false }));
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر فتح طلب الدعم.' })); }
-  }
-
-  async function refreshPasswordRecovery() {
-    if (!recoveryForm.id || !recoveryForm.token) return;
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id), { headers: { 'X-Recovery-Token': recoveryForm.token } });
-      setRecoveryForm(v => ({ ...v, messages: result.recovery?.messages || v.messages, info: result.recovery?.status ? 'حالة الطلب: ' + result.recovery.status : v.info }));
-    } catch (_) {}
-  }
-
-  async function sendRecoveryMessage() {
-    const text = recoveryForm.text.trim();
-    if (!text) return;
-    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/messages', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { text } });
-      setRecoveryForm(v => ({ ...v, text: '', messages: result.recovery?.messages || v.messages, loading: false }));
-      await refreshPasswordRecovery();
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر إرسال الرسالة.' })); }
-  }
-
-  async function verifyRecoveryCode() {
-    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/verify-code', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { code: recoveryForm.code } });
-      setRecoveryForm(v => ({ ...v, loading: false, info: result.message || 'تم التحقق من الرمز.' }));
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'رمز التحقق غير صحيح.' })); }
-  }
-
-  async function resetRecoveredPassword() {
-    if (recoveryForm.newPassword.length < 8 || recoveryForm.newPassword !== recoveryForm.confirmPassword) { setRecoveryForm(v => ({ ...v, error: 'كلمة المرور الجديدة 8 أحرف على الأقل ويجب أن يتطابق التأكيد.' })); return; }
-    setRecoveryForm(v => ({ ...v, loading: true, error: '' }));
-    try {
-      const result = await api('/password-recovery/request/' + encodeURIComponent(recoveryForm.id) + '/reset-password', { method: 'POST', headers: { 'X-Recovery-Token': recoveryForm.token }, body: { newPassword: recoveryForm.newPassword, confirmPassword: recoveryForm.confirmPassword } });
-      Alert.alert('تمت الاستعادة', result.message || 'تم تغيير كلمة المرور.');
-      setRecoveryForm({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
-      setScreen('login');
-    } catch (err) { setRecoveryForm(v => ({ ...v, loading: false, error: err.message || 'تعذر تغيير كلمة المرور.' })); }
-  }
-
-  useEffect(() => {
-    if (screen !== 'passwordRecovery' || !recoveryForm.id || !recoveryForm.token) return;
-    const timer = setInterval(refreshPasswordRecovery, 3000);
-    return () => clearInterval(timer);
-  }, [screen, recoveryForm.id, recoveryForm.token]);
-
   async function adminRefreshExtras() { setReloadKey(v => v + 1); }
   async function adminAddService() {
     const name = adminServiceDraft.name.trim(), category = adminServiceDraft.category.trim();
@@ -1506,7 +1438,7 @@ function AppScreens({ onScreenChange }) {
     catch (err) { Alert.alert('تعذر حفظ الأسعار', err.message || 'حاول مرة أخرى.'); }
   }
   async function adminAddRegion() {
-    const name = adminRegionDraft.trim().replace(/\\s+/g, ' ');
+    const name = adminRegionDraft.trim().replace(/\s+/g, ' ');
     if (name.length < 2 || name.length > 100) { Alert.alert('اسم المنطقة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
     try { const result = await api('/admin/regions', { method: 'POST', token: session.token, body: { name } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة المنطقة.'); setAdminRegionDraft(''); setReloadKey(v => v + 1); }
     catch (err) { Alert.alert('تعذر إضافة المنطقة', err.message || 'قد تكون المنطقة موجودة بالفعل.'); }
@@ -1647,24 +1579,10 @@ function AppScreens({ onScreenChange }) {
         await api('/notifications/' + session.role + '/push-token', {
           method: 'POST',
           token: session.token,
-          body: { token: result.data, platform: Platform.OS }
-        });
-      } catch (error) {
-        console.warn('Expo push registration failed:', error?.message || error);
-      }
-    }
-    void registerPushToken();
-    return () => { cancelled = true; };
-  }, [session]);
-  const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
-  const toggleArray = (key, value) => updateForm(key, form[key].includes(value) ? form[key].filter(item => item !== value) : [...form[key], value]);
-
-  if (authRestoring) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.statusText}>جاري استعادة حسابك...</Text></View></SafeAreaView>;
-
   if (screen === 'login') return <SafeAreaView style={styles.loginSafe}>
     <KeyboardAvoidingView style={styles.loginPage} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TouchableOpacity accessibilityRole="button" onPress={() => setScreen('home')} style={styles.loginBackButton}>
-        <Text style={styles.loginBackText}>رجوع للرئيسية</Text>
+        <Text style={styles.loginBackText}>‹ رجوع</Text>
       </TouchableOpacity>
       <View style={styles.loginLogoCircle}>
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.loginLogo} resizeMode="contain" />
@@ -1677,14 +1595,9 @@ function AppScreens({ onScreenChange }) {
         <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="اكتب رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
         <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" returnKeyType="go" onSubmitEditing={handleLogin} blurOnSubmit />
         <TouchableOpacity accessibilityRole="button" onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }} style={styles.recoveryLink}>
-          <Text style={styles.recoveryLinkText}>استعادة كلمة السر</Text>
+          <Text style={styles.recoveryLinkText}>نسيت كلمة السر؟ استعادة</Text>
         </TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" onPress={handleLogin} disabled={loginLoading} style={[styles.loginGradientButton, loginLoading && styles.disabledButton]}>
-          <View pointerEvents="none" style={styles.loginGradientColors}>
-            <View style={[styles.loginGradientSegment, { backgroundColor: '#0A2A4A' }]} />
-            <View style={[styles.loginGradientSegment, { backgroundColor: '#104775' }]} />
-            <View style={[styles.loginGradientSegment, { backgroundColor: '#1565A0' }]} />
-          </View>
           <Text style={styles.loginGradientButtonText}>{loginLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}</Text>
         </TouchableOpacity>
         {authMode === 'client' && <Button title="إنشاء حساب عميل جديد" secondary onPress={() => setScreen('clientRegister')} />}
@@ -1698,31 +1611,25 @@ function AppScreens({ onScreenChange }) {
     const history = isClientAccount ? clientData.orders : session?.role === 'fanni' ? techData.offers : [];
     const completedHistory = (history || []).filter(item => ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'complete', 'finished'].includes(String(item.status || item.orderStatus || '').trim().toLowerCase()));
     return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
-      <Button title="رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} />
+      <Button title="‹ رجوع" secondary onPress={() => setScreen(session?.role === 'client' ? 'client' : session?.role === 'fanni' ? 'technician' : 'admin')} />
       <Text style={styles.title}>حسابي</Text>
       <View style={styles.dataCard}>
         <Text style={styles.sectionTitle}>بيانات الحساب</Text>
-        <Text style={styles.detail}>الاسم: {session?.user?.name || '—'}</Text>
-        <Text style={styles.detail}>رقم الهاتف: {session?.user?.phone || '—'}</Text>
-        <Text style={styles.detail}>نوع الحساب: {isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text>
-        {session?.user?.status ? <Text style={styles.detail}>حالة الحساب: {session.user.status}</Text> : null}
-        {session?.role === 'fanni' && Array.isArray(session?.user?.specialties) ? <Text style={styles.detail}>الخدمات والمهن: {session.user.specialties.join('، ') || '—'}</Text> : null}
-        {session?.role === 'fanni' && session?.user?.level ? <Text style={styles.detail}>المستوى المهني: {session.user.level}</Text> : null}
-        {session?.role === 'fanni' && session?.user?.walletBalance != null ? <Text style={styles.detail}>الرصيد: {String(session.user.walletBalance)}</Text> : null}
-        {session?.user?.adminRole ? <Text style={styles.detail}>المنصب الإداري: {session.user.adminRole}</Text> : null}
+        <View style={styles.detailRow}><Text style={styles.detailLabel}>الاسم</Text><Text style={styles.detailValue}>{session?.user?.name || '—'}</Text></View>
+        <View style={styles.detailRow}><Text style={styles.detailLabel}>رقم الهاتف</Text><Text style={styles.detailValue}>{session?.user?.phone || '—'}</Text></View>
+        <View style={styles.detailRow}><Text style={styles.detailLabel}>نوع الحساب</Text><Text style={styles.detailValue}>{isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text></View>
+        {session?.role === 'fanni' && session?.user?.walletBalance != null ? <View style={styles.detailRow}><Text style={styles.detailLabel}>الرصيد</Text><Text style={styles.detailValueGold}>{String(session.user.walletBalance)} جنيه</Text></View> : null}
       </View>
       <Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} />
       {['client', 'fanni'].includes(session?.role) ? <>
         <Text style={styles.sectionTitle}>سجل الخدمات والتقييمات</Text>
-        <Text style={styles.detail}>التقييم التلقائي يظهر مرة واحدة فقط. لو تخطّيته، تقدر ترجع هنا وتقيّم العملية يدويًا.</Text>
         {completedHistory.length ? completedHistory.map((item, index) => {
           const sn = getOrderSN(item);
           const alreadyRated = Boolean(item.myRating || item.clientRating || item.fanniRating || item.ratingByClient || item.ratingByFanni || (item.ratings || []).some(r => r.reviewerRole === session.role));
           const rating = item.myRating || item.clientRating || item.fanniRating || {};
           return <View key={sn || index} style={styles.dataCard}>
-            <Text style={styles.detail}>رقم العملية: {sn || '—'}</Text>
-            <Text style={styles.detail}>الخدمة: {item.service || item.serviceName || item.title || 'خدمة'}</Text>
-            <Text style={styles.detail}>{alreadyRated ? 'التقييم: ' + ('★'.repeat(Math.max(0, Math.min(5, Number(rating.stars || rating.rating) || 0))) + ' ' + String(rating.stars || rating.rating || 'تم التقييم')) : 'لم يتم التقييم'}</Text>
+            <Text style={styles.cardTitle}>{item.service || 'خدمة'} • {sn}</Text>
+            <Text style={styles.detail}>{alreadyRated ? '★'.repeat(Math.max(0, Math.min(5, Number(rating.stars || rating.rating) || 0))) + ' ' + String(rating.stars || rating.rating || 'تم التقييم') : 'لم يتم التقييم'}</Text>
             {!alreadyRated ? <Button title="تقييم العملية يدويًا" secondary onPress={() => { setScreen(session.role === 'client' ? 'client' : 'technician'); setRatingPrompt({ role: session.role, order: item }); }} /> : null}
           </View>;
         }) : <Text style={styles.detail}>لا توجد عمليات مكتملة لعرضها حاليًا.</Text>}
@@ -1730,25 +1637,23 @@ function AppScreens({ onScreenChange }) {
     </ScrollView></SafeAreaView>;
   }
 
-  if (screen === 'changePassword') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع إلى حسابي" secondary onPress={() => setScreen('account')} /><Text style={styles.title}>تغيير كلمة المرور</Text><Text style={styles.detail}>اكتب كلمة المرور الحالية ثم كلمة المرور الجديدة.</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+  if (screen === 'changePassword') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="‹ رجوع إلى حسابي" secondary onPress={() => setScreen('account')} /><Text style={styles.title}>تغيير كلمة المرور</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
-  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيقوم الدعم بالتحقق من ملكية الحساب ثم إرسال رمز مؤقت داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
-
-  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text><Text style={styles.detail}>سيتحقق الدعم من ملكية الحساب ثم يرسل رمزًا مؤقتًا داخل هذه المحادثة.</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
+  if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="‹ رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} multiline /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
   if (screen === 'clientRegister' || screen === 'technicianRegister') {
     const isClient = screen === 'clientRegister';
     return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
-      <Button title="رجوع" secondary onPress={() => setScreen('home')} />
+      <Button title="‹ رجوع" secondary onPress={() => setScreen('home')} />
       <Text style={styles.title}>{isClient ? 'إنشاء حساب عميل' : 'تسجيل فني جديد'}</Text>
       <Field label="الاسم" value={form.name} onChangeText={v => updateForm('name', v)} autoCapitalize="words" />
       <Field label="رقم الهاتف" value={form.phone} onChangeText={v => updateForm('phone', v)} keyboardType="phone-pad" />
-      <Field label="كلمة السر (6 أحرف للفني، 8 للعميل على الأقل)" value={form.password} onChangeText={v => updateForm('password', v)} secureTextEntry />
+      <Field label="كلمة السر" value={form.password} onChangeText={v => updateForm('password', v)} secureTextEntry />
       <Field label="تأكيد كلمة السر" value={form.confirmPassword} onChangeText={v => updateForm('confirmPassword', v)} secureTextEntry />
       {!isClient && <>
         <Text style={styles.sectionTitle}>اختار الخدمات اللي بتقدمها</Text>
         {categories.map(category => <View key={category.label} style={styles.selectionGroup}>
-          <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} خدمة {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
           {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
         </View>)}
       </>}
@@ -1757,54 +1662,70 @@ function AppScreens({ onScreenChange }) {
   }
 
   if (screen === 'client' && session?.role === 'client') return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>حساب العميل</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بك'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
-      <Text style={styles.sectionTitle}>طلبات العميل</Text>
-      <View style={styles.tabRow}>{[{key:'new',label:'طلب جديد',count:0},{key:'current',label:'طلبات جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'طلبات سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع طلب',count:0},{key:'complaint',label:'شكوى',count:0}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pill, clientTab===t.key && styles.pillActive]}><Text style={[styles.pillText,clientTab===t.key && styles.pillTextActive]}>{t.label}{t.key!=='new' ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
-    <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]}>
-      {clientTab === 'new' ? <><Text style={styles.sectionTitle}>اطلب خدمة</Text><View style={styles.dataCard}><Text style={styles.detail}>اسم العميل: {session.user?.name || '—'}</Text><Text style={styles.detail}>رقم الهاتف المسجل: {session.user?.phone || '—'}</Text><Text style={styles.detail}>بيانات الحساب مرتبطة بالطلب تلقائيًا.</Text></View>
+      {/* HEADER PREMIUM COMPACT - اسم العميل صغير */}
+      <View style={styles.clientHeader}>
+        <View style={styles.clientHeaderLeft}>
+          <TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButtonSmall}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <View style={styles.bellBadgeDot}><Text style={styles.bellBadgeText}>{notifications.unread}</Text></View> : null}</TouchableOpacity>
+          <Button title="خروج" secondary onPress={logout} />
+        </View>
+        <View style={styles.clientHeaderRight}>
+          <View style={styles.clientAvatarSmall}><Text style={styles.clientAvatarText}>{(session.user?.name || 'ع')[0]}</Text></View>
+          <View style={styles.clientHeaderInfo}>
+            <Text style={styles.clientNameSmall} numberOfLines={1}>أهلًا {session.user?.name || 'بك'}</Text>
+            <Text style={styles.clientRoleSmall}>عميل صُنّاع</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.tabRowPremium}>{[{key:'new',label:'طلب جديد',icon:'＋'},{key:'current',label:'جارية',count:clientData.orders.filter(o => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'previous',label:'سابقة',count:clientData.orders.filter(o => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(o.status)).length},{key:'track',label:'تتبع'},{key:'complaint',label:'شكوى'}].map(t => <TouchableOpacity key={t.key} onPress={() => setClientTab(t.key)} style={[styles.pillPremium, clientTab===t.key && styles.pillPremiumActive]}><Text style={[styles.pillPremiumText,clientTab===t.key && styles.pillPremiumTextActive]}>{t.icon ? t.icon + ' ' : ''}{t.label}{t.count ? ` (${t.count})` : ''}</Text></TouchableOpacity>)}</View>
+
+    <ScrollView ref={clientScrollRef} contentContainerStyle={[styles.page, { paddingBottom: 110 }]} showsVerticalScrollIndicator={false}>
+      {clientTab === 'new' ? <><View style={styles.welcomeCard}><Text style={styles.welcomeTitle}>اطلب خدمتك الآن 🚀</Text><Text style={styles.welcomeSub}>اختار المهنة والخدمة والفني المناسب هيجيلك</Text></View>
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
-        <Text style={styles.fieldLabel}>اختار المهنة الرئيسية</Text>
-        <View style={styles.serviceTiles}>
-          {categories.map(category => <TouchableOpacity key={category.label} accessibilityRole="button" accessibilityState={{ selected: selected?.label === category.label }} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={[styles.serviceTile, selected?.label === category.label && styles.serviceTileSelected]}>
-            <Text style={styles.serviceTileIcon}>{category.emoji || '🛠️'}</Text>
-            <Text style={styles.serviceTileLabel}>{category.label}</Text>
+        <Text style={styles.fieldLabelPremium}>① اختار المهنة الرئيسية</Text>
+        <View style={styles.serviceTilesPremium}>
+          {categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={[styles.serviceTilePremium, selected?.label === category.label && styles.serviceTilePremiumSelected]}>
+            <View style={[styles.serviceIconCircle, selected?.label === category.label && styles.serviceIconCircleSelected]}><Text style={styles.serviceTileIcon}>{category.emoji || '🛠️'}</Text></View>
+            <Text style={[styles.serviceTileLabelPremium, selected?.label === category.label && styles.serviceTileLabelPremiumSelected]}>{category.label}</Text>
           </TouchableOpacity>)}
         </View>
         {selected ? <>
-          <Text style={styles.fieldLabel}>اختار الخدمة التفصيلية</Text>
-          <View style={styles.serviceTiles}>
-            {(selected.services || []).map(service => <TouchableOpacity key={service} accessibilityRole="button" accessibilityState={{ selected: form.service === service }} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={[styles.serviceTile, styles.detailServiceTile, form.service === service && styles.serviceTileSelected]}>
-              <Text style={styles.serviceTileIcon}>{getServiceEmoji(service)}</Text>
-              <Text style={styles.serviceTileLabel}>{service}</Text>
+          <Text style={styles.fieldLabelPremium}>② اختار الخدمة التفصيلية</Text>
+          <View style={styles.serviceTilesPremium}>
+            {(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={[styles.serviceTilePremium, styles.detailTilePremium, form.service === service && styles.serviceTilePremiumSelected]}>
+              <View style={[styles.serviceIconCircleSmall, form.service === service && styles.serviceIconCircleSelected]}><Text style={styles.serviceTileIconSmall}>{getServiceEmoji(service)}</Text></View>
+              <Text style={[styles.serviceTileLabelPremiumSmall, form.service === service && styles.serviceTileLabelPremiumSelected]}>{service}</Text>
             </TouchableOpacity>)}
           </View>
-        </> : <Text style={styles.servicePickerHint}>اختار المهنة الرئيسية الأول علشان تظهر الخدمات التفصيلية الخاصة بيها.</Text>}
-        <Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
+        </> : null}
+        <View style={styles.formCard}><Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
         <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
-        <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها عشان الفني يقدر يقدم لك عرضًا مضبوطًا" />
-        <Text style={styles.note}>اكتب تفاصيل الشغل المطلوبة بوضوح؛ التفاصيل إلزامية وتساعد الفني على تقديم عرض مناسب.</Text>
+        <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها" />
         <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: من 300 إلى 500 جنيه" />
-        <Button title={loginLoading ? 'جاري إرسال الطلب...' : 'إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} />
+        <Button title={loginLoading ? 'جاري إرسال الطلب...' : '🚀 إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} /></View>
       </>}</> : null}
-      {clientData.sn ? <View style={styles.codeRow}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ الكود" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
+      {clientData.sn ? <View style={styles.codeRowPremium}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
       {['current', 'previous'].includes(clientTab) ? clientData.orders.filter(order => clientTab === 'previous' ? ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(order.status) : !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(order.status)).map((order, i) => {
         const sn = getOrderSN(order), expanded = Boolean(expandedClientOrders[sn]), rating = ratingDrafts[sn];
-        return <View key={String(order._id || sn || i)} style={styles.dataCard}>
-          <TouchableOpacity onPress={() => setExpandedClientOrders(current => ({ ...current, [sn]: !current[sn] }))}><Text style={styles.cardTitle}>{order.service || 'طلب خدمة'} — {sn}</Text><Text style={styles.detail}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text><Text style={styles.detail}>{expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض تفاصيل الطلب'}</Text></TouchableOpacity>
-          {expanded ? <><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text><Text style={styles.detail}>{order.description || 'لا توجد تفاصيل إضافية.'}</Text><Text style={styles.detail}>{order.acceptedOfferPrice ? `السعر المتفق عليه: ${order.acceptedOfferPrice} جنيه` : ''}</Text>
-            {order.status === 'تم اختيار فني' && order.assignedFanniName ? <Text style={styles.detail}>الفني المختار: {order.assignedFanniName}</Text> : null}
-            {order.status === 'تم اختيار فني' && order.assignedFanniPhone ? <><Text style={styles.detail}>رقم الفني: {order.assignedFanniPhone}</Text><Button title="اتصال بالفني" secondary onPress={() => Linking.openURL(`tel:${order.assignedFanniPhone}`)} /></> : null}
+        return <View key={String(order._id || sn || i)} style={styles.orderCardPremium}>
+          <TouchableOpacity onPress={() => setExpandedClientOrders(current => ({ ...current, [sn]: !current[sn] }))} style={styles.orderCardHeader}>
+            <View style={[styles.statusDot, ['تم اختيار فني','تم الانتهاء'].includes(order.status) ? styles.statusDotDone : styles.statusDotPending]} />
+            <View style={{flex:1}}><Text style={styles.cardTitlePremium}>{order.service || 'طلب خدمة'} — {sn}</Text><Text style={styles.orderStatusSmall}>{order.status || 'قيد المراجعة'} • {order.area || ''}</Text></View>
+            <Text style={styles.expandIcon}>{expanded ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {expanded ? <View style={styles.orderCardBody}><Text style={styles.detail}>{dateLabel(order.createdAt)}</Text><Text style={styles.detail}>{order.description || 'لا توجد تفاصيل إضافية.'}</Text>
+            {order.status === 'تم اختيار فني' && order.assignedFanniName ? <Text style={styles.detailBold}>الفني: {order.assignedFanniName}</Text> : null}
+            {order.status === 'تم اختيار فني' && order.assignedFanniPhone ? <Button title="📞 اتصال بالفني" secondary onPress={() => Linking.openURL(`tel:${order.assignedFanniPhone}`)} /> : null}
             {!['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف','منتهي','منتهي - اعتذار'].includes(order.status) ? <Button title="إلغاء الطلب" secondary onPress={() => cancelClientOrder(order)} /> : null}
-            {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitle}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCard}><Text style={styles.cardTitle}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Text style={styles.detail}>استفسار سريع قبل قبول العرض:</Text><View style={styles.roleActions}>{['هل السعر شامل؟','متى تقدر تيجي؟','هل في تكلفة إضافية؟'].map(question=><Button key={question} title={question} secondary onPress={()=>sendOrderChat({...order,_id:offer._id||offer.id},question)}/>)}</View><Button title={orderChats[sn]?.open && String(orderChats[sn]?.targetOfferId)===String(offer._id||offer.id)?'إخفاء المحادثة':'محادثة قبل القبول'} secondary onPress={()=>toggleOrderChat({...order,_id:offer._id||offer.id,offerId:offer._id||offer.id},'client')}/><Button title="قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
-            <View style={styles.roleActions}>{(Array.isArray(order.offers) && order.offers.length > 0 || ['تم اختيار فني','تم الانتهاء'].includes(order.status || order.orderStatus)) ? <Button title={orderChats[sn]?.open?'إخفاء المحادثة':'محادثة الطلب'} secondary onPress={()=>toggleOrderChat(order,'client')}/> : null}{order.status==='تم الانتهاء'&&!rating?.submitted&&!rating?.skipped&&!dismissedRatings[sn]?<Button title="تقييم الفني" onPress={()=>setRatingDrafts(current=>({...current,[sn]:{stars:'5',comment:'',blockFuture:false}}))}/>:null}</View>
-            {order.status==='تم الانتهاء'&&rating&&!rating.submitted&&!rating.skipped?<View style={styles.offerCard}><Text style={styles.cardTitle}>تقييم الفني</Text>{renderRatingStars(order, Number(rating.stars || 5))}<Field label="تعليق (اختياري)" value={rating.comment||''} onChangeText={value=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],comment:value}}))} multiline/>{Number(rating.stars)===1?<TouchableOpacity style={styles.inlineCheck} onPress={()=>setRatingDrafts(current=>({...current,[sn]:{...current[sn],blockFuture:!current[sn]?.blockFuture}}))}><Text style={styles.detail}>{rating.blockFuture?'☑':'☐'} عدم استقبال عروض من الفني ده مرة تانية</Text></TouchableOpacity>:null}<Button title="حفظ التقييم" onPress={()=>submitOrderRating(order)}/></View>:null}
-            {(Array.isArray(order.offers) && order.offers.length > 0 || ['تم اختيار فني','تم الانتهاء'].includes(order.status || order.orderStatus)) && orderChats[sn]?.open ? <View style={styles.chatPanel}>{orderChats[sn]?.loading?<ActivityIndicator color={COLORS.teal}/>:<>{orderChats[sn]?.error?<Text style={styles.errorText}>{orderChats[sn].error}</Text>:null}<ScrollView ref={ref => { clientChatScrollRefs.current[sn] = ref; }} style={{ maxHeight: 280 }} onScroll={({ nativeEvent }) => { const { contentOffset, contentSize, layoutMeasurement } = nativeEvent; clientChatAtBottomRef.current[sn] = contentOffset.y + layoutMeasurement.height >= contentSize.height - 48; }} scrollEventThrottle={16} onContentSizeChange={() => { if (clientChatAtBottomRef.current[sn] !== false) clientChatScrollRefs.current[sn]?.scrollToEnd({ animated: true }); }} nestedScrollEnabled>{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detail}>{message.senderRole==='client'?'العميل':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}</ScrollView>{(orderChats[sn]?.priceChangeRequests||[]).filter(request=>request.status==='قيد الموافقة').map(request=><View key={String(request._id||request.id)} style={styles.priceRequest}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {request.reason}</Text><View style={styles.roleActions}><Button title="موافقة" onPress={()=>decideOrderPrice(order,request,true)}/><Button title="رفض" secondary onPress={()=>decideOrderPrice(order,request,false)}/></View></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={()=>sendOrderChat(order)} placeholder="اكتب رسالتك داخل المنصة"/><View style={styles.roleActions}><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(order)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(order,'client')}/></View></>}</View>:null}
-          </> : null}
+            {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitleSmall}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCardPremium}><Text style={styles.cardTitleSmall}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Button title="✅ قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
+            <View style={styles.roleActions}><Button title={orderChats[sn]?.open?'إخفاء المحادثة':'💬 محادثة'} secondary onPress={()=>toggleOrderChat(order,'client')}/></View>
+            {orderChats[sn]?.open ? <View style={styles.chatPanelPremium}>{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detailSmall}>{message.senderRole==='client'?'أنت':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline placeholder="اكتب رسالتك"/><Button title="إرسال" onPress={()=>sendOrderChat(order)}/></View>:null}
+          </View> : null}
         </View>;
       }) : null}
-      {clientTab === 'track' ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تتبع طلبك</Text><Field label="كود الطلب" value={clientTrackSN} onChangeText={setClientTrackSN} placeholder="SN123456" autoCapitalize="characters"/><Button title={clientTrackLoading ? 'جاري البحث...' : 'تتبع الطلب'} onPress={trackClientOrder} disabled={clientTrackLoading}/>{clientTrackError ? <Text style={styles.errorText}>{clientTrackError}</Text> : null}{clientTrackedOrder ? <View style={styles.offerCard}><Text style={styles.cardTitle}>{clientTrackedOrder.service || 'طلب خدمة'} — {getOrderSN(clientTrackedOrder)}</Text><Text style={styles.detail}>الحالة: {clientTrackedOrder.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المنطقة: {clientTrackedOrder.area || '—'}</Text><Text style={styles.detail}>{clientTrackedOrder.description || clientTrackedOrder.details || ''}</Text><Text style={styles.detail}>السعر المتفق عليه: {clientTrackedOrder.acceptedOfferPrice ?? 'غير محدد'} جنيه</Text>{(clientTrackedOrder.offers || []).map((offer, i) => <View key={String(offer._id || offer.id || i)} style={styles.priceRequest}><Text style={styles.cardTitle}>{offer.fanniName || offer.technicianName || 'فني'} — {offer.price ?? '—'} جنيه</Text><Text style={styles.detail}>{offer.message || ''}</Text>{!clientTrackedOrder.acceptedOfferId && !['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف'].includes(clientTrackedOrder.status) ? <Button title="قبول العرض" onPress={() => acceptClientOffer(clientTrackedOrder, offer)} /> : null}</View>)}</View> : null}</View> : null}
-      {clientTab === 'complaint' ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تقديم شكوى للإدارة</Text><Text style={styles.detail}>استخدم كود الطلب والاسم المسجل، ولا تكتب أرقام تليفونات داخل تفاصيل الشكوى.</Text><Field label="كود الطلب" value={clientComplaint.sn} onChangeText={v => setClientComplaint(c => ({ ...c, sn: v.toUpperCase(), error: '' }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل مع الطلب" value={clientComplaint.name} onChangeText={v => setClientComplaint(c => ({ ...c, name: v, error: '' }))} autoCapitalize="words"/><Field label="تفاصيل الشكوى (10 أحرف على الأقل)" value={clientComplaint.text} onChangeText={v => setClientComplaint(c => ({ ...c, text: v, error: '' }))} multiline/><Text style={styles.detail}>{clientComplaint.text.length}/1000</Text>{clientComplaint.error ? <Text style={styles.errorText}>{clientComplaint.error}</Text> : null}<Button title={clientComplaint.loading ? 'جاري الإرسال...' : 'إرسال الشكوى'} onPress={submitClientComplaint} disabled={clientComplaint.loading}/><View style={styles.offerCard}><Text style={styles.cardTitle}>متابعة شكوى سابقة</Text><Field label="كود الطلب" value={clientComplaintTrack.sn} onChangeText={v => setClientComplaintTrack(c => ({ ...c, sn: v.toUpperCase(), error: '', result: null }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل" value={clientComplaintTrack.name} onChangeText={v => setClientComplaintTrack(c => ({ ...c, name: v, error: '', result: null }))} autoCapitalize="words"/><Button title={clientComplaintTrack.loading ? 'جاري البحث...' : 'متابعة الشكوى'} onPress={trackClientComplaints} disabled={clientComplaintTrack.loading}/>{clientComplaintTrack.error ? <Text style={styles.errorText}>{clientComplaintTrack.error}</Text> : null}{clientComplaintTrack.result ? <Text style={styles.detail}>{JSON.stringify(clientComplaintTrack.result)}</Text> : null}</View></View> : null}
-      {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>الإشعارات {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?<ScrollView style={styles.notificationList} contentContainerStyle={styles.notificationListContent} nestedScrollEnabled showsVerticalScrollIndicator>{notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={[styles.notificationRow, !(item.read||item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title||'إشعار من صُنّاع'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>)}</ScrollView>:<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}</ScrollView>
+      {clientTab === 'track' ? <View style={styles.formCard}><Text style={styles.cardTitlePremium}>تتبع طلبك 🔍</Text><Field label="كود الطلب" value={clientTrackSN} onChangeText={setClientTrackSN} placeholder="SN123456" autoCapitalize="characters"/><Button title={clientTrackLoading ? 'جاري البحث...' : 'تتبع الطلب'} onPress={trackClientOrder} disabled={clientTrackLoading}/>{clientTrackError ? <Text style={styles.errorText}>{clientTrackError}</Text> : null}{clientTrackedOrder ? <View style={styles.offerCardPremium}><Text style={styles.cardTitleSmall}>{clientTrackedOrder.service || 'طلب خدمة'} — {getOrderSN(clientTrackedOrder)}</Text><Text style={styles.detail}>الحالة: {clientTrackedOrder.status || 'قيد المراجعة'}</Text></View> : null}</View> : null}
+      {clientTab === 'complaint' ? <View style={styles.formCard}><Text style={styles.cardTitlePremium}>تقديم شكوى للإدارة</Text><Field label="كود الطلب" value={clientComplaint.sn} onChangeText={v => setClientComplaint(c => ({ ...c, sn: v.toUpperCase(), error: '' }))} placeholder="SN123456" autoCapitalize="characters"/><Field label="الاسم المسجل" value={clientComplaint.name} onChangeText={v => setClientComplaint(c => ({ ...c, name: v, error: '' }))}/><Field label="تفاصيل الشكوى" value={clientComplaint.text} onChangeText={v => setClientComplaint(c => ({ ...c, text: v, error: '' }))} multiline/><Button title={clientComplaint.loading ? 'جاري الإرسال...' : 'إرسال الشكوى'} onPress={submitClientComplaint} disabled={clientComplaint.loading}/></View> : null}
+      {notificationsOpen ? <View style={styles.notificationPopupPremium}><View style={styles.headerRow}><Text style={styles.cardTitleSmall}>الإشعارات {notifications.unread ? `(${notifications.unread})` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View>{notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitleSmall}>{item.title||'إشعار'}</Text><Text style={styles.detail}>{item.message||''}</Text></TouchableOpacity>)}</View>:null}</ScrollView>
     <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
     {renderRatingModal('client')}
   </SafeAreaView>;
@@ -1813,147 +1734,64 @@ function AppScreens({ onScreenChange }) {
     const user = techData.profile || session.user || {};
     const tab = techData.tab;
     const displayedOffers = techData.offers.filter(item => tab === 'completed' ? item.orderStatus === 'تم الانتهاء' : item.orderStatus !== 'تم الانتهاء');
-    const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => o.orderStatus !== 'تم الانتهاء').length})` }, { key: 'completed', label: `المكتملة (${techData.offers.filter(o => o.orderStatus === 'تم الانتهاء').length})` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }, { key: 'notifications', label: `الإشعارات${notifications.unread ? ` (${notifications.unread})` : ''}` }];
+    const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => o.orderStatus !== 'تم الانتهاء').length})` }, { key: 'completed', label: `المكتملة` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }];
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
-      {user.status === 'معتمد' && (!user.technicianGuidelinesAcceptedAt || user.technicianGuidelinesVersion !== '2026-10-20-v1') ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ميثاق التعامل المهني مع العملاء</Text><Text style={styles.detail}>اقرأ التعليمات التالية ووافق عليها قبل استخدام لوحة الفني:</Text><Text style={styles.detail}>١. التزم بسعر العرض الذي وافق عليه العميل. أي زيادة تحتاج موافقة صريحة مسجلة داخل المنصة قبل التنفيذ.</Text><Text style={styles.detail}>٢. تعامل باحترام وصدق، دون ضغط أو تهديد أو تضليل.</Text><Text style={styles.detail}>٣. قبل قبول العرض، استخدم الردود المسموحة فقط: «نعم»، «لا»، «حسب الاتفاق». ممنوع تبادل بيانات الاتصال أو التحايل على المنصة قبل القبول.</Text><Text style={styles.detail}>٤. لا تضغط إنهاء المهمة إلا بعد إنجازها فعلًا.</Text><Text style={styles.detail}>٥. احمِ بيانات العميل ولا تستخدمها خارج الطلب.</Text><Text style={styles.detail}>٦. يحق للطرفين التقييم بعد الإكمال؛ ممنوع الإكراه على تقييم إيجابي أو التلاعب بالتقييمات.</Text><Text style={styles.detail}>٧. المخالفات قد تؤدي إلى مراجعة الطلب أو تعليق الحساب أو إيقافه.</Text><TouchableOpacity onPress={() => setGuidelinesChecked(value => !value)} style={styles.roleActions}><Text style={styles.detail}>{guidelinesChecked ? '☑' : '□'} قرأت التعليمات وأوافق على الالتزام بها.</Text></TouchableOpacity><Button title="موافق ثم تأكيد" onPress={() => guidelinesChecked ? acceptTechnicianGuidelines() : Alert.alert('الموافقة مطلوبة', 'لازم تقرأ الميثاق وتحدد الموافقة أولًا.')} /></View> : null}
-      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
-      {offerDraft ? <View style={styles.dataCard}>
-        <Text style={styles.cardTitle}>تقديم عرض على {offerDraft.order.service || 'الخدمة'} — {offerDraft.order.sn}</Text>
+      <View style={styles.clientHeader}>
+        <View style={styles.clientHeaderLeft}>
+          <TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButtonSmall}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <View style={styles.bellBadgeDot}><Text style={styles.bellBadgeText}>{notifications.unread}</Text></View> : null}</TouchableOpacity>
+          <Button title="خروج" secondary onPress={logout} />
+        </View>
+        <View style={styles.clientHeaderRight}>
+          <View style={[styles.clientAvatarSmall, {backgroundColor: '#0F172A'}]}><Text style={styles.clientAvatarText}>{(user.name || 'ف')[0]}</Text></View>
+          <View style={styles.clientHeaderInfo}>
+            <Text style={styles.clientNameSmall} numberOfLines={1}>{user.name || 'الفني'} • {user.level || 'مبتدئ'}</Text>
+            <Text style={styles.clientRoleSmall}>{user.status || 'قيد المراجعة'} • {Number(user.walletBalance || 0)} جنيه</Text>
+          </View>
+        </View>
+      </View>
+      <View style={styles.tabRowPremium}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pillPremium, tab === item.key && styles.pillPremiumActive]}><Text style={[styles.pillPremiumText, tab === item.key && styles.pillPremiumTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
+      {offerDraft ? <View style={styles.formCard}>
+        <Text style={styles.cardTitlePremium}>تقديم عرض على {offerDraft.order.service || 'الخدمة'} — {offerDraft.order.sn}</Text>
         <Field label="السعر بالجنيه" value={offerDraft.price} onChangeText={value => setOfferDraft(current => ({ ...current, price: value }))} keyboardType="numeric" />
         <Field label="رسالة للعميل" value={offerDraft.message} onChangeText={value => setOfferDraft(current => ({ ...current, message: value }))} multiline />
         <Button title="إرسال العرض" onPress={submitOffer} />
         <Button title="إلغاء" secondary onPress={() => setOfferDraft(null)} />
       </View> : null}
       <View style={{ flex: 1 }}>
-        {techData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الفني من الخادم...</Text></View> : <>
-          {techData.error ? <Text style={styles.errorText}>{techData.error}</Text> : null}
-          {tab === 'available' && <><View style={styles.dataCard}><Text style={styles.cardTitle}>البحث وتصفية فرص العمل</Text><Field label="ابحث بالخدمة أو المنطقة أو كود الطلب" value={technicianSearch} onChangeText={setTechnicianSearch} placeholder="مثال: سباكة أو مدينة نصر أو SN123456" /><Text style={styles.fieldLabel}>تصفية حسب الخدمة</Text><View style={styles.roleActions}><Button title="كل الخدمات" secondary={technicianServiceFilter !== 'الكل'} onPress={() => setTechnicianServiceFilter('الكل')} />{(user.specialties || []).map(service => <Button key={String(service)} title={String(service)} secondary={technicianServiceFilter !== service} onPress={() => setTechnicianServiceFilter(service)} />)}</View><Text style={styles.detail}>النتائج: {techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)) && (technicianServiceFilter === 'الكل' || String(item.service || item.specialty || '') === technicianServiceFilter || categories.some(category => category.label === technicianServiceFilter && Array.isArray(category.services) && category.services.includes(String(item.service || item.specialty || '')))); }).length} من {techData.orders.length}</Text></View><FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)) && (technicianServiceFilter === 'الكل' || String(item.service || item.specialty || '') === technicianServiceFilter || categories.some(category => category.label === technicianServiceFilter && Array.isArray(category.services) && category.services.includes(String(item.service || item.specialty || '')))); })} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{techData.orders.length ? 'مفيش فرص مطابقة للبحث أو التصفية.' : 'لا توجد فرص متاحة حاليًا أو الحساب لم يُعتمد بعد.'}</Text>} renderItem={({ item }) => {
+        {techData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الفني...</Text></View> : <>
+          {tab === 'available' && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.listPremium} data={techData.orders.filter(item => { const query = technicianSearch.trim().toLocaleLowerCase(); const haystack = [item.service, item.specialty, item.area, item.sn, item.orderSn, item.description, item.desc].filter(Boolean).join(' ').toLocaleLowerCase(); return (!query || haystack.includes(query)); })} keyExtractor={(item, i) => String(item._id || item.sn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد فرص متاحة حاليًا.</Text>} renderItem={({ item }) => {
              const sn = getOrderSN(item);
-             const expanded = Boolean(expandedTechnicianOrders[sn]);
-             return <View style={styles.dataCard}>
-               <TouchableOpacity onPress={() => setExpandedTechnicianOrders(current => ({ ...current, [sn]: !current[sn] }))}>
-                 <Text style={styles.cardTitle}>{item.service || 'طلب خدمة'} — {sn || '—'}</Text>
-                 <Text style={styles.detail}>{item.status || 'متاح'} · {expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض التفاصيل'}</Text>
-               </TouchableOpacity>
-               {expanded ? <>
-                 <Text style={styles.detail}>{item.area || ''}</Text>
-                 <Text style={styles.detail}>{item.description || item.desc || 'لا توجد تفاصيل إضافية.'}</Text>
-                 <Text style={styles.detail}>ميزانية العميل: {item.budget || 'غير محددة'}</Text>
-                 <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
-               </> : null}
+             return <View style={styles.orderCardPremium}>
+               <Text style={styles.cardTitlePremium}>{item.service || 'طلب خدمة'} — {sn}</Text>
+               <Text style={styles.detail}>{item.area || ''} • {item.budget || 'ميزانية غير محددة'}</Text>
+               <Text style={styles.detailSmall}>{item.description || ''}</Text>
+               <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
              </View>;
-           }} /></>}
-          {(tab === 'offers' || tab === 'completed') && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.list} data={displayedOffers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{tab === 'completed' ? 'لا توجد طلبات مكتملة في السجل حتى الآن.' : 'لسه ماقدمتش عروض نشطة.'}</Text>} renderItem={({ item }) => {
+           }} />}
+          {(tab === 'offers' || tab === 'completed') && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.listPremium} data={displayedOffers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>لسه ماقدمتش عروض نشطة.</Text>} renderItem={({ item }) => {
              const sn = getOrderSN(item);
-             const expanded = Boolean(expandedTechnicianOrders[sn]);
-             return <View style={styles.dataCard}>
-               <TouchableOpacity onPress={() => setExpandedTechnicianOrders(current => ({ ...current, [sn]: !current[sn] }))}>
-                 <Text style={styles.cardTitle}>{item.service || 'خدمة'} — {sn || '—'}</Text>
-                 <Text style={styles.detail}>{item.orderStatus || 'حالة غير محددة'} · {expanded ? 'اضغط لإخفاء التفاصيل' : 'اضغط لعرض التفاصيل'}</Text>
-               </TouchableOpacity>
-               {expanded ? <>
-                 <Text style={styles.detail}>السعر: {item.price || item.priceNum || '—'} جنيه</Text>
-                 <Text style={styles.detail}>{item.message || ''}</Text>{item.client && ['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus) ? <View style={styles.offerCard}><Text style={styles.cardTitle}>تفاصيل العميل والطلب</Text><Text style={styles.detail}>اسم العميل: {item.client.name || '—'}</Text><Text style={styles.detail}>المنطقة: {item.client.area || '—'}</Text><Text style={styles.detail}>العنوان بالتفصيل: {item.client.address || '—'}</Text><Text style={styles.detail}>تفاصيل المطلوب: {item.client.description || '—'}</Text><Text style={styles.detail}>ميزانية العميل: {item.client.budget || 'غير محددة'}</Text><Text style={styles.detail}>السعر المتفق عليه: {item.client.acceptedOfferPrice ?? item.price ?? '—'} جنيه</Text><Text style={styles.detail}>عمولة المنصة: {item.client.commissionAmount ?? '—'} جنيه</Text><Text style={styles.detail}>حالة العمولة: {item.client.commissionCharged ? 'تم الخصم' : 'لم يتم الخصم'}</Text>{item.client.phone && item.orderStatus === 'تم اختيار فني' ? <Button title={`اتصال بالعميل: ${item.client.phone}`} secondary onPress={() => Linking.openURL(`tel:${item.client.phone}`)} /> : null}</View> : null}<View style={styles.roleActions}><Button title={orderChats[getOrderSN(item)]?.open ? 'إخفاء المحادثة' : 'محادثة الطلب'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
-          {orderChats[getOrderSN(item)]?.open ? <View style={styles.chatPanel}>{orderChats[getOrderSN(item)]?.loading ? <ActivityIndicator color={COLORS.teal}/> : <><ScrollView ref={chatScrollRef} style={{ maxHeight: 280 }} onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })} nestedScrollEnabled>{(orderChats[getOrderSN(item)]?.messages || []).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'fanni' ? styles.chatMessageTechnician : styles.chatMessageClient]}><Text style={styles.detail}>{message.senderRole === 'fanni' ? 'أنت' : 'العميل'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}</ScrollView><Field label="رسالة للعميل" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value=>setChatDrafts(current=>({...current,[getOrderSN(item)]:value}))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={()=>sendOrderChat(item)} placeholder="اكتب رسالتك"/><Button title="إرسال الرسالة" onPress={()=>sendOrderChat(item)}/><Button title="تحديث المحادثة" secondary onPress={()=>refreshOrderChat(item,'fanni')}/></>}</View> : null}
-          {item.orderStatus !== 'تم اختيار فني' && item.orderStatus !== 'تم الانتهاء' ? <View style={styles.roleActions}><Text style={styles.detail}>رد سريع على استفسار العميل:</Text>{['نعم','لا','حسب الاتفاق'].map(reply=><Button key={reply} title={reply} secondary onPress={()=>sendOrderChat(item,reply)}/>)}</View> : null}
-          {item.orderStatus === 'تم اختيار فني' ? <View style={styles.offerCard}><Text style={styles.cardTitle}>طلب تعديل السعر</Text><Field label="السعر الجديد بالجنيه" value={priceDrafts[getOrderSN(item)]?.price || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], price: value } }))} keyboardType="numeric" /><Field label="سبب التعديل" value={priceDrafts[getOrderSN(item)]?.reason || ''} onChangeText={value => setPriceDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], reason: value } }))} multiline /><Button title="إرسال طلب تعديل السعر" onPress={() => requestOrderPriceChange(item)} /></View> : null}
-          {item.orderStatus === 'تم الانتهاء' && !ratingDrafts[getOrderSN(item)]?.submitted && !ratingDrafts[getOrderSN(item)]?.skipped && !dismissedRatings[getOrderSN(item)] ? (
-            <View style={styles.offerCard}>
-              <Text style={styles.cardTitle}>تقييم العميل</Text>
-              {renderRatingStars(item, Number(ratingDrafts[getOrderSN(item)]?.stars || 5))}
-              <Field
-                label="تعليق (اختياري)"
-                value={ratingDrafts[getOrderSN(item)]?.comment || ''}
-                onChangeText={value => setRatingDrafts(current => ({
-                  ...current,
-                  [getOrderSN(item)]: { ...current[getOrderSN(item)], comment: value },
-                }))}
-                multiline
-              />
-              {Number(ratingDrafts[getOrderSN(item)]?.stars || 5) === 1 ? <TouchableOpacity onPress={() => setRatingDrafts(current => ({ ...current, [getOrderSN(item)]: { ...current[getOrderSN(item)], blockFuture: !current[getOrderSN(item)]?.blockFuture } }))} style={styles.roleActions}><Text style={styles.detail}>{ratingDrafts[getOrderSN(item)]?.blockFuture ? '☑' : '□'} عدم إظهار طلبات العميل ده ليّ مرة تانية (اختياري)</Text></TouchableOpacity> : null}
-              <Button title="حفظ تقييم العميل" onPress={() => submitOrderRating(item)} />
-            </View>
-          ) : null}
-          {['تم اختيار فني','تم الانتهاء'].includes(item.orderStatus || item.status) && orderChats[getOrderSN(item)]?.open ? (
-            <View style={styles.chatPanel}>
-              {orderChats[getOrderSN(item)]?.loading ? <ActivityIndicator color={COLORS.teal} /> : (
-                <View>
-                  {orderChats[getOrderSN(item)]?.error ? <Text style={styles.errorText}>{orderChats[getOrderSN(item)].error}</Text> : null}
-                  {(orderChats[getOrderSN(item)]?.messages || []).map((message, index) => (
-                    <View key={String(message._id || index)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}>
-                      <Text style={styles.detail}>{message.senderRole === 'client' ? 'العميل' : 'الفني'} • {dateLabel(message.createdAt)}</Text>
-                      <Text style={styles.chatMessageText}>{message.text}</Text>
-                    </View>
-                  ))}
-                  {(orderChats[getOrderSN(item)]?.priceChangeRequests || []).filter(request => request.status === 'قيد الموافقة').map(request => (
-                    <View key={String(request._id)} style={styles.priceRequest}>
-                      <Text style={styles.cardTitle}>طلب تعديل السعر</Text>
-                      <Text style={styles.detail}>من {request.oldPrice} إلى {request.newPrice} جنيه • {request.status}</Text>
-                      <Text style={styles.detail}>{request.reason}</Text>
-                    </View>
-                  ))}
-                  <Field label="ردك داخل المنصة" value={chatDrafts[getOrderSN(item)] || ''} onChangeText={value => setChatDrafts(current => ({ ...current, [getOrderSN(item)]: value }))} multiline returnKeyType="send" blurOnSubmit onSubmitEditing={() => sendOrderChat(item)} />
-                  <View style={styles.roleActions}>
-                    <Button title="إرسال الرسالة" onPress={() => sendOrderChat(item)} />
-                    <Button title="تحديث المحادثة" secondary onPress={() => refreshOrderChat(item, 'fanni')} />
-                  </View>
-                </View>
-              )}
-            </View>
-          ) : null}
-          </> : null}</View>; }} />}
-          {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>المحفظة: {Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على المحفظة فقط إلى الرقم التالي، ولا نقبل التحويل عبر إنستا باي.</Text><View style={styles.codeRow}><Text selectable style={styles.cardTitle}>01152822263</Text><Button title="نسخ الرقم" secondary onPress={()=>copyOrderCode('01152822263')}/></View><Field label="مبلغ الشحن بالجنيه" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Text style={styles.fieldLabel}>المحفظة التي حوّلت منها</Text><View style={styles.roleActions}>{[{value:'vodafone_cash',label:'فودافون كاش'},{value:'orange_cash',label:'أورنج كاش'},{value:'etisalat_cash',label:'اتصالات كاش'},{value:'we_pay',label:'وي باي'}].map(method=><Button key={method.value} title={method.label} secondary={topup.method!==method.value} onPress={()=>setTopup(t=>({...t,method:method.value}))}/>)}</View><Field label="رقم مرجع التحويل (اختياري)" value={topup.reference} onChangeText={v => setTopup(t => ({ ...t, reference: v }))} /><Button title="إرسال طلب شحن للمراجعة" onPress={submitTopup} /><Text style={styles.sectionTitle}>سجل المحفظة</Text>{techData.wallet.map((item, i) => <View key={String(item._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type || item.status || 'حركة محفظة'}</Text><Text style={styles.detail}>{item.amount || ''} جنيه • {dateLabel(item.createdAt || item.date)}</Text></View>)}</ScrollView>}
-          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitle}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>الحالة: {user.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>المستوى المهني: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الصفة الإدارية: {user.adminRole || 'فني'}</Text><Text style={styles.detail}>الشارات: {(user.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات حتى الآن'}</Text><Text style={styles.detail}>الخدمات: {(user.specialties || []).join('، ') || '—'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><View style={styles.roleActions}><Button title="تحديث بيانات الحساب" secondary onPress={() => setReloadKey(v => v + 1)} /><Button title="تغيير كلمة المرور" onPress={() => setScreen('account')} /></View></ScrollView>}
-          {tab === 'notifications' && <ScrollView contentContainerStyle={styles.page}><View style={styles.headerRow}><Text style={styles.sectionTitle}>إشعارات الفني</Text><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread} /></View>{notifications.loading ? <ActivityIndicator color={COLORS.teal} /> : notifications.error ? <Text style={styles.errorText}>{notifications.error}</Text> : notifications.items.length ? notifications.items.map((item, i) => <TouchableOpacity key={String(item._id || item.id || i)} onPress={() => markNotificationRead(item)} style={[styles.dataCard, !(item.read || item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title || 'إشعار'}{!(item.read || item.readAt) ? ' • جديد' : ''}</Text><Text style={styles.detail}>{item.message || ''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>) : <Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</ScrollView>}
+             return <View style={styles.orderCardPremium}>
+               <Text style={styles.cardTitlePremium}>{item.service || 'خدمة'} — {sn}</Text>
+               <Text style={styles.detail}>الحالة: {item.orderStatus || '—'} • السعر: {item.price || '—'} جنيه</Text>
+               <View style={styles.roleActions}><Button title={orderChats[sn]?.open ? 'إخفاء المحادثة' : 'محادثة'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
+             </View>; }} />}
+          {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><View style={styles.walletCard}><Text style={styles.walletTitle}>المحفظة 💰</Text><Text style={styles.walletAmount}>{Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على: 01152822263</Text></View><Field label="مبلغ الشحن" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Button title="إرسال طلب شحن" onPress={submitTopup} /></ScrollView>}
+          {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitlePremium}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>المستوى: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || 0)} جنيه</Text></View></ScrollView>}
         </>}
       </View>
-      {notificationsOpen ? <View style={styles.notificationPopup}><View style={styles.headerRow}><Text style={styles.cardTitle}>إشعارات الفني {notifications.unread ? `(${notifications.unread} جديدة)` : ''}</Text><Button title="إغلاق" secondary onPress={()=>setNotificationsOpen(false)}/></View><Button title="قراءة الكل" secondary onPress={markAllNotificationsRead} disabled={!notifications.unread}/>{notifications.loading?<ActivityIndicator color={COLORS.teal}/>:notifications.error?<Text style={styles.errorText}>{notifications.error}</Text>:notifications.items.length?<ScrollView style={styles.notificationList} contentContainerStyle={styles.notificationListContent} nestedScrollEnabled showsVerticalScrollIndicator>{notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={[styles.notificationRow, !(item.read||item.readAt) && styles.notificationUnread]}><Text style={styles.cardTitle}>{item.title||'إشعار'}{!(item.read||item.readAt)?' • جديد':''}</Text><Text style={styles.detail}>{item.message||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt)}</Text></TouchableOpacity>)}</ScrollView>:<Text style={styles.emptyText}>لا توجد إشعارات حاليًا.</Text>}</View>:null}
+      {notificationsOpen ? <View style={styles.notificationPopupPremium}><Text style={styles.cardTitleSmall}>الإشعارات</Text>{notifications.items.map((item,i)=><TouchableOpacity key={String(item._id||item.id||i)} onPress={()=>markNotificationRead(item)} style={styles.notificationRow}><Text style={styles.cardTitleSmall}>{item.title||'إشعار'}</Text><Text style={styles.detail}>{item.message||''}</Text></TouchableOpacity>)}</View>:null}
       <View pointerEvents="box-none" style={styles.floatingControls}><TouchableOpacity onPress={refreshVisibleData} style={styles.floatingButton}><Text style={styles.floatingIcon}>⟳</Text></TouchableOpacity><TouchableOpacity onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}><Text style={styles.floatingWhatsApp}>🎧</Text></TouchableOpacity></View>
       {renderRatingModal('fanni')}
     </SafeAreaView>;
   }
 
   if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) {
-    const rolePath = session.role;
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}>
-        <View style={styles.flex}><Text style={styles.title}>دعم صُنّاع</Text><Text style={styles.subtitle}>محادثة خاصة داخل التطبيق</Text></View>
-        <Button title="رجوع" secondary onPress={() => { screenHistoryRef.current.pop(); const target = rolePath === 'client' ? 'client' : 'technician'; screenRef.current = target; setScreenState(target); setSupportCase(null); }} />
-      </View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>دعم صُنّاع</Text></View><Button title="رجوع" secondary onPress={() => { screenHistoryRef.current.pop(); const target = session.role === 'client' ? 'client' : 'technician'; screenRef.current = target; setScreenState(target); setSupportCase(null); }} /></View>
       <ScrollView contentContainerStyle={styles.page}>
-        <View style={styles.dataCard}>
-          <Text style={styles.cardTitle}>محادثة جديدة</Text>
-          <Text style={styles.detail}>اكتب مشكلتك هنا. رقمك الشخصي لا يظهر في هذه المحادثة.</Text>
-          <Field label="عنوان المشكلة (اختياري)" value={supportSubject} onChangeText={setSupportSubject} placeholder="مثال: مشكلة في الطلب" />
-          {!supportCase ? <>
-            <Field label="رسالتك" value={supportDraft} onChangeText={setSupportDraft} multiline placeholder="اشرح المشكلة أو الاستفسار..." />
-            <Button title="إرسال وفتح محادثة الدعم" onPress={startSupportCase} disabled={supportLoading} />
-          </> : null}
-        </View>
-        <Text style={styles.sectionTitle}>محادثاتي السابقة</Text>
-        {supportLoading ? <ActivityIndicator color={COLORS.teal} /> : null}
-        {supportError ? <Text style={styles.errorText}>{supportError}</Text> : null}
-        {supportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => openSupportCase(item)} style={[styles.dataCard, supportCase?._id === item._id && { borderColor: COLORS.teal }]}>
-          <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'}</Text>
-          <Text style={styles.detail}>الحالة: {item.status || 'جديدة'}{item.needsHuman ? ' • تحتاج تدخل الدعم' : ''}</Text>
-          <Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text>
-        </TouchableOpacity>)}
-        {supportCase ? <View style={styles.chatPanel}>
-          <Text style={styles.sectionTitle}>{supportCase.subject || 'محادثة الدعم'}</Text>
-          {(supportCase.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}>
-            <Text style={styles.detail}>{message.senderRole === 'admin' ? 'دعم صُنّاع' : message.senderRole === 'assistant' ? 'المساعد' : 'أنت'} • {dateLabel(message.createdAt)}</Text>
-            <Text style={styles.chatMessageText}>{message.text}</Text>
-          </View>)}
-          {['تم الحل', 'مغلقة'].includes(supportCase.status) ? <Text style={styles.detail}>تم إغلاق هذه الحالة. افتح محادثة جديدة إذا احتجت مساعدة أخرى.</Text> : <>
-            <Field label="اكتب ردك" value={supportDraft} onChangeText={setSupportDraft} multiline placeholder="اكتب رسالتك للدعم..." />
-            <View style={styles.roleActions}>
-              <Button title="إرسال" onPress={() => sendSupportMessage(false)} disabled={supportLoading} />
-              <Button title="طلب تدخل الدعم" secondary onPress={() => sendSupportMessage(true)} disabled={supportLoading} />
-            </View>
-          </>}
-        </View> : null}
-        <Button title="تحديث المحادثات" secondary onPress={loadSupportCases} disabled={supportLoading} />
+        <View style={styles.formCard}><Text style={styles.cardTitlePremium}>محادثة جديدة</Text><Field label="عنوان المشكلة" value={supportSubject} onChangeText={setSupportSubject} /><Field label="رسالتك" value={supportDraft} onChangeText={setSupportDraft} multiline /><Button title="إرسال وفتح محادثة الدعم" onPress={startSupportCase} disabled={supportLoading} /></View>
+        {supportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => openSupportCase(item)} style={styles.dataCard}><Text style={styles.cardTitleSmall}>{item.subject || 'استفسار عام'}</Text><Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text></TouchableOpacity>)}
+        {supportCase ? <View style={styles.chatPanelPremium}><Text style={styles.sectionTitleSmall}>{supportCase.subject || 'محادثة الدعم'}</Text>{(supportCase.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}><Text style={styles.detailSmall}>{message.senderRole === 'admin' ? 'دعم صُنّاع' : 'أنت'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}<Field label="اكتب ردك" value={supportDraft} onChangeText={setSupportDraft} multiline /><Button title="إرسال" onPress={() => sendSupportMessage(false)} /></View> : null}
       </ScrollView>
     </SafeAreaView>;
   }
@@ -1961,142 +1799,35 @@ function AppScreens({ onScreenChange }) {
   if (screen === 'admin' && session?.role === 'admin') {
     const tab = adminData.tab;
     const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
-    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'طلبات الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }, { key: 'levels', label: 'المستوى المهني' }, ...(session.user?.role === 'admin' ? [{ key: 'services', label: 'الخدمات' }, { key: 'pricing', label: 'الأسعار' }, { key: 'wallets', label: 'محافظ الفنيين' }, { key: 'regions', label: 'المناطق' }, { key: 'content', label: 'محتوى المنصة' }, { key: 'settings', label: 'الإعدادات' }, { key: 'reports', label: 'التقارير' }, { key: 'audit', label: 'سجل التدقيق' }, { key: 'roles', label: 'المناصب الإدارية' }, { key: 'notifications', label: 'إرسال إشعار' }] : [])];
-    const pendingActionCount = key => {
-      const values = key === 'support' ? adminSupportCases : adminData[key] || [];
-      const statusOf = item => String(item?.status || item?.actualStatus || item?.state || '').trim().toLowerCase();
-      const closedStatuses = ['تم الحل', 'مغلقة', 'مغلق', 'تم الإغلاق', 'منتهية', 'مكتملة', 'مكتمل', 'محلولة', 'closed', 'resolved', 'complete', 'completed', 'approved', 'rejected', 'رفض', 'مرفوض', 'مرفوضة', 'تم الاعتماد', 'تم الرفض', 'مقبول', 'مقبولة'];
-      if (key === 'orders') return values.filter(item => ['قيد المراجعة', 'pending', 'awaiting review', 'بانتظار المراجعة', 'بانتظار النشر'].includes(statusOf(item))).length;
-      if (key === 'fannis') return values.filter(item => !item.isApproved && !item.isDisabled && ['قيد المراجعة', 'pending', 'بانتظار المراجعة', ''].includes(statusOf(item))).length;
-      if (key === 'topups') return values.filter(item => !closedStatuses.includes(statusOf(item)) && ['قيد المراجعة', 'pending', 'بانتظار المراجعة', 'جديد', ''].includes(statusOf(item))).length;
-      if (key === 'complaints') return values.filter(item => !closedStatuses.includes(statusOf(item))).length;
-      if (key === 'support') return values.filter(item => item.needsHuman && !closedStatuses.includes(statusOf(item))).length;
-      return 0;
-    };
+    const tabs = [{ key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' }, { key: 'clients', label: 'العملاء' }, { key: 'topups', label: 'الشحن' }, { key: 'complaints', label: 'الشكاوى' }, { key: 'support', label: 'الدعم' }];
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitle}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
-      <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}{['orders','fannis','clients','topups','complaints','support'].includes(item.key) ? ` (${pendingActionCount(item.key)})` : ''}</Text></TouchableOpacity>)}</View>
-      {adminData.loading ? <View style={styles.center}><ActivityIndicator size="large" color={COLORS.teal} /><Text style={styles.statusText}>جاري تحميل بيانات الإدارة...</Text></View> : <View style={{ flex: 1 }}>
-        {adminData.error ? <Text style={styles.errorText}>{adminData.error}</Text> : null}
-        {tab === 'wallets' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>إدارة محافظ الفنيين</Text><Text style={styles.detail}>اختر فنيًا لعرض الحركات المالية، أو تجميد المحفظة، أو تسجيل تسوية موثقة.</Text>
-          {adminData.fannis.map((fanni,i)=><TouchableOpacity key={String(fanni._id||fanni.id||i)} onPress={()=>setAdminWallet(c=>({...c,fanniId:String(fanni._id||fanni.id),amount:String(fanni.walletBalance??fanni.balance??''),transactions:[]}))} style={[styles.dataCard,String(fanni._id||fanni.id)===adminWallet.fanniId&&{borderColor:COLORS.teal}]}><Text style={styles.cardTitle}>{fanni.name||'فني'} — {fanni.phone||''}</Text><Text style={styles.detail}>الرصيد: {Number(fanni.walletBalance??fanni.balance??0)} جنيه • المحفظة {fanni.isFrozen?'مجمّدة':'نشطة'}</Text></TouchableOpacity>)}
-          {adminWallet.fanniId ? <View style={styles.dataCard}><Text style={styles.sectionTitle}>إجراءات المحفظة</Text><Field label="الرصيد الجديد بعد التسوية (جنيه)" value={adminWallet.amount} onChangeText={v=>setAdminWallet(c=>({...c,amount:v}))} keyboardType="numeric" /><Field label="سبب الإجراء (مطلوب)" value={adminWallet.reason} onChangeText={v=>setAdminWallet(c=>({...c,reason:v}))} multiline />
-            <View style={styles.roleActions}><Button title="تسوية الرصيد" onPress={()=>adminWalletAction('balance')} /><Button title="تجميد المحفظة" secondary onPress={()=>adminWalletAction('freeze')} /><Button title="إلغاء التجميد" secondary onPress={()=>adminWalletAction('unfreeze')} /></View>
-            <Button title={adminWallet.loading?'جاري التحميل...':'عرض كشف الحركات المالية'} secondary onPress={adminLoadWalletTransactions} disabled={adminWallet.loading}/>
-            {adminWallet.loading?<ActivityIndicator color={COLORS.teal}/>:adminWallet.transactions.length?adminWallet.transactions.map((item,i)=><View key={String(item._id||item.id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.type||item.action||item.status||'حركة مالية'} • {Number(item.amount||0)} جنيه</Text><Text style={styles.detail}>{item.reason||item.description||''}</Text><Text style={styles.detail}>{dateLabel(item.createdAt||item.date)}</Text></View>):<Text style={styles.emptyText}>حمّل كشف الحساب لعرض الحركات.</Text>}
-          </View> : null}
-        </ScrollView> : tab === 'services' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>إدارة الخدمات والأقسام</Text><Text style={styles.detail}>هذه القائمة متصلة مباشرة بقائمة الخدمات الموجودة على الخادم.</Text>
-          <Field label="اسم الخدمة الجديدة" value={adminServiceDraft.name} onChangeText={v => setAdminServiceDraft(c => ({ ...c, name: v }))} />
-          <Field label="اسم القسم" value={adminServiceDraft.category} onChangeText={v => setAdminServiceDraft(c => ({ ...c, category: v }))} />
-          <Field label="رمز الخدمة" value={adminServiceDraft.emoji} onChangeText={v => setAdminServiceDraft(c => ({ ...c, emoji: v }))} />
-          <Button title="إضافة الخدمة" onPress={adminAddService} />
-          {adminExtras.services.map((category, index) => <View key={String(category.label || category.name || index)} style={styles.dataCard}><View style={styles.headerRow}><Text style={styles.cardTitle}>{category.emoji || '🔧'} {category.label || category.name}</Text><View style={styles.roleActions}><Button title="↑ قسم" secondary onPress={() => adminMoveCategory(index, -1)} disabled={index===0}/><Button title="↓ قسم" secondary onPress={() => adminMoveCategory(index, 1)} disabled={index===adminExtras.services.length-1}/></View></View><Text style={styles.detail}>الخدمات: {(category.services || []).length} • النشطة: {category.activeCount ?? '—'}</Text>{adminServiceEdit.category === (category.label || category.name) && (category._detailed || []).some(item => item.name === adminServiceEdit.oldName) ? <View style={styles.dataCard}><Text style={styles.cardTitle}>تعديل: {adminServiceEdit.oldName}</Text><Field label="الاسم الجديد" value={adminServiceEdit.name} onChangeText={v => setAdminServiceEdit(c => ({ ...c, name: v }))} /><View style={styles.roleActions}><Button title="حفظ الاسم" onPress={adminSaveServiceEdit} /><Button title="إلغاء" secondary onPress={() => setAdminServiceEdit({ category: '', oldName: '', name: '' })} /></View></View> : null}{(category._detailed || (category.services || []).map(name => ({name}))).map((item, i, arr) => <View key={String(item._id || item.name || i)} style={styles.dataCard}><Text style={styles.detail}>{item.name} {item.isActive === false ? '• مخفية' : ''}</Text><View style={styles.roleActions}><Button title="↑" secondary onPress={() => adminMoveService(category.label || category.name, item.name, -1)} disabled={i===0}/><Button title="↓" secondary onPress={() => adminMoveService(category.label || category.name, item.name, 1)} disabled={i===arr.length-1}/><Button title="تعديل" secondary onPress={() => adminBeginServiceEdit(category.label || category.name, item.name)} /><Button title={item.isActive === false ? 'إظهار' : 'إخفاء'} secondary onPress={() => adminToggleService(category.label || category.name, item.name, item.isActive === false)} /><Button title="حذف" secondary onPress={() => adminDeleteService(category.label || category.name, item.name)} /></View></View>)}</View>)}
-          <Button title="تحديث قائمة الخدمات" secondary onPress={() => setReloadKey(v => v + 1)} />
-        </ScrollView> : tab === 'pricing' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>الأسعار والعمولات</Text>
-          <Field label="رسوم الفرصة / الكشف (جنيه)" value={String(adminExtras.pricing.check)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, check: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
-          <Field label="العمولة (%)" value={String(adminExtras.pricing.commission)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, commission: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
-          <Field label="أقل عرض (جنيه)" value={String(adminExtras.pricing.minOffer)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, minOffer: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
-          <Field label="أعلى عرض (جنيه)" value={String(adminExtras.pricing.maxOffer)} onChangeText={v => setAdminExtras(c => ({ ...c, pricing: { ...c.pricing, maxOffer: v === '' ? '' : Number(v) } }))} keyboardType="numeric" />
-          <Button title="حفظ الأسعار والعمولات" onPress={adminSavePricing} />
-          <Text style={styles.sectionTitle}>آخر تغييرات الأسعار</Text>{adminExtras.pricingHistory.slice(0,20).map((item,i)=><View key={String(item._id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.reason || item.key || 'تغيير أسعار'}</Text><Text style={styles.detail}>{item.by || 'الإدارة'} • {dateLabel(item.createdAt)}</Text></View>)}
-        </ScrollView> : tab === 'regions' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>إدارة المناطق</Text><Field label="اسم المنطقة الجديدة" value={adminRegionDraft} onChangeText={setAdminRegionDraft} /><Button title="إضافة المنطقة" onPress={adminAddRegion} />
-          {adminExtras.regions.map((region,i)=><View key={String(region._id||region.name||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{region.name}</Text><Text style={styles.detail}>{region.isActive === false ? 'غير نشطة' : 'نشطة'} • {dateLabel(region.createdAt)}</Text></View>)}
-        </ScrollView> : tab === 'content' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>محتوى المنصة والإعلان</Text><Field label="الإعلان الظاهر للعملاء والفنيين" value={adminAnnouncementDraft} onChangeText={setAdminAnnouncementDraft} multiline /><Text style={styles.detail}>{adminAnnouncementDraft.length}/1000</Text>
-          <Text style={styles.sectionTitle}>إضافة سؤال شائع</Text><Field label="السؤال" value={adminFaqDraft.question} onChangeText={v => setAdminFaqDraft(c => ({ ...c, question: v }))} /><Field label="الإجابة" value={adminFaqDraft.answer} onChangeText={v => setAdminFaqDraft(c => ({ ...c, answer: v }))} multiline /><Button title="إضافة السؤال للقائمة" onPress={adminAddFaqDraft} />
-          {adminExtras.content.faqs.map((faq,i)=><View key={String(i)} style={styles.dataCard}><Text style={styles.cardTitle}>{faq.question}</Text><Text style={styles.detail}>{faq.answer}</Text><Button title="حذف السؤال من القائمة" secondary onPress={()=>setAdminExtras(c=>({...c,content:{...c.content,faqs:c.content.faqs.filter((_,j)=>j!==i)}}))}/></View>)}
-          <Button title="حفظ محتوى المنصة" onPress={adminSaveContent} />
-        </ScrollView> : tab === 'settings' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>إعدادات النظام</Text><Field label="اسم المنصة" value={adminExtras.settings.siteName} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,siteName:v}}))} />
-          <View style={styles.dataCard}><Text style={styles.cardTitle}>وضع الصيانة</Text><Text style={styles.detail}>{adminExtras.settings.maintenance ? 'مفعل' : 'غير مفعل'}</Text><View style={styles.roleActions}><Button title="تفعيل" secondary={!adminExtras.settings.maintenance} onPress={()=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenance:true}}))}/><Button title="إيقاف" secondary={adminExtras.settings.maintenance} onPress={()=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenance:false}}))}/></View></View>
-          <Field label="رسالة الصيانة" value={adminExtras.settings.maintenanceMessage} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,maintenanceMessage:v}}))} multiline />
-          <Field label="حد محاولات تسجيل الفني لكل IP" value={String(adminExtras.settings.maxFanniSignupAttempts)} onChangeText={v=>setAdminExtras(c=>({...c,settings:{...c.settings,maxFanniSignupAttempts:Number(v)}}))} keyboardType="numeric" />
-          <Button title="حفظ الإعدادات" onPress={adminSaveSettings} />
-        </ScrollView> : tab === 'reports' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>تقارير الإدارة</Text><Text style={styles.detail}>التواريخ بصيغة YYYY-MM-DD. اترك الحقول فارغة لإحصاء كل الفترات.</Text>
-          <Field label="من تاريخ (YYYY-MM-DD)" value={adminReportFilters.startDate} onChangeText={v=>setAdminReportFilters(c=>({...c,startDate:v}))} />
-          <Field label="إلى تاريخ (YYYY-MM-DD)" value={adminReportFilters.endDate} onChangeText={v=>setAdminReportFilters(c=>({...c,endDate:v}))} />
-          <Field label="تصفية حسب الخدمة (اختياري)" value={adminReportFilters.service} onChangeText={v=>setAdminReportFilters(c=>({...c,service:v}))} />
-          <Field label="تصفية حسب المنطقة (اختياري)" value={adminReportFilters.area} onChangeText={v=>setAdminReportFilters(c=>({...c,area:v}))} />
-          <Button title="إنشاء التقرير" onPress={adminGenerateReport} />
-          {adminExtras.report?.summary ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ملخص التقرير</Text>{[['إجمالي الطلبات',adminExtras.report.summary.totalOrders],['طلبات مكتملة',adminExtras.report.summary.completedOrders],['طلبات ملغاة',adminExtras.report.summary.cancelledOrders],['قيد المراجعة',adminExtras.report.summary.pendingOrders],['تستقبل عروضًا',adminExtras.report.summary.publishedOrders],['الفنيون المعتمدون',adminExtras.report.summary.approvedTechnicians],['العملاء النشطون',adminExtras.report.summary.activeClients]].map(([label,value])=><Text key={label} style={styles.detail}>{label}: {Number(value||0)}</Text>)}<Text style={styles.sectionTitle}>أكثر الخدمات طلبًا</Text>{(adminExtras.report.topServices||[]).map((item,i)=><Text key={String(i)} style={styles.detail}>{item.service}: {item.count}</Text>)}</View> : <Text style={styles.emptyText}>أنشئ تقريرًا لعرض الإحصائيات.</Text>}
-        </ScrollView> : tab === 'audit' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>سجل التدقيق الإداري</Text><Button title="تحديث السجل" secondary onPress={adminLoadAuditLogs} />{adminExtras.auditLogs.map((item,i)=><View key={String(item._id||i)} style={styles.dataCard}><Text style={styles.cardTitle}>{item.action || item.event || 'إجراء إداري'}</Text><Text style={styles.detail}>{item.adminName || item.by || item.actorName || 'الإدارة'} • {dateLabel(item.createdAt)}</Text><Text style={styles.detail}>{item.targetType || item.entityType || ''} {item.targetId || item.entityId || ''}</Text><Text style={styles.detail}>{item.reason || item.details || item.summary || ''}</Text></View>)}
-        </ScrollView> : tab === 'topups' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات شحن.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.amount || 0} جنيه — {item.actualStatus || item.status || 'قيد المراجعة'}</Text><Text style={styles.detail}>هاتف المحوّل: {item.fromPhone || '—'}</Text><Text style={styles.detail}>رقم المرجع: {item.referenceNumber || item.reference || '—'}</Text><Text style={styles.detail}>تاريخ الطلب: {dateLabel(item.createdAt)}</Text>{(item.status === 'pending' || item.actualStatus === 'قيد المراجعة') ? <View style={styles.roleActions}><Button title="اعتماد وإضافة الرصيد" onPress={() => reviewTopup(item, 'approve')} /><Button title="رفض" secondary onPress={() => reviewTopup(item, 'reject')} /></View> : <Text style={styles.detail}>تمت مراجعة الطلب.</Text>}</View>} /> : tab === 'complaints' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا توجد شكاوى.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>شكوى الطلب {item.sn || '—'}</Text><Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.type || item.category || 'شكوى'}</Text><Text style={styles.detail}>{item.message || item.text || item.description || 'لا يوجد نص للشكوى'}</Text><View style={styles.roleActions}><Button title="قيد المراجعة" secondary onPress={() => setComplaintStatus(item, 'قيد المراجعة')} /><Button title="تم الحل" onPress={() => setComplaintStatus(item, 'تم الحل')} /><Button title="مرفوضة" secondary onPress={() => setComplaintStatus(item, 'مرفوضة')} /></View></View>} /> : tab === 'support' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>حالات دعم صُنّاع</Text>
-          <Text style={styles.detail}>الحالات التي تحتاج تدخلًا بشريًا تظهر أولًا. افتح الحالة لقراءة الرسائل والرد من داخل التطبيق.</Text>
-          <Text style={styles.sectionTitle}>طلبات استعادة كلمة المرور</Text>
-          {adminRecoveryCases.map(item => <TouchableOpacity key={String(item.id || item._id)} onPress={() => openAdminRecovery(item)} style={[styles.dataCard, adminRecoverySelected && String(adminRecoverySelected.id || adminRecoverySelected._id) === String(item.id || item._id) && { borderColor: COLORS.teal }]}><Text style={styles.cardTitle}>{item.accountName || 'حساب'} — {item.phone || ''}</Text><Text style={styles.detail}>{item.ownerRole === 'client' ? 'عميل' : item.ownerRole === 'admin' ? 'إدارة' : 'فني'} • {item.status || 'بانتظار الدعم'}</Text><Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text></TouchableOpacity>)}
-          {adminRecoverySelected ? <View style={styles.chatPanel}><Text style={styles.cardTitle}>محادثة استعادة كلمة المرور</Text>{(adminRecoverySelected.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}><Text style={styles.detail}>{message.senderRole === 'admin' ? 'الدعم' : 'المستخدم'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}<Text style={styles.detail}>تحقق من ملكية الحساب قبل إصدار الرمز.</Text><Button title="تأكيد التحقق وإصدار رمز" onPress={issueAdminRecoveryCode} />{adminRecoveryCode ? <View style={styles.dataCard}><Text style={styles.cardTitle}>رمز مؤقت — صالح 10 دقائق</Text><Text selectable style={styles.title}>{adminRecoveryCode}</Text><Button title="تجهيز إرسال الرمز في المحادثة" onPress={() => setAdminRecoveryDraft('رمز استعادة كلمة المرور: ' + adminRecoveryCode + ' — صالح لمدة 10 دقائق.')} /></View> : null}<Field label="رسالة الدعم" value={adminRecoveryDraft} onChangeText={setAdminRecoveryDraft} multiline placeholder="اكتب الرد أو جهز إرسال الرمز أعلاه..." /><View style={styles.roleActions}><Button title="إرسال الرد" onPress={replyAdminRecovery} /><Button title="تحديث الطلبات" secondary onPress={loadAdminRecoveryCases} /></View></View> : null}
-          {adminSupportCases.map(item => <TouchableOpacity key={String(item._id)} onPress={() => setAdminSupportSelected(item)} style={[styles.dataCard, adminSupportSelected?._id === item._id && { borderColor: COLORS.teal }]}>
-            <Text style={styles.cardTitle}>{item.subject || 'استفسار عام'} — {item.ownerName || (item.ownerRole === 'fanni' ? 'فني' : 'عميل')}</Text>
-            <Text style={styles.detail}>الحالة: {item.status || 'جديدة'} • {item.ownerRole === 'fanni' ? 'فني' : 'عميل'}{item.needsHuman ? ' • يحتاج تدخلًا' : ''}</Text>
-            <Text style={styles.detail}>{dateLabel(item.lastMessageAt || item.createdAt)}</Text>
-          </TouchableOpacity>)}
-          {adminSupportSelected ? <View style={styles.chatPanel}>
-            <Text style={styles.cardTitle}>{adminSupportSelected.subject || 'محادثة الدعم'}</Text>
-            {(adminSupportSelected.messages || []).map((message, index) => <View key={String(message._id || index)} style={styles.chatMessage}>
-              <Text style={styles.detail}>{message.senderRole === 'admin' ? 'الإدارة' : message.senderRole === 'assistant' ? 'المساعد' : message.senderRole === 'fanni' ? 'الفني' : 'العميل'} • {dateLabel(message.createdAt)}</Text>
-              <Text style={styles.chatMessageText}>{message.text}</Text>
-            </View>)}
-            {!['تم الحل','مغلقة'].includes(adminSupportSelected.status) ? <>
-              <Field label="رد الإدارة" value={adminSupportDraft} onChangeText={setAdminSupportDraft} multiline placeholder="اكتب ردك هنا..." />
-              <View style={styles.roleActions}><Button title="إرسال الرد" onPress={() => replyAdminSupport(adminSupportSelected)} /><Button title="تحديث القائمة" secondary onPress={loadAdminSupportCases} /></View>
-            </> : <Text style={styles.detail}>الحالة مغلقة.</Text>}
-          </View> : null}
-          <Button title="تحديث حالات الدعم" secondary onPress={loadAdminSupportCases} />
-        </ScrollView> : tab === 'notifications' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}><Text style={styles.sectionTitle}>إرسال إشعار داخل التطبيق</Text><Text style={styles.detail}>الإشعار يظهر للحسابات المستهدفة داخل تطبيق صُنّاع.</Text><Field label="عنوان الإشعار" value={broadcast.title} onChangeText={value => setBroadcast(current => ({ ...current, title: value }))} placeholder="مثال: تحديث مهم" /><Field label="نص الإشعار" value={broadcast.message} onChangeText={value => setBroadcast(current => ({ ...current, message: value }))} multiline placeholder="اكتب الرسالة هنا" /><Text style={styles.fieldLabel}>المستلمون</Text><View style={styles.roleActions}>{[{key:'all',label:'الجميع'},{key:'clients',label:'العملاء'},{key:'fannis',label:'الفنيون'},{key:'cairo_fannis',label:'فنيّو القاهرة'}].map(option => <Button key={option.key} title={option.label} secondary={broadcast.audience !== option.key} onPress={() => setBroadcast(current => ({ ...current, audience: option.key }))} />)}</View><Button title="إرسال الإشعار" onPress={sendAdminBroadcast} /></ScrollView> : tab === 'roles' && session.user?.role === 'admin' ? <ScrollView contentContainerStyle={styles.page}>
-          <Text style={styles.sectionTitle}>التسلسل الإداري والصلاحيات</Text>
-          <Text style={styles.detail}>المدير العام فقط يستطيع تعيين المناصب أو سحبها. الخادم هو الذي يفرض الصلاحيات فعليًا.</Text>
-          {adminUsersLoading ? <ActivityIndicator color={COLORS.teal} /> : adminUsers.map((u, i) => <View key={String(u.id || u._id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{u.name || 'حساب إداري'}</Text><Text style={styles.detail}>{u.phone || ''} • {u.adminRole || (u.role === 'admin' ? 'مدير عام' : 'فني')}</Text>{u.role !== 'admin' ? <Button title="سحب المنصب الإداري" secondary onPress={() => revokeAdminRoleForUser(u)} /> : <Text style={styles.detail}>حساب المدير العام الأساسي.</Text>}</View>)}
-          <Text style={styles.sectionTitle}>ترقية فني معتمد إلى منصب إداري</Text>
-          {adminData.fannis.filter(f => (f.status === 'معتمد' || f.status === 'approved') && !f.adminRole).map((f, i) => <View key={String(f._id || f.id || i)} style={styles.dataCard}><Text style={styles.cardTitle}>{f.name || 'فني'} — {f.phone || ''}</Text><View style={styles.roleActions}>{['قراءة فقط', 'مشرف', 'مشرف أول', 'مدير'].map(role => <Button key={role} title={role} secondary onPress={() => changeAdminRoleForFanni(f, role)} />)}</View></View>)}
-        </ScrollView> : tab === 'levels' ? <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>لا يوجد فنّيون لعرض مستوياتهم.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitle}>{item.name || 'فني'} — {item.level || 'مبتدئ'}</Text><Text style={styles.detail}>{item.phone || ''} • {item.status || item.actualStatus || ''}</Text><Text style={styles.detail}>الشارات: {(item.badges || []).map(b => typeof b === 'string' ? b : b.label || b.name || '').filter(Boolean).join('، ') || 'لا توجد شارات'}</Text><Button title="ترقية للمستوى التالي" onPress={() => updateProfessionalLevel(item)} /></View>} /> : <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || item.sn || item.phone || i)} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.emptyText}>مفيش بيانات لعرضها حاليًا.</Text>} renderItem={({ item }) => {
-          const title = tab === 'orders' ? (item.sn || item.service || 'طلب خدمة') : (item.name || item.phone || (tab === 'fannis' ? 'فني' : 'عميل'));
-          const detail = tab === 'orders' ? [item.status, item.service, item.area, item.createdAt ? dateLabel(item.createdAt) : ''].filter(Boolean).join(' • ')
-            : tab === 'fannis' ? [item.phone, item.status || item.actualStatus, Array.isArray(item.specialties) ? item.specialties.join('، ') : item.skill].filter(Boolean).join(' • ')
-            : [item.phone, item.orderCount ? `عدد الطلبات: ${item.orderCount}` : '', item.lastOrder ? `آخر طلب: ${item.lastOrder}` : ''].filter(Boolean).join(' • ');
-          return <View style={styles.dataCard}><Text style={styles.cardTitle}>{title}</Text><Text style={styles.detail}>{detail || 'لا توجد تفاصيل إضافية'}</Text>{tab === 'orders' && session.user?.role === 'admin' && item.status === 'قيد المراجعة' ? <Button title="نشر الطلب للفنيين" onPress={() => publishOrder(item)} /> : null}{tab === 'orders' && session.user?.role === 'admin' && !['تم الانتهاء','منتهي','تم اختيار فني','مؤرشف','ملغي'].includes(item.status) ? <Button title="إلغاء الطلب" secondary onPress={() => adminOrderAction(item, 'cancel')} /> : null}{tab === 'orders' && session.user?.role === 'admin' && !['قيد المراجعة','تم النشر','وصلتك عروض','تم اختيار فني','مؤرشف'].includes(item.status) ? <Button title="أرشفة الطلب" secondary onPress={() => adminOrderAction(item, 'archive')} /> : null}{tab === 'fannis' && !item.isApproved && !item.isDisabled ? <View style={styles.roleActions}><Button title="اعتماد الفني" onPress={() => moderateTechnician(item, 'approve')} /><Button title="رفض" secondary onPress={() => moderateTechnician(item, 'reject')} /></View> : tab === 'fannis' && item.isApproved ? <Button title="تعليق الفني" secondary onPress={() => moderateTechnician(item, 'disable')} /> : tab === 'fannis' && item.isDisabled ? <Button title="إعادة تفعيل الفني" onPress={() => moderateTechnician(item, 'enable')} /> : null}{tab === 'fannis' && session.user?.role === 'admin' ? <View style={styles.dataCard}><Text style={styles.detail}>تعيين المستوى المهني</Text><View style={styles.roleActions}>{['مبتدئ','ممارس','محترف','خبير'].map(level => <Button key={level} title={level} secondary onPress={() => adminSetTechnicianLevel(item, level)} />)}</View></View> : null}{tab === 'clients' && session.user?.role === 'admin' ? <View style={styles.roleActions}><Button title="تعليق العميل" secondary onPress={() => adminClientAction(item.phone, 'block')} /><Button title="إعادة التفعيل" onPress={() => adminClientAction(item.phone, 'unblock')} /><Button title="حذف الحساب" secondary onPress={() => adminClientAction(item.phone, 'account')} /></View> : null}</View>;
-        }} />}
-        <Button title="إعادة تحميل بيانات الإدارة" secondary onPress={() => setReloadKey(v => v + 1)} />
-      </View>}
-      <Text style={styles.note}>هذه نسخة ربط أولية للعرض والقراءة. أوامر الإدارة الحساسة تحتاج واجهات منفصلة واختبارات صلاحيات قبل تفعيلها.</Text>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>لوحة إدارة صُنّاع</Text><Text style={styles.subtitleSmall}>أهلًا {session.user?.name || 'بالإدارة'}</Text></View><Button title="حسابي" secondary onPress={() => setScreen('account')} /><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.tabRowPremium}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => { setAdminData(v => ({ ...v, tab: item.key })); if (item.key === 'support') loadAdminSupportCases(); }} style={[styles.pillPremium, tab === item.key && styles.pillPremiumActive]}><Text style={[styles.pillPremiumText, tab === item.key && styles.pillPremiumTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
+      <FlatList style={{ flex: 1 }} data={items} keyExtractor={(item, i) => String(item._id || item.id || item.sn || item.phone || i)} contentContainerStyle={styles.listPremium} ListEmptyComponent={<Text style={styles.emptyText}>مفيش بيانات حاليًا.</Text>} renderItem={({ item }) => <View style={styles.dataCard}><Text style={styles.cardTitleSmall}>{item.name || item.sn || item.phone || 'عنصر'}</Text><Text style={styles.detail}>{item.status || item.phone || ''}</Text>{tab === 'orders' && item.status === 'قيد المراجعة' ? <Button title="نشر الطلب" onPress={() => publishOrder(item)} /> : null}{tab === 'fannis' && !item.isApproved && !item.isDisabled ? <View style={styles.roleActions}><Button title="اعتماد" onPress={() => moderateTechnician(item, 'approve')} /><Button title="رفض" secondary onPress={() => moderateTechnician(item, 'reject')} /></View> : null}</View>} />
     </SafeAreaView>;
   }
 
   return <SafeAreaView style={styles.safe}>
     <ScrollView contentContainerStyle={styles.homePage} showsVerticalScrollIndicator={false}>
       <View style={styles.homeBrandArea}>
-        <View style={styles.homeLogoCircle}>
+        <View style={styles.homeLogoCirclePremium}>
           <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.homeLogoImage} resizeMode="contain" />
         </View>
-        <Text style={styles.homeBrandTitle}>صُنّاع</Text>
-        <Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>
-        <Text style={styles.homeIntro}>خدماتك وشغلك في مكان واحد، بخطوات بسيطة.</Text>
+        <Text style={styles.homeBrandTitlePremium}>صُنّاع</Text>
+        <Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>
+        <Text style={styles.homeIntroPremium}>خدماتك وشغلك في مكان واحد، بخطوات بسيطة وسريعة.</Text>
       </View>
-      <View style={styles.roleCards}>
-        <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} onPress={() => goLogin('client')} style={[styles.roleCard, styles.clientRoleCard]}>
-          <View style={styles.clientIconCircle}><Text style={styles.roleIcon}>⌂</Text></View>
-          <View style={styles.roleCardCopy}>
-            <Text style={styles.roleTitle}>الدخول كعميل</Text>
-            <Text style={styles.roleDescription}>ادخل كعميل واطلب الخدمة اللي محتاجها، وتابع عروض الفنيين وطلبك بسهولة.</Text>
-            <Text style={styles.roleActionHint}>اطلب خدمتك الآن ←</Text>
-          </View>
+      <View style={styles.roleCardsPremium}>
+        <TouchableOpacity activeOpacity={0.88} onPress={() => goLogin('client')} style={[styles.roleCardPremium, styles.clientRoleCardPremium]}>
+          <View style={styles.clientIconCirclePremium}><Text style={styles.roleIconPremium}>⌂</Text></View>
+          <View style={styles.roleCardCopy}><Text style={styles.roleTitlePremium}>الدخول كعميل</Text><Text style={styles.roleDescriptionPremium}>اطلب الخدمة اللي محتاجها وتابع عروض الفنيين بسهولة.</Text><View style={styles.roleActionBadge}><Text style={styles.roleActionBadgeText}>اطلب الآن ←</Text></View></View>
         </TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" activeOpacity={0.82} onPress={() => goLogin('fanni')} style={[styles.roleCard, styles.technicianRoleCard]}>
-          <View style={styles.technicianIconCircle}><Text style={styles.roleIcon}>⚒</Text></View>
-          <View style={styles.roleCardCopy}>
-            <Text style={styles.roleTitle}>الدخول كفني</Text>
-            <Text style={styles.roleDescription}>ادخل كفني، والشغل مستنيك! استقبل الطلبات، وقدّم عروضك، وتابع شغلك ومكسبك.</Text>
-            <Text style={styles.roleActionHint}>شوف فرص الشغل ←</Text>
-          </View>
+        <TouchableOpacity activeOpacity={0.88} onPress={() => goLogin('fanni')} style={[styles.roleCardPremium, styles.technicianRoleCardPremium]}>
+          <View style={styles.technicianIconCirclePremium}><Text style={styles.roleIconPremium}>⚒</Text></View>
+          <View style={styles.roleCardCopy}><Text style={styles.roleTitlePremium}>الدخول كفني</Text><Text style={styles.roleDescriptionPremium}>استقبل الطلبات وقدّم عروضك وتابع مكسبك.</Text><View style={[styles.roleActionBadge, {backgroundColor:'#0F172A'}]}><Text style={styles.roleActionBadgeText}>شوف فرص الشغل ←</Text></View></View>
         </TouchableOpacity>
       </View>
-      <View style={styles.homeFooter}><View style={styles.homeFooterDot} /><Text style={styles.homeFooterText}>اختار طريقة الدخول وابدأ مع صُنّاع</Text></View>
+      <View style={styles.homeFooterPremium}><View style={styles.homeFooterDot} /><Text style={styles.homeFooterText}>اختار طريقة الدخول وابدأ مع صُنّاع</Text></View>
     </ScrollView>
   </SafeAreaView>;
 }
@@ -2117,288 +1848,154 @@ function getServiceEmoji(service) {
   return '🛠️';
 }
 
+// ===================== WOW PREMIUM STYLES - هيدر صغير ثابت + تصميم بريميوم =====================
 const styles = StyleSheet.create({
   appRoot: { flex: 1, backgroundColor: '#FFFFFF' },
   brandHeaderSafe: { backgroundColor: '#FFFFFF' },
-  brandHeader: { minHeight: 54, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EAF1F5' },
-
-  brandHeaderLogo: { width: 42, height: 42 },
-  brandHeaderTitle: { color: COLORS.navy, fontSize: 21, fontWeight: '900', marginLeft: 9 },
+  // FIXED COMPACT HEADER - لا ياخذ نص الشاشة
+  brandHeader: { height: 48, minHeight: 48, maxHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  brandHeaderLogo: { width: 30, height: 30 },
+  brandHeaderTitle: { color: '#0F172A', fontSize: 18, fontWeight: '900', marginLeft: 8, letterSpacing: 0.3 },
   appScreenArea: { flex: 1 },
-  homeLogoImage: { width: 98, height: 98, alignSelf: 'center' },
-  safe: { flex: 1, backgroundColor: '#FFFFFF' },
-  page: { padding: 16, paddingBottom: 30, gap: 10, backgroundColor: '#F8FAFC' },
-  screenSection: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2EEEE', borderRadius: 18, padding: 13, marginVertical: 7 },
-  screenDivider: { height: 1, backgroundColor: '#EAF1F5', marginVertical: 8 },
 
-  homePage: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 22, gap: 20, justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  safe: { flex: 1, backgroundColor: '#F8FAFC' },
+  page: { padding: 14, paddingBottom: 28, gap: 10, backgroundColor: '#F8FAFC' },
   flex: { flex: 1 },
+  
+  // CLIENT HEADER PREMIUM - اسم صغير
+  clientHeader: { height: 56, minHeight: 56, maxHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  clientHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  clientHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  clientAvatarSmall: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0D9488', alignItems: 'center', justifyContent: 'center' },
+  clientAvatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  clientHeaderInfo: { flex: 1 },
+  clientNameSmall: { color: '#0F172A', fontSize: 13, fontWeight: '800', textAlign: 'right', lineHeight: 16 },
+  clientRoleSmall: { color: '#64748B', fontSize: 11, fontWeight: '600', textAlign: 'right', marginTop: 1 },
+
+  bellButtonSmall: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', alignItems: 'center', justifyContent: 'center' },
+  bellBadgeDot: { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  bellBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: '900' },
+
+  // HOME PREMIUM
+  homePage: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 22, gap: 18, justifyContent: 'center', backgroundColor: '#FFFFFF' },
   homeBrandArea: { alignItems: 'center', paddingBottom: 2 },
-  homeLogoCircle: { width: 124, height: 124, borderRadius: 62, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5F2F2', shadowColor: '#0F4C75', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 5, marginBottom: 10 },
-  homeBrandTitle: { color: '#0F4C75', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 0.2 },
-  homeTagline: { color: '#0E9A9A', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 4, lineHeight: 23 },
-  homeIntro: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 21, marginTop: 7 },
-  roleCards: { flexDirection: 'column', gap: 13 },
-  roleCard: { width: '100%', minHeight: 132, flexDirection: 'row-reverse', alignItems: 'center', gap: 13, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 22, paddingHorizontal: 15, paddingVertical: 16, shadowColor: '#0F4C75', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
-  clientRoleCard: { borderRightWidth: 4, borderRightColor: '#0E9A9A' },
-  technicianRoleCard: { borderRightWidth: 4, borderRightColor: '#0F4C75' },
-  clientIconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#E9F8F7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C5EAE7' },
-  technicianIconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#EAF2F8', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D2E4F0' },
-  roleIcon: { fontSize: 29, color: '#0F4C75', fontWeight: '800' },
-  roleCardCopy: { flex: 1, gap: 3, justifyContent: 'center' },
-  roleTitle: { color: '#0F4C75', fontSize: 17, fontWeight: '900', textAlign: 'right' },
-  roleDescription: { color: '#64748B', fontSize: 12, textAlign: 'right', lineHeight: 19, marginTop: 4, flexShrink: 1 },
-  roleActionHint: { color: '#0E9A9A', fontSize: 12, fontWeight: '900', textAlign: 'right', marginTop: 6 },
-  homeFooter: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 0 },
-  homeFooterDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#0E9A9A' },
+  homeLogoCirclePremium: { width: 96, height: 96, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4, marginBottom: 12 },
+  homeLogoImage: { width: 68, height: 68, alignSelf: 'center' },
+  homeBrandTitlePremium: { color: '#0F172A', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
+  homeTaglinePremium: { color: '#0D9488', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  homeIntroPremium: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 6, paddingHorizontal: 12 },
+  roleCardsPremium: { flexDirection: 'column', gap: 12, marginTop: 8 },
+  roleCardPremium: { width: '100%', minHeight: 110, flexDirection: 'row-reverse', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  clientRoleCardPremium: { borderRightWidth: 4, borderRightColor: '#0D9488', backgroundColor: '#F0FDFA' },
+  technicianRoleCardPremium: { borderRightWidth: 4, borderRightColor: '#0F172A', backgroundColor: '#F8FAFC' },
+  clientIconCirclePremium: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#CCFBF1', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#99F6E4' },
+  technicianIconCirclePremium: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CBD5E1' },
+  roleIconPremium: { fontSize: 22, color: '#0F172A', fontWeight: '800' },
+  roleCardCopy: { flex: 1, gap: 4, justifyContent: 'center' },
+  roleTitlePremium: { color: '#0F172A', fontSize: 16, fontWeight: '900', textAlign: 'right' },
+  roleDescriptionPremium: { color: '#64748B', fontSize: 12, textAlign: 'right', lineHeight: 18, marginTop: 2 },
+  roleActionBadge: { alignSelf: 'flex-end', backgroundColor: '#0D9488', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 6 },
+  roleActionBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  homeFooterPremium: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4 },
+  homeFooterDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#0D9488' },
   homeFooterText: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+
+  // LOGIN PREMIUM
   loginSafe: { flex: 1, backgroundColor: '#FFFFFF' },
-  loginPage: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28, justifyContent: 'center', gap: 12 },
-  loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F5F7F9', borderWidth: 1, borderColor: '#E5EAF0' },
-  loginBackText: { color: '#0F4C75', fontSize: 13, fontWeight: '700' },
-  loginLogoCircle: { width: 116, height: 116, borderRadius: 58, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F0F4F7', shadowColor: '#0F4C75', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 5, marginBottom: 4 },
-  loginLogo: { width: 86, height: 86 },
-  loginTitle: { fontSize: 25, fontWeight: '900', color: '#0F4C75', textAlign: 'center' },
-  loginSubtitle: { color: '#64748B', marginTop: 5, textAlign: 'center', lineHeight: 22, fontSize: 14 },
-  loginForm: { width: '100%', gap: 5 },
-  recoveryLink: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 2, marginBottom: 4 },
-  recoveryLinkText: { color: '#0E9A9A', fontSize: 14, fontWeight: '800', textAlign: 'left' },
-  loginGradientButton: { minHeight: 52, borderRadius: 14, marginVertical: 5, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#0A2A4A', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  loginGradientColors: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
-  loginGradientSegment: { flex: 1 },
-  loginGradientButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'center' },
-  loginHeading: { alignItems: 'flex-end', gap: 3, marginVertical: 8 },
-  title: { fontSize: 25, fontWeight: 'bold', color: COLORS.navy, textAlign: 'right' },
-  subtitle: { color: COLORS.muted, marginTop: 5, textAlign: 'right', lineHeight: 21 },
-  hero: { color: COLORS.navy, fontSize: 22, fontWeight: 'bold', textAlign: 'right', marginTop: 12 },
-  brand: { backgroundColor: COLORS.navy, color: COLORS.white, fontSize: 30, fontWeight: 'bold', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, overflow: 'hidden' },
-  homeHeader: { padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  homeButtons: { gap: 8, marginVertical: 12 },
-  button: { backgroundColor: COLORS.teal, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 48, maxWidth: '100%', flexShrink: 1, borderWidth: 1, borderColor: '#0B8585', shadowColor: COLORS.teal, shadowOpacity: 0.13, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  loginPage: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28, justifyContent: 'center', gap: 10 },
+  loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  loginBackText: { color: '#0F172A', fontSize: 13, fontWeight: '700' },
+  loginLogoCircle: { width: 88, height: 88, borderRadius: 22, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 2 },
+  loginLogo: { width: 62, height: 62 },
+  loginTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', textAlign: 'center' },
+  loginSubtitle: { color: '#64748B', marginTop: 4, textAlign: 'center', lineHeight: 20, fontSize: 13 },
+  loginForm: { width: '100%', gap: 4, marginTop: 8 },
+  recoveryLink: { alignSelf: 'flex-end', paddingVertical: 6 },
+  recoveryLinkText: { color: '#0D9488', fontSize: 13, fontWeight: '800' },
+  loginGradientButton: { minHeight: 50, borderRadius: 14, marginVertical: 6, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A', elevation: 3 },
+  loginGradientButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  loginHeading: { alignItems: 'center', gap: 2, marginVertical: 6 },
+  title: { fontSize: 20, fontWeight: '900', color: COLORS.navy, textAlign: 'right' },
+  subtitleSmall: { color: COLORS.muted, marginTop: 2, textAlign: 'right', fontSize: 12, lineHeight: 16 },
 
-  buttonText: { color: COLORS.white, fontWeight: '800', fontSize: 13, textAlign: 'center', flexShrink: 1 },
-  buttonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CFE2E3', shadowOpacity: 0.03, elevation: 1 },
+  // BUTTONS PREMIUM
+  button: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 44, borderWidth: 1, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 6, elevation: 1 },
+  buttonPrimary: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  buttonSecondary: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
+  buttonText: { fontWeight: '800', fontSize: 13, textAlign: 'center' },
+  buttonPrimaryText: { color: '#FFFFFF' },
+  buttonSecondaryText: { color: '#0F172A' },
+  disabledButton: { opacity: 0.5 },
 
-  buttonSecondaryText: { color: COLORS.navy },
-  disabledButton: { opacity: 0.55 },
+  // FIELDS
   fieldWrap: { marginVertical: 5 },
-  fieldLabel: { color: COLORS.navy, fontWeight: 'bold', marginTop: 7, marginBottom: 6, textAlign: 'right' },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE8EB', borderRadius: 15, paddingHorizontal: 14, paddingVertical: 13, color: COLORS.text, fontSize: 16, minHeight: 49 },
+  fieldLabel: { color: '#0F172A', fontWeight: '800', marginTop: 6, marginBottom: 5, textAlign: 'right', fontSize: 13 },
+  fieldLabelPremium: { color: '#0F172A', fontWeight: '900', marginTop: 14, marginBottom: 8, textAlign: 'right', fontSize: 14, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-end' },
+  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#0F172A', fontSize: 14, minHeight: 46 },
+  multiline: { minHeight: 80, textAlignVertical: 'top' },
 
-  multiline: { minHeight: 86, textAlignVertical: 'top' },
-  note: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 19, marginVertical: 8 },
-  notificationRow: { paddingVertical: 8, paddingHorizontal: 9, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 2, backgroundColor: '#FFFFFF', borderRadius: 10, marginTop: 4 },
-  notificationUnread: { backgroundColor: '#FFF7D6', borderColor: '#F5B928', borderWidth: 1 },
-  homeSummary: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0FDFA', borderRadius: 12, padding: 12 },
-  bellButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#FFF4C2', borderWidth: 1, borderColor: '#F5B928', alignItems: 'center', justifyContent: 'center' },
-  bellText: { fontSize: 21 },
-  bellBadge: { position: 'absolute', top: -5, right: -5, minWidth: 17, textAlign: 'center', borderRadius: 9, overflow: 'hidden', color: '#FFFFFF', backgroundColor: '#B91C1C', fontSize: 10, fontWeight: '900', paddingHorizontal: 3 },
-  notificationPopup: { position: 'absolute', zIndex: 20, top: 70, right: 12, width: '88%', maxWidth: 360, maxHeight: '58%', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F5B928', borderRadius: 18, padding: 10, elevation: 14 },
-  notificationList: { maxHeight: 300, flexGrow: 0, flexShrink: 1 },
-  notificationListContent: { paddingBottom: 4 },
-  floatingControls: { position: 'absolute', left: 14, right: 14, bottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  floatingButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.teal, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: COLORS.teal, shadowOpacity: 0.18, shadowRadius: 8 },
+  // SERVICE TILES WOW
+  serviceTilesPremium: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginHorizontal: -4, marginBottom: 10 },
+  serviceTilePremium: { width: '31.3%', minHeight: 96, marginHorizontal: '1%', marginBottom: 8, paddingHorizontal: 6, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 16, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
+  detailTilePremium: { minHeight: 84, backgroundColor: '#F8FAFC' },
+  serviceTilePremiumSelected: { backgroundColor: '#0F172A', borderColor: '#0F172A', shadowOpacity: 0.15, elevation: 3 },
+  serviceIconCircle: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  serviceIconCircleSmall: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
+  serviceIconCircleSelected: { backgroundColor: 'rgba(255,255,255,0.15)' },
+  serviceTileIcon: { fontSize: 20, textAlign: 'center' },
+  serviceTileIconSmall: { fontSize: 16, textAlign: 'center' },
+  serviceTileLabelPremium: { color: '#0F172A', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 15 },
+  serviceTileLabelPremiumSmall: { color: '#334155', fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 14 },
+  serviceTileLabelPremiumSelected: { color: '#FFFFFF' },
 
-  floatingIcon: { color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '900' },
-  whatsappButton: { backgroundColor: '#16A34A' },
-  floatingWhatsApp: { color: '#FFFFFF', fontSize: 24, fontWeight: '900' },
-  codeRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
-  roleActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: 7, marginTop: 8 },
-  chatPanel: { backgroundColor: '#F8FCFC', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 18, padding: 12, marginTop: 11, shadowColor: COLORS.navy, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
+  // CARDS PREMIUM
+  welcomeCard: { backgroundColor: '#0F172A', borderRadius: 16, padding: 14, marginBottom: 6, flexDirection: 'column', gap: 3 },
+  welcomeTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'right' },
+  welcomeSub: { color: '#94A3B8', fontSize: 12, textAlign: 'right', marginTop: 2 },
+  formCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 12, marginVertical: 6, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  dataCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginVertical: 5, shadowColor: '#0F172A', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  orderCardPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 0, marginVertical: 6, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  orderCardHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, backgroundColor: '#FFFFFF' },
+  orderCardBody: { padding: 12, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 6 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusDotPending: { backgroundColor: '#F59E0B' },
+  statusDotDone: { backgroundColor: '#10B981' },
+  cardTitlePremium: { color: '#0F172A', fontSize: 14, fontWeight: '900', textAlign: 'right', flex: 1 },
+  cardTitleSmall: { color: '#0F172A', fontSize: 13, fontWeight: '800', textAlign: 'right' },
+  orderStatusSmall: { color: '#64748B', fontSize: 11, textAlign: 'right', marginTop: 2 },
+  expandIcon: { color: '#94A3B8', fontSize: 12, fontWeight: '800' },
+  offerCardPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 10, marginTop: 8 },
+  chatPanelPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 10, marginTop: 10 },
+  detail: { color: '#475569', marginTop: 4, textAlign: 'right', lineHeight: 19, fontSize: 13 },
+  detailRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  detailLabel: { color: '#64748B', fontSize: 13, fontWeight: '600' },
+  detailValue: { color: '#0F172A', fontSize: 13, fontWeight: '800' },
+  detailValueGold: { color: '#0D9488', fontSize: 13, fontWeight: '900' },
+  detailSmall: { color: '#94A3B8', fontSize: 11, textAlign: 'right', marginTop: 2 },
+  detailBold: { color: '#0F172A', fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 6 },
+  sectionTitleSmall: { color: '#0F172A', fontSize: 13, fontWeight: '900', textAlign: 'right', marginTop: 10, marginBottom: 4 },
+  sectionTitle: { color: '#0F172A', fontSize: 16, fontWeight: '900', textAlign: 'right', marginTop: 12, marginBottom: 6 },
+  errorText: { color: '#DC2626', textAlign: 'right', marginVertical: 6, fontSize: 12, lineHeight: 18 },
+  successText: { color: '#059669', fontWeight: '900', textAlign: 'right', fontSize: 13 },
 
-  chatMessage: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 8, marginVertical: 4 },
-  chatMessageClient: { backgroundColor: '#EFF7FC', borderColor: '#D5E8F2', alignSelf: 'flex-start', maxWidth: '92%' },
+  // TABS PREMIUM
+  tabRowPremium: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginVertical: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  pillPremium: { borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 7, marginVertical: 2 },
+  pillPremiumActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  pillPremiumText: { color: '#475569', fontSize: 12, fontWeight: '700' },
+  pillPremiumTextActive: { color: '#FFFFFF' },
+  tabRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginVertical: 8, paddingHorizontal: 10 },
+  pill: { borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, marginVertical: 2 },
+  pillActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  pillText: { color: '#475569', fontSize: 12, fontWeight: '700' },
+  pillTextActive: { color: '#FFFFFF' },
 
-  chatMessageTechnician: { backgroundColor: '#E9F8F7', borderColor: '#B9E5E1', alignSelf: 'flex-end', maxWidth: '92%' },
+  // WALLET
+  walletCard: { backgroundColor: '#0F172A', borderRadius: 20, padding: 18, marginVertical: 8, alignItems: 'center' },
+  walletTitle: { color: '#94A3B8', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  walletAmount: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 6, textAlign: 'center' },
 
-  chatMessageText: { color: COLORS.text, textAlign: 'right', lineHeight: 21, marginTop: 4 },
-  priceRequest: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 10, marginVertical: 6 },
-  inlineCheck: { paddingVertical: 8 },
-  tabRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 7, marginVertical: 8, paddingHorizontal: 12 },
-  tabPill: { flexShrink: 1, maxWidth: '100%' },
-  pill: { borderRadius: 18, borderWidth: 1, borderColor: '#D9E3F0', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 9, marginRight: 4, marginVertical: 3, maxWidth: '100%' },
-  pillActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal, shadowColor: COLORS.teal, shadowOpacity: 0.10, shadowRadius: 5, elevation: 1 },
-
-  pillText: { color: COLORS.text, fontSize: 12, fontWeight: '600' },
-  pillTextActive: { color: COLORS.white },
-  sectionTitle: { color: COLORS.navy, fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 12, marginBottom: 5 },
-  selectionGroup: { backgroundColor: COLORS.white, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 5 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(5, 15, 35, 0.62)', justifyContent: 'center', padding: 20 },
-  ratingModal: { alignSelf: 'center', width: '100%', maxWidth: 360, backgroundColor: COLORS.white, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: COLORS.gold, maxHeight: '82%' },
-  ratingStarsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 8 },
-  ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
-  ratingStar: { fontSize: 27, color: '#CBD5E1' },
-  ratingStarActive: { color: COLORS.gold },
-  dropdownButton: { minHeight: 50, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginVertical: 5 },
-  serviceTiles: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginHorizontal: -4, marginBottom: 12 },
-  serviceTile: { width: '31.8%', minHeight: 112, aspectRatio: 0.92, marginHorizontal: '0.75%', marginBottom: 10, paddingHorizontal: 5, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF5F6', borderWidth: 1.5, borderColor: '#C6E3E5', borderRadius: 17 },
-  detailServiceTile: { minHeight: 104, backgroundColor: '#EAF5F6' },
-  serviceTileSelected: { backgroundColor: '#D0EBE9', borderColor: COLORS.teal, borderWidth: 2.5 },
-  serviceTileIcon: { fontSize: 34, marginBottom: 8, textAlign: 'center' },
-  serviceTileLabel: { color: COLORS.navy, fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
-  servicePickerHint: { color: COLORS.muted, textAlign: 'center', fontSize: 13, lineHeight: 20, paddingVertical: 8, marginBottom: 8 },
-  dropdownButtonText: { color: COLORS.text, textAlign: 'right', fontSize: 15, fontWeight: '700', flex: 1 },
-  dropdownArrow: { color: COLORS.navy, fontSize: 14, marginLeft: 10 },
-  dropdownOptions: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, marginBottom: 8, overflow: 'hidden' },
-  dropdownOption: { paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  dropdownOptionText: { color: COLORS.text, textAlign: 'right', fontSize: 14 },
-  categoryToggle: { paddingVertical: 5 },
-  offerCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 17, padding: 14, marginTop: 9, shadowColor: COLORS.navy, shadowOpacity: 0.045, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-
-  groupTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginBottom: 5 },
-  choiceRow: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  choiceText: { color: COLORS.text, textAlign: 'right' },
-  headerRow: { padding: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  statusText: { marginTop: 12, color: '#64748B', textAlign: 'center' },
-  dataCard: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 19, padding: 15, marginVertical: 7, shadowColor: COLORS.navy, shadowOpacity: 0.045, shadowRadius: 9, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
-
-  cardTitle: { color: COLORS.navy, fontSize: 16, fontWeight: 'bold', textAlign: 'right' },
-  detail: { color: COLORS.muted, marginTop: 6, textAlign: 'right', lineHeight: 20 },
-  errorText: { color: COLORS.red, textAlign: 'right', marginVertical: 8, lineHeight: 21, paddingHorizontal: 12 },
-  successText: { color: '#047857', fontWeight: '800', textAlign: 'right', marginVertical: 10, flexWrap: 'wrap' },
-  emptyText: { textAlign: 'center', color: COLORS.muted, padding: 28 },
-  list: { paddingHorizontal: 12, paddingBottom: 18 },
-  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between' },
-  categoryCard: { width: '48%', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDEBEC', borderRadius: 17, padding: 14, marginBottom: 10, shadowColor: COLORS.navy, shadowOpacity: 0.035, shadowRadius: 6, elevation: 1 },
-
-  categoryActive: { backgroundColor: '#E9F8F7', borderColor: COLORS.teal, borderWidth: 1.5 },
-
-  emoji: { fontSize: 27, textAlign: 'right' },
-  categoryTitle: { color: COLORS.navy, fontWeight: 'bold', textAlign: 'right', marginTop: 7 },
-  categoryTitleActive: { color: COLORS.navy },
-
-  serviceLine: { color: COLORS.text, textAlign: 'right', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-});
-
-class StartupErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { console.error('Sonaa startup render error:', error, info?.componentStack); }
-  render() {
-    if (this.state.error) {
-      return <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 24, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0F172A', textAlign: 'right', marginBottom: 12 }}>تعذر تشغيل شاشة صُنّاع</Text>
-        <Text selectable style={{ color: '#B91C1C', textAlign: 'left', marginBottom: 20 }}>{String(this.state.error?.message || this.state.error)}</Text>
-        <TouchableOpacity onPress={() => this.setState({ error: null })} style={{ backgroundColor: '#14B8A6', padding: 14, borderRadius: 12, alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>إعادة المحاولة</Text></TouchableOpacity>
-      </SafeAreaView>;
-    }
-    return this.props.children;
-  }
-}
-
-function AppContent() {
-  const [currentScreen, setCurrentScreen] = useState('home');
-  const [showSplash, setShowSplash] = useState(true);
-  const spin = useRef(new Animated.Value(0)).current;
-  const showBrandHeader = !['home', 'login'].includes(currentScreen);
-
-  useEffect(() => {
-    const animation = Animated.loop(Animated.timing(spin, {
-      toValue: 1,
-      duration: 1500,
-      easing: Easing.linear,
-      useNativeDriver: true,
-    }));
-    animation.start();
-    const timer = setTimeout(() => setShowSplash(false), 2600);
-    return () => {
-      animation.stop();
-      clearTimeout(timer);
-    };
-  }, [spin]);
-
-  const spinRotation = spin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return <View style={styles.appRoot}>
-    {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
-      <View style={styles.brandHeader}>
-        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
-        <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
-      </View>
-    </SafeAreaView> : null}
-    <View style={styles.appScreenArea}><AppScreens onScreenChange={setCurrentScreen} /></View>
-    {showSplash ? <View style={splashStyles.overlay}>
-      <View style={splashStyles.logoFrame}>
-        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={splashStyles.logo} resizeMode="contain" />
-        <View pointerEvents="none" style={splashStyles.wordOrbit}>
-          <Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>
-        </View>
-      </View>
-      <Text style={splashStyles.title}>صُنّاع</Text>
-      <Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>
-      <View style={splashStyles.loadingTrack}><View style={splashStyles.loadingFill} /></View>
-    </View> : null}
-  </View>;
-}
-
-const splashStyles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 999,
-    elevation: 999,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  logoFrame: {
-    width: 178,
-    height: 178,
-    borderRadius: 89,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DDEBEC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0F4C75',
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 7,
-    overflow: 'hidden',
-  },
-  logo: { width: 132, height: 132 },
-  wordOrbit: {
-    position: 'absolute',
-    width: 126,
-    height: 126,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  spinningWord: {
-    color: '#0E9A9A',
-    fontSize: 22,
-    fontWeight: '900',
-    textAlign: 'center',
-    textShadowColor: '#FFFFFF',
-    textShadowRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    overflow: 'hidden',
-    paddingHorizontal: 5,
-    borderRadius: 8,
-  },
-  title: { marginTop: 24, color: '#0F4C75', fontSize: 30, fontWeight: '900' },
-  caption: { marginTop: 7, color: '#0E9A9A', fontSize: 14, fontWeight: '700' },
-  loadingTrack: {
-    marginTop: 28,
-    width: 148,
-    height: 4,
-    borderRadius: 3,
-    backgroundColor: '#DDEBEC',
-    overflow: 'hidden',
-  },
-  loadingFill: {
-    width: '65%',
-    height: '100%',
-    backgroundColor: '#0E9A9A',
-    borderRadius: 3,
-  },
-});
-
-export default function App() {
-  return <SafeAreaProvider><StartupErrorBoundary><AppContent /></StartupErrorBoundary></SafeAreaProvider>;
-}
+  // NOTIFICATIONS PREMIUM
+  bellButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+  bellText: { fontSize: 18 },
+  notificationPopupPremium: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor      
