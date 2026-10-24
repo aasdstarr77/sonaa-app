@@ -1579,6 +1579,21 @@ function AppScreens({ onScreenChange }) {
         await api('/notifications/' + session.role + '/push-token', {
           method: 'POST',
           token: session.token,
+          body: { token: result.data, platform: Platform.OS }
+        });
+      } catch (error) {
+        console.warn('Expo push registration failed:', error?.message || error);
+      }
+    }
+    void registerPushToken();
+    return () => { cancelled = true; };
+  }, [session]);
+
+  const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
+  const toggleArray = (key, value) => updateForm(key, form[key].includes(value) ? form[key].filter(item => item !== value) : [...form[key], value]);
+
+  if (authRestoring) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.statusText}>جاري استعادة حسابك...</Text></View></SafeAreaView>;
+
   if (screen === 'login') return <SafeAreaView style={styles.loginSafe}>
     <KeyboardAvoidingView style={styles.loginPage} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TouchableOpacity accessibilityRole="button" onPress={() => setScreen('home')} style={styles.loginBackButton}>
@@ -1997,8 +2012,6 @@ const styles = StyleSheet.create({
 
   // NOTIFICATIONS PREMIUM
   bellButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
-  bellText: { fontSize: 18 },
-  notificationPopupPremium: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor     
   bellText: { fontSize: 18 },
   notificationPopupPremium: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 12, elevation: 10, maxHeight: 360 },
   notificationRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },

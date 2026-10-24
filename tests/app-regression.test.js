@@ -49,6 +49,13 @@ test('foreground notifications are configured to show alerts and play sound', ()
   assert.match(app, /shouldPlaySound: true/);
 });
 
+test('push token registration posts the Expo token for the active session and cleans up', () => {
+  assert.ok(app.includes('Notifications.getExpoPushTokenAsync({ projectId })'));
+  assert.ok(app.includes('pushTokenRef.current = result.data'));
+  assert.ok(app.includes('body: { token: result.data, platform: Platform.OS }'));
+  assert.ok(app.includes('return () => { cancelled = true; };'));
+});
+
 test('required runtime packages are declared', () => {
   for (const name of ['expo', 'react', 'react-native', 'expo-notifications', 'expo-secure-store']) {
     assert.ok(packageJson.dependencies[name], 'missing dependency: ' + name);
@@ -99,7 +106,7 @@ test('rating modal and rating submission safely handle missing technician order 
 test('Sonaa splash caption changes while the spinning logo word remains unchanged', () => {
   assert.ok(app.includes('<Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>'), 'spinning logo word should remain unchanged');
   assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'splash caption should use the agreed tagline');
-  assert.ok(app.includes('<Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should remain unchanged');
+  assert.ok(app.includes('<Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should retain the premium home design');
   assert.ok(!app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login should not receive the splash-only tagline');
   assert.ok(!app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should not receive the splash-only tagline');
 });
