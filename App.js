@@ -844,7 +844,6 @@ function AppScreens({ onScreenChange }) {
 
   useEffect(() => {
     if (!session || screen !== 'technician' || session.role !== 'fanni') return;
-    let active = true;
     const acceptedJobs = techData.offers.filter(item => {
       const status = String(item.orderStatus || item.status || '').trim();
       return status === 'تم اختيار فني' || item.accepted === true;
@@ -854,10 +853,9 @@ function AppScreens({ onScreenChange }) {
       if (!sn || assignedDetails[sn]?.loading || assignedDetails[sn]?.order || assignedDetails[sn]?.error) continue;
       setAssignedDetails(current => ({ ...current, [sn]: { loading: true, error: '' } }));
       api(`/orders/${encodeURIComponent(sn)}/assigned-details`, { token: session.token })
-        .then(result => { if (active) setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: result.order || result.data || null, error: '' } })); })
-        .catch(error => { if (active) setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: null, error: error.message || 'تعذر تحميل تفاصيل العميل' } })); });
+        .then(result => { setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: result.order || result.data || null, error: '' } })); })
+        .catch(error => { setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: null, error: error.message || 'تعذر تحميل تفاصيل العميل' } })); });
     }
-    return () => { active = false; };
   }, [session, screen, techData.offers, assignedDetails]);
 
   useEffect(() => {
