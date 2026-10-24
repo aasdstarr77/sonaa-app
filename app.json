@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sonaa - صُنّاع",
     "slug": "sonaa",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "platforms": [
@@ -10,6 +10,7 @@
     ],
     "android": {
       "package": "com.sonaa.app",
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
