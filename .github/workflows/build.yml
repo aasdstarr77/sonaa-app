@@ -2,10 +2,13 @@ name: Build APK Final
 on:
   push:
     branches: [ main ]
-    paths-ignore:
+    paths:
       - 'App.js'
-      - 'tests/**'
-      - '.github/workflows/app-tests.yml'
+      - 'app.json'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'android/**'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 jobs:
