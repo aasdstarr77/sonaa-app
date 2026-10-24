@@ -164,3 +164,17 @@ test('client service description is prominent and readable on technician job car
   assert.ok(app.includes('تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description'));
   assert.ok(app.includes('تفاصيل الشغل من العميل</Text><Text style={styles.serviceDescriptionText}>{assignedDetails[sn].order.description'));
 });
+
+test('client orders and technician offers are deduplicated by serial number on every refresh', () => {
+  assert.ok(app.includes('function uniqueByOrderSN(items)'));
+  assert.equal((app.match(/orders: uniqueByOrderSN\\(toList\\(result, \\[\\'orders\\'\\]\\)\\)/g) || []).length, 2);
+  assert.ok(app.includes("offers: results[1].status === 'fulfilled' ? uniqueByOrderSN(toList(results[1].value, ['offers'])) : current.offers"));
+  assert.ok(app.includes("function uniqueByOrderSN(items)"));
+  assert.ok(app.includes("const sn = getOrderSN(item)"));
+  assert.ok(app.includes("indexBySN.set(sn, result.length)"));
+});
+
+test('client current orders tab is labeled الطلبات الجارية', () => {
+  assert.ok(app.includes("{key:'current',label:'الطلبات الجارية'"));
+  assert.ok(!app.includes("{key:'current',label:'جارية'"));
+});
