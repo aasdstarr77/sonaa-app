@@ -157,9 +157,9 @@ test('technician price increase and client approval controls are wired to existi
 test('technician sees a pending price-increase status in the chat to prevent duplicate requests', () => {
   assert.ok(app.includes("تم تقديم طلبك، في انتظار رد العميل."));
   assert.ok(app.includes("لا ترسل طلبًا آخر قبل رد العميل."));
-  assert.ok(app.includes("(orderChats[sn]?.priceChangeRequests||[]).map(request=>"));
-  assert.ok(app.includes("request.status==='مقبول'?'وافق العميل على زيادة السعر.'"));
-  assert.ok(app.includes("request.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.'"));
+  assert.ok(app.includes("getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests)"));
+  assert.ok(app.includes("entry.status==='مقبول'?'وافق العميل على زيادة السعر.'"));
+  assert.ok(app.includes("entry.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.'"));
 });
 
 test('client and technician notifications continue polling while their app screen is open', () => {
@@ -219,4 +219,17 @@ test('client and technician notifications visually distinguish unread items and 
 
 test('mark all notifications read clears unread count and dims all notifications', () => {
   assert.ok(app.includes('items: current.items.map(n => ({ ...n, read: true, readAt: n.readAt || new Date().toISOString() })), unread: 0'));
+});
+
+test('client and technician chats render price-change requests in the same chronological timeline as messages', () => {
+  assert.ok(app.includes('function getOrderChatTimeline(messages, priceChangeRequests)'));
+  assert.ok(app.includes("item?.createdAt || 0"));
+  assert.ok(app.includes("item?.requestedAt || item?.createdAt || 0"));
+  assert.ok(app.includes('return aTime - bTime || a._chatStableOrder - b._chatStableOrder'));
+  assert.equal(app.split('getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests)').length - 1, 2);
+  assert.ok(!app.includes('(orderChats[sn]?.priceChangeRequests||[]).map(request=>'), 'price-change requests must not render in a separate fixed section');
+  assert.ok(app.includes('onPress={()=>decideOrderPrice(order,entry,true)}'), 'client approval remains connected to each pending request');
+  assert.ok(app.includes('onPress={()=>decideOrderPrice(order,entry,false)}'), 'client rejection remains connected to each pending request');
+  assert.ok(app.includes("entry.status==='مقبول'?'وافق العميل على زيادة السعر.'"));
+  assert.ok(app.includes("entry.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.'"));
 });
