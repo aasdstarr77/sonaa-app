@@ -178,3 +178,15 @@ test('client current orders tab is labeled الطلبات الجارية', () =>
   assert.ok(app.includes("{key:'current',label:'الطلبات الجارية'"));
   assert.ok(!app.includes("{key:'current',label:'جارية'"));
 });
+
+test('client and technician notifications visually distinguish unread items and provide read all', () => {
+  assert.equal(app.split('title="قراءة الكل" secondary onPress={markAllNotificationsRead}').length - 1, 2);
+  assert.equal(app.split('(item.read || item.readAt) ? styles.notificationRead : styles.notificationUnread').length - 1, 2);
+  assert.ok(app.includes("notificationRead: { backgroundColor: '#F8FAFC', opacity: 0.62 }"));
+  assert.ok(app.includes("notificationReadText: { color: '#64748B' }"));
+  assert.ok(app.includes('unread: 0 }));
+});
+
+test('mark all notifications read clears unread count and dims all notifications', () => {
+  assert.ok(app.includes('items: current.items.map(n => ({ ...n, read: true, readAt: n.readAt || new Date().toISOString() })), unread: 0'));
+});
