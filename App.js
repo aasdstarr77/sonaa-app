@@ -142,6 +142,12 @@ function AppScreens({ onScreenChange }) {
   const registrationPhoneRef = useRef(null);
   const registrationPasswordRef = useRef(null);
   const registrationConfirmPasswordRef = useRef(null);
+  const clientAreaInputRef = useRef(null);
+  const clientAddressInputRef = useRef(null);
+  const clientDescriptionInputRef = useRef(null);
+  const clientBudgetInputRef = useRef(null);
+  const clientServiceDetailYRef = useRef(0);
+  const clientFormYRef = useRef(0);
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
   const [assignedDetails, setAssignedDetails] = useState({});
@@ -1804,24 +1810,24 @@ function AppScreens({ onScreenChange }) {
       {servicesLoading ? <ActivityIndicator color={COLORS.teal} /> : <>
         <Text style={styles.fieldLabelPremium}>① اختار المهنة الرئيسية</Text>
         <View style={styles.serviceTilesPremium}>
-          {categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); }} style={[styles.serviceTilePremium, selected?.label === category.label && styles.serviceTilePremiumSelected]}>
+          {categories.map(category => <TouchableOpacity key={category.label} onPress={() => { setSelected(category); updateForm('service', ''); setServicePickerOpen(false); setSubservicePickerOpen(false); requestAnimationFrame(() => clientScrollRef.current?.scrollTo({ y: Math.max(0, clientServiceDetailYRef.current - 24), animated: true })); }} style={[styles.serviceTilePremium, selected?.label === category.label && styles.serviceTilePremiumSelected]}>
             <View style={[styles.serviceIconCircle, selected?.label === category.label && styles.serviceIconCircleSelected]}><Text style={styles.serviceTileIcon}>{category.emoji || '🛠️'}</Text></View>
             <Text style={[styles.serviceTileLabelPremium, selected?.label === category.label && styles.serviceTileLabelPremiumSelected]}>{category.label}</Text>
           </TouchableOpacity>)}
         </View>
-        {selected ? <>
+        {selected ? <View onLayout={event => { clientServiceDetailYRef.current = event.nativeEvent.layout.y; }}>
           <Text style={styles.fieldLabelPremium}>② اختار الخدمة التفصيلية</Text>
           <View style={styles.serviceTilesPremium}>
-            {(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); }} style={[styles.serviceTilePremium, styles.detailTilePremium, form.service === service && styles.serviceTilePremiumSelected]}>
+            {(selected.services || []).map(service => <TouchableOpacity key={service} onPress={() => { updateForm('service', service); setSubservicePickerOpen(false); requestAnimationFrame(() => { clientScrollRef.current?.scrollTo({ y: Math.max(0, clientFormYRef.current - 16), animated: true }); setTimeout(() => clientAreaInputRef.current?.focus(), 280); }); }} style={[styles.serviceTilePremium, styles.detailTilePremium, form.service === service && styles.serviceTilePremiumSelected]}>
               <View style={[styles.serviceIconCircleSmall, form.service === service && styles.serviceIconCircleSelected]}><Text style={styles.serviceTileIconSmall}>{getServiceEmoji(service)}</Text></View>
               <Text style={[styles.serviceTileLabelPremiumSmall, form.service === service && styles.serviceTileLabelPremiumSelected]}>{service}</Text>
             </TouchableOpacity>)}
           </View>
-        </> : null}
-        <View style={styles.formCard}><Field label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" />
-        <Field label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" />
-        <Field label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها" />
-        <Field label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: من 300 إلى 500 جنيه" />
+        </View> : null}
+        <View onLayout={event => { clientFormYRef.current = event.nativeEvent.layout.y; }} style={styles.formCard}><Field inputRef={clientAreaInputRef} label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" returnKeyType="next" returnKeyLabel="التالي" onSubmitEditing={() => clientAddressInputRef.current?.focus()} blurOnSubmit={false} />
+        <Field inputRef={clientAddressInputRef} label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" returnKeyType="next" returnKeyLabel="التالي" onSubmitEditing={() => clientDescriptionInputRef.current?.focus()} blurOnSubmit={false} />
+        <Field inputRef={clientDescriptionInputRef} label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها" />
+        <Field inputRef={clientBudgetInputRef} label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: من 300 إلى 500 جنيه" returnKeyType="go" returnKeyLabel="إرسال الطلب" onSubmitEditing={createOrder} blurOnSubmit />
         <Button title={loginLoading ? 'جاري إرسال الطلب...' : '🚀 إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} /></View>
       </>}</> : null}
       {clientData.sn ? <View style={styles.codeRowPremium}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
