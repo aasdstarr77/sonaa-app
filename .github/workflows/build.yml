@@ -3,6 +3,7 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
+      - 'App.js'
       - 'tests/**'
       - '.github/workflows/app-tests.yml'
       - '.github/workflows/build.yml'

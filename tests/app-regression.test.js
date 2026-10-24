@@ -19,14 +19,15 @@ test('rating dismissal uses versioned encrypted storage and keeps migration keys
   assert.match(app, /SecureStore\.setItemAsync\(ratingStorageKey, JSON\.stringify\(merged\)\)/);
 });
 
-test('skipping a rating persists the order dismissal before closing the prompt', () => {
+test('skipping a rating closes immediately and persists dismissal before returning', () => {
   const start = app.indexOf('async function skipRatingPrompt()');
   assert.notEqual(start, -1, 'skipRatingPrompt function should exist');
   const end = app.indexOf('\n  function renderRatingModal', start);
   assert.notEqual(end, -1, 'rating modal renderer should follow skip function');
   const body = app.slice(start, end);
+  assert.match(body, /ratingHandledRef\.current\.add/);
+  assert.ok(body.indexOf('setRatingPrompt(') < body.indexOf('await saveRatingDismissal(sn)'), 'prompt should close before storage finishes');
   assert.match(body, /await saveRatingDismissal\(sn\)/);
-  assert.match(body, /setRatingPrompt\(current => current && getOrderSN\(current\.order\) === sn \? null : current\)/);
 });
 
 test('rating dismissal state is loaded before being considered ready for the active account', () => {
@@ -109,4 +110,34 @@ test('Sonaa splash caption changes while the spinning logo word remains unchange
   assert.ok(app.includes('<Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should retain the premium home design');
   assert.ok(!app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login should not receive the splash-only tagline');
   assert.ok(!app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should not receive the splash-only tagline');
+});
+
+test('rating prompts are guarded synchronously after skip or successful/duplicate submission', () => {
+  assert.match(app, /ratingHandledRef = useRef\(new Set\(\)\)/);
+  assert.match(app, /ratingHandledRef\.current\.add\(`\$\{ratingStorageKey\}:\$\{sn\}`\)/);
+  assert.match(app, /!ratingHandledRef\.current\.has\(`\$\{ratingStorageKey\}:\$\{sn\}`\)/);
+});
+
+test('pre-acceptance chat exposes the server-approved quick questions and replies', () => {
+  for (const phrase of ['هل السعر شامل؟', 'متى تقدر تيجي؟', 'هل في تكلفة إضافية؟', 'نعم', 'لا', 'حسب الاتفاق']) assert.ok(app.includes(phrase), 'missing quick chat action: ' + phrase);
+});
+
+test('accepted technician jobs load private client details through the authorized API and show call action', () => {
+  assert.ok(app.includes('/assigned-details'));
+  assert.ok(app.includes('📞 اتصال بالعميل'));
+  assert.ok(app.includes('العنوان بالتفصيل:'));
+  assert.ok(app.includes('تفاصيل الشغل:'));
+});
+
+test('technician price increase and client approval controls are wired to existing backend routes', () => {
+  assert.ok(app.includes('/price-change'));
+  assert.ok(app.includes('إرسال طلب الزيادة'));
+  assert.ok(app.includes('موافقة على الزيادة'));
+  assert.ok(app.includes('رفض الزيادة'));
+  assert.ok(app.includes('لازم السعر الجديد يكون أعلى من السعر الحالي'));
+});
+
+test('client and technician notifications continue polling while their app screen is open', () => {
+  assert.match(app, /setInterval\(\(\) => loadRoleNotifications\(false\), 5000\)/);
+  assert.match(app, /setInterval\(pollOpenChats, 3000\)/);
 });
