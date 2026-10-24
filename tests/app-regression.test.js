@@ -226,7 +226,7 @@ test('client and technician chats render price-change requests in the same chron
   assert.ok(app.includes("item?.createdAt || 0"));
   assert.ok(app.includes("item?.requestedAt || item?.createdAt || 0"));
   assert.ok(app.includes('return aTime - bTime || a._chatStableOrder - b._chatStableOrder'));
-  assert.equal(app.split('getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests)').length - 1, 2);
+  assert.equal(app.split("getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests).map((entry,j)=>entry._chatItemType").length - 1, 2);
   assert.ok(!app.includes('(orderChats[sn]?.priceChangeRequests||[]).map(request=>'), 'price-change requests must not render in a separate fixed section');
   assert.ok(app.includes('onPress={()=>decideOrderPrice(order,entry,true)}'), 'client approval remains connected to each pending request');
   assert.ok(app.includes('onPress={()=>decideOrderPrice(order,entry,false)}'), 'client rejection remains connected to each pending request');
