@@ -20,15 +20,16 @@ test('rating dismissal uses versioned encrypted storage and keeps migration keys
   assert.match(app, /SecureStore\.setItemAsync\(ratingStorageKey, serialized\)/);
 });
 
-test('skipping a rating closes immediately and persists dismissal before returning', () => {
-  const start = app.indexOf('async function skipRatingPrompt()');
-  assert.notEqual(start, -1, 'skipRatingPrompt function should exist');
-  const end = app.indexOf('\n  function renderRatingModal', start);
-  assert.notEqual(end, -1, 'rating modal renderer should follow skip function');
-  const body = app.slice(start, end);
-  assert.match(body, /ratingHandledRef\.current\.add/);
-  assert.ok(body.indexOf('setRatingPrompt(') < body.indexOf('await saveRatingDismissal(sn)'), 'prompt should close before storage finishes');
-  assert.match(body, /await saveRatingDismissal\(sn\)/);
+test('rating prompt has no skip action and submits from a compact five-star row', () => {
+  const modalStart = app.indexOf('function renderRatingModal(role)');
+  const modalEnd = app.indexOf('\n  async function sendAdminBroadcast', modalStart);
+  assert.notEqual(modalStart, -1, 'rating modal renderer should exist');
+  const modalBody = app.slice(modalStart, modalEnd);
+  assert.ok(modalBody.includes('renderRatingStars(order, stars, true)'), 'modal should use compact stars');
+  assert.ok(modalBody.includes("submitting ? '...' : 'تقييم'"), 'modal should show the تقييم button');
+  assert.ok(!modalBody.includes('تخطي'), 'rating modal must not have a skip button');
+  assert.ok(!modalBody.includes('تعليق (اختياري)'), 'rating modal should only ask for stars');
+  assert.ok(modalBody.includes('onRequestClose={() => {}}'), 'back action must not dismiss the rating prompt');
 });
 
 test('rating dismissal state is loaded before being considered ready for the active account', () => {
@@ -113,11 +114,12 @@ test('Sonaa splash caption changes while the spinning logo word remains unchange
   assert.ok(!app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should not receive the splash-only tagline');
 });
 
-test('completed jobs never trigger an automatic rating modal and manual rating remains available', () => {
-  assert.doesNotMatch(app, /setRatingPrompt\(\{ role: 'client', order: completedOrder \}\)/);
-  assert.doesNotMatch(app, /setRatingPrompt\(\{ role: 'fanni', order: completedOffer \}\)/);
-  assert.ok(app.includes('تقييم العملية يدويًا'), 'manual rating entry point should remain in account history');
-  assert.ok(app.includes("setRatingPrompt({ role: session.role, order: item })"), 'manual rating action should open the selected order');
+test('rating prompt appears only when an order transitions to completed while its role is active', () => {
+  assert.ok(app.includes('ratingStatusSnapshotRef'), 'previous order statuses should be tracked');
+  assert.ok(app.includes('previousStatus && !isCompletedStatus(previousStatus) && isCompletedStatus(status)'), 'prompt should depend on a transition into completed');
+  assert.ok(app.includes('if (candidate) setRatingPrompt(current => current || candidate)'), 'only one pending prompt should open at a time');
+  assert.ok(app.includes('⭐ قيّم الفني'), 'client keeps a manual rating option in previous orders');
+  assert.ok(app.includes('⭐ قيّم العميل'), 'technician keeps a manual rating option in completed jobs');
 });
 
 test('blue keyboard send action sends messages in client, technician, and support chats', () => {
