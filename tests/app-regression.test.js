@@ -184,7 +184,7 @@ test('client and technician notifications visually distinguish unread items and 
   assert.equal(app.split('(item.read || item.readAt) ? styles.notificationRead : styles.notificationUnread').length - 1, 2);
   assert.ok(app.includes("notificationRead: { backgroundColor: '#F8FAFC', opacity: 0.62 }"));
   assert.ok(app.includes("notificationReadText: { color: '#64748B' }"));
-  assert.ok(app.includes('unread: 0 }));
+  assert.ok(app.includes("unread: 0 }));"));
 });
 
 test('mark all notifications read clears unread count and dims all notifications', () => {
