@@ -185,9 +185,10 @@ function AppScreens({ onScreenChange }) {
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const ratingAccountId = String(session?.user?.phone || session?.user?._id || session?.user?.id || 'account').trim().replace(/\s+/g, '');
-  const ratingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
+  const ratingStorageKey = `sonaa.rating.dismissed.v4:${session?.role || 'guest'}:${ratingAccountId}`;
+  const previousRatingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
   const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
-  const previousRatingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
+  const oldestRatingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
 
   useEffect(() => {
     let active = true;
@@ -202,10 +203,11 @@ function AppScreens({ onScreenChange }) {
     }
     (async () => {
       try {
-        const [currentRaw, previousRaw, legacyRaw] = await Promise.all([
+        const [currentRaw, previousRaw, oldestRaw, legacyRaw] = await Promise.all([
           SecureStore.getItemAsync(ratingStorageKey),
           previousRatingStorageKey === ratingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(previousRatingStorageKey),
-          legacyRatingStorageKey === ratingStorageKey || legacyRatingStorageKey === previousRatingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(legacyRatingStorageKey),
+          oldestRatingStorageKey === ratingStorageKey || oldestRatingStorageKey === previousRatingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(oldestRatingStorageKey),
+          legacyRatingStorageKey === ratingStorageKey || legacyRatingStorageKey === previousRatingStorageKey || legacyRatingStorageKey === oldestRatingStorageKey ? Promise.resolve(null) : SecureStore.getItemAsync(legacyRatingStorageKey),
         ]);
         if (!active) return;
         const parseDismissals = raw => {
@@ -216,12 +218,19 @@ function AppScreens({ onScreenChange }) {
         };
         const current = parseDismissals(currentRaw);
         const previous = parseDismissals(previousRaw);
+        const oldest = parseDismissals(oldestRaw);
         const legacy = parseDismissals(legacyRaw);
-        const saved = { ...legacy, ...previous, ...current };
+        const saved = { ...legacy, ...oldest, ...previous, ...current };
         dismissedRatingsRef.current = saved;
         setDismissedRatings(saved);
-        if (Object.keys(saved).length && (!currentRaw || !previousRaw || !legacyRaw)) {
-          await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(saved));
+        if (Object.keys(saved).length) {
+          const serialized = JSON.stringify(saved);
+          await Promise.all([
+            SecureStore.setItemAsync(ratingStorageKey, serialized),
+            SecureStore.setItemAsync(previousRatingStorageKey, serialized),
+            SecureStore.setItemAsync(oldestRatingStorageKey, serialized),
+            SecureStore.setItemAsync(legacyRatingStorageKey, serialized),
+          ]);
         }
       } catch (error) {
         console.warn('تعذر استعادة حالات تخطي التقييم:', error?.message || error);
@@ -1062,13 +1071,13 @@ function AppScreens({ onScreenChange }) {
       const merged = { ...persisted, ...dismissedRatingsRef.current, [sn]: true };
       dismissedRatingsRef.current = merged;
       setDismissedRatings(merged);
-      await SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(merged));
-      if (previousRatingStorageKey !== ratingStorageKey) {
-        await SecureStore.setItemAsync(previousRatingStorageKey, JSON.stringify(merged));
-      }
-      if (legacyRatingStorageKey !== ratingStorageKey && legacyRatingStorageKey !== previousRatingStorageKey) {
-        await SecureStore.setItemAsync(legacyRatingStorageKey, JSON.stringify(merged));
-      }
+      const serialized = JSON.stringify(merged);
+      await Promise.all([
+        SecureStore.setItemAsync(ratingStorageKey, serialized),
+        SecureStore.setItemAsync(previousRatingStorageKey, serialized),
+        SecureStore.setItemAsync(oldestRatingStorageKey, serialized),
+        SecureStore.setItemAsync(legacyRatingStorageKey, serialized),
+      ]);
     } catch (error) {
       console.warn('تعذر حفظ حالة تخطي التقييم:', error?.message || error);
     }
@@ -1745,7 +1754,7 @@ function AppScreens({ onScreenChange }) {
             {order.status === 'تم اختيار فني' && order.assignedFanniName ? <Text style={styles.detailBold}>الفني: {order.assignedFanniName}</Text> : null}
             {order.status === 'تم اختيار فني' && order.assignedFanniPhone ? <Button title="📞 اتصال بالفني" secondary onPress={() => Linking.openURL(`tel:${order.assignedFanniPhone}`)} /> : null}
             {!['تم اختيار فني','تم الانتهاء','ملغي','مؤرشف','منتهي','منتهي - اعتذار'].includes(order.status) ? <Button title="إلغاء الطلب" secondary onPress={() => cancelClientOrder(order)} /> : null}
-            {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitleSmall}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCardPremium}><Text style={styles.cardTitleSmall}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Button title="✅ قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
+            {Array.isArray(order.offers) && order.offers.length ? <><Text style={styles.sectionTitleSmall}>عروض الفنيين ({order.offers.length})</Text>{order.offers.map((offer,j)=><View key={String(offer._id||offer.id||j)} style={styles.offerCardPremium}><Text style={styles.cardTitleSmall}>{offer.fanniName||offer.technicianName||'فني'} — {offer.price??'—'} جنيه</Text><Text style={styles.detail}>★ {Number(offer.fanniRatingAverage||0).toFixed(1)} ({Number(offer.fanniRatingCount||0)} تقييم) • ✓ {Number(offer.fanniCompletedJobs||0)} مهمة مكتملة</Text><Text style={styles.detail}>{offer.message||''}</Text>{order.status!=='تم اختيار فني'&&order.status!=='تم الانتهاء'&&<><Button title="✅ قبول العرض" onPress={()=>acceptClientOffer(order,offer)}/></>}</View>)}</> : <Text style={styles.detail}>لا توجد عروض حتى الآن.</Text>}
             <View style={styles.roleActions}><Button title={orderChats[sn]?.open?'إخفاء المحادثة':'💬 محادثة'} secondary onPress={()=>toggleOrderChat(order,'client')}/></View>
             {orderChats[sn]?.open ? <View style={styles.chatPanelPremium}>{(orderChats[sn]?.messages||[]).map((message,j)=><View key={String(message._id||j)} style={[styles.chatMessage, message.senderRole === 'client' ? styles.chatMessageClient : styles.chatMessageTechnician]}><Text style={styles.detailSmall}>{message.senderRole==='client'?'أنت':'الفني'} • {dateLabel(message.createdAt)}</Text><Text style={styles.chatMessageText}>{message.text}</Text></View>)}<Field label="رسالة للفني" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} multiline placeholder="اكتب رسالتك"/><Button title="إرسال" onPress={()=>sendOrderChat(order)}/></View>:null}
           </View> : null}
@@ -1803,6 +1812,7 @@ function AppScreens({ onScreenChange }) {
              return <View style={styles.orderCardPremium}>
                <Text style={styles.cardTitlePremium}>{item.service || 'خدمة'} — {sn}</Text>
                <Text style={styles.detail}>الحالة: {item.orderStatus || '—'} • السعر: {item.price || '—'} جنيه</Text>
+               {item.client ? <Text style={styles.detail}>تقييم العميل: ★ {Number(item.client.ratingAverage || 0).toFixed(1)} ({Number(item.client.ratingCount || 0)} تقييم) • ✓ {Number(item.client.completedJobs || 0)} مهمة مكتملة</Text> : null}
                <View style={styles.roleActions}><Button title={orderChats[sn]?.open ? 'إخفاء المحادثة' : 'محادثة'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
              </View>; }} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><View style={styles.walletCard}><Text style={styles.walletTitle}>المحفظة 💰</Text><Text style={styles.walletAmount}>{Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على: 01152822263</Text></View><Field label="مبلغ الشحن" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Button title="إرسال طلب شحن" onPress={submitTopup} /></ScrollView>}
