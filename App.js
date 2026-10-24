@@ -16,7 +16,7 @@ Notifications.setNotificationHandler({
 });
 
 const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
-const COLORS = { navy: '#0F172A', navy2: '#1E3A5F', blue: '#2563EB', gold: '#F59E0B', teal: '#0D9488', tealLight: '#CCFBF1', bg: '#F8FAFC', bgSoft: '#F1F5F9', text: '#0F172A', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#DC2626' };
+const COLORS = { navy: '#172554', navy2: '#312E81', blue: '#4F46E5', gold: '#F59E0B', teal: '#0891B2', tealLight: '#CFFAFE', bg: '#F5F7FF', bgSoft: '#EEF2FF', text: '#172554', muted: '#64748B', border: '#D8DDF5', white: '#FFFFFF', red: '#DC2626' };
 
 async function api(path, options = {}) {
   const { token, body, headers, signal: externalSignal, timeoutMs = 30000, ...fetchOptions } = options;
@@ -106,7 +106,7 @@ function Button({ title, onPress, secondary = false, disabled = false }) {
 function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none', returnKeyType = 'default', returnKeyLabel, onSubmitEditing, blurOnSubmit = false, inputRef }) {
   return <View style={styles.fieldWrap}>
     <Text style={styles.fieldLabel}>{label}</Text>
-    <TextInput ref={inputRef} value={value} onChangeText={onChangeText} placeholder={placeholder || label} placeholderTextColor="#94A3B8"
+    <TextInput ref={inputRef} value={value} onChangeText={onChangeText} placeholder={placeholder || label} placeholderTextColor="#8794B8"
       secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
       multiline={multiline} returnKeyType={returnKeyType} returnKeyLabel={returnKeyLabel} onSubmitEditing={onSubmitEditing} blurOnSubmit={blurOnSubmit} textAlign="right" style={[styles.input, multiline && styles.multiline]} />
   </View>;
@@ -1876,7 +1876,7 @@ function AppScreens({ onScreenChange }) {
           <Button title="خروج" secondary onPress={logout} />
         </View>
         <View style={styles.clientHeaderRight}>
-          <View style={[styles.clientAvatarSmall, {backgroundColor: '#0F172A'}]}><Text style={styles.clientAvatarText}>{(user.name || 'ف')[0]}</Text></View>
+          <View style={[styles.clientAvatarSmall, {backgroundColor: '#172554'}]}><Text style={styles.clientAvatarText}>{(user.name || 'ف')[0]}</Text></View>
           <View style={styles.clientHeaderInfo}>
             <Text style={styles.clientNameSmall} numberOfLines={1}>{user.name || 'الفني'} • {user.level || 'مبتدئ'}</Text>
             <Text style={styles.clientRoleSmall}>{user.status || 'قيد المراجعة'} • {Number(user.walletBalance || 0)} جنيه</Text>
@@ -1975,7 +1975,7 @@ function AppScreens({ onScreenChange }) {
         </TouchableOpacity>
         <TouchableOpacity activeOpacity={0.88} onPress={() => goLogin('fanni')} style={[styles.roleCardPremium, styles.technicianRoleCardPremium]}>
           <View style={styles.technicianIconCirclePremium}><Text style={styles.roleIconPremium}>⚒</Text></View>
-          <View style={styles.roleCardCopy}><Text style={styles.roleTitlePremium}>الدخول كفني</Text><Text style={styles.roleDescriptionPremium}>استقبل الطلبات وقدّم عروضك وتابع مكسبك.</Text><View style={[styles.roleActionBadge, {backgroundColor:'#0F172A'}]}><Text style={styles.roleActionBadgeText}>شوف فرص الشغل ←</Text></View></View>
+          <View style={styles.roleCardCopy}><Text style={styles.roleTitlePremium}>الدخول كفني</Text><Text style={styles.roleDescriptionPremium}>استقبل الطلبات وقدّم عروضك وتابع مكسبك.</Text><View style={[styles.roleActionBadge, {backgroundColor:'#172554'}]}><Text style={styles.roleActionBadgeText}>شوف فرص الشغل ←</Text></View></View>
         </TouchableOpacity>
       </View>
       <View style={styles.homeFooterPremium}><View style={styles.homeFooterDot} /><Text style={styles.homeFooterText}>اختار طريقة الدخول وابدأ مع صُنّاع</Text></View>
@@ -2004,23 +2004,23 @@ const styles = StyleSheet.create({
   appRoot: { flex: 1, backgroundColor: '#FFFFFF' },
   brandHeaderSafe: { backgroundColor: '#FFFFFF' },
   // FIXED COMPACT HEADER - لا ياخذ نص الشاشة
-  brandHeader: { height: 48, minHeight: 48, maxHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  brandHeader: { height: 48, minHeight: 48, maxHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E7EAFE' },
   brandHeaderLogo: { width: 30, height: 30 },
-  brandHeaderTitle: { color: '#0F172A', fontSize: 18, fontWeight: '900', marginLeft: 8, letterSpacing: 0.3 },
+  brandHeaderTitle: { color: '#172554', fontSize: 18, fontWeight: '900', marginLeft: 8, letterSpacing: 0.3 },
   appScreenArea: { flex: 1 },
 
-  safe: { flex: 1, backgroundColor: '#F8FAFC' },
-  page: { padding: 14, paddingBottom: 28, gap: 10, backgroundColor: '#F8FAFC' },
+  safe: { flex: 1, backgroundColor: '#F5F7FF' },
+  page: { padding: 14, paddingBottom: 28, gap: 10, backgroundColor: '#F5F7FF' },
   flex: { flex: 1 },
   
   // CLIENT HEADER PREMIUM - اسم صغير
-  clientHeader: { height: 56, minHeight: 56, maxHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  clientHeader: { height: 56, minHeight: 56, maxHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E7EAFE' },
   clientHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   clientHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  clientAvatarSmall: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0D9488', alignItems: 'center', justifyContent: 'center' },
+  clientAvatarSmall: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0891B2', alignItems: 'center', justifyContent: 'center' },
   clientAvatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   clientHeaderInfo: { flex: 1 },
-  clientNameSmall: { color: '#0F172A', fontSize: 13, fontWeight: '800', textAlign: 'right', lineHeight: 16 },
+  clientNameSmall: { color: '#172554', fontSize: 13, fontWeight: '800', textAlign: 'right', lineHeight: 16 },
   clientRoleSmall: { color: '#64748B', fontSize: 11, fontWeight: '600', textAlign: 'right', marginTop: 1 },
 
   bellButtonSmall: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', alignItems: 'center', justifyContent: 'center' },
@@ -2030,178 +2030,178 @@ const styles = StyleSheet.create({
   // HOME PREMIUM
   homePage: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 22, gap: 18, justifyContent: 'center', backgroundColor: '#FFFFFF' },
   homeBrandArea: { alignItems: 'center', paddingBottom: 2 },
-  homeLogoCirclePremium: { width: 96, height: 96, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4, marginBottom: 12 },
+  homeLogoCirclePremium: { width: 96, height: 96, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', shadowColor: '#172554', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4, marginBottom: 12 },
   homeLogoImage: { width: 68, height: 68, alignSelf: 'center' },
-  homeBrandTitlePremium: { color: '#0F172A', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
-  homeTaglinePremium: { color: '#0D9488', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 4 },
+  homeBrandTitlePremium: { color: '#172554', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
+  homeTaglinePremium: { color: '#0891B2', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 4 },
   homeIntroPremium: { color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 20, marginTop: 6, paddingHorizontal: 12 },
   roleCardsPremium: { flexDirection: 'column', gap: 12, marginTop: 8 },
-  roleCardPremium: { width: '100%', minHeight: 110, flexDirection: 'row-reverse', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  clientRoleCardPremium: { borderRightWidth: 4, borderRightColor: '#0D9488', backgroundColor: '#F0FDFA' },
-  technicianRoleCardPremium: { borderRightWidth: 4, borderRightColor: '#0F172A', backgroundColor: '#F8FAFC' },
-  clientIconCirclePremium: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#CCFBF1', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#99F6E4' },
-  technicianIconCirclePremium: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CBD5E1' },
-  roleIconPremium: { fontSize: 22, color: '#0F172A', fontWeight: '800' },
+  roleCardPremium: { width: '100%', minHeight: 110, flexDirection: 'row-reverse', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, shadowColor: '#172554', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  clientRoleCardPremium: { borderRightWidth: 4, borderRightColor: '#0891B2', backgroundColor: '#ECFEFF' },
+  technicianRoleCardPremium: { borderRightWidth: 4, borderRightColor: '#172554', backgroundColor: '#F5F7FF' },
+  clientIconCirclePremium: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#CFFAFE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A5F3FC' },
+  technicianIconCirclePremium: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#D8DDF5', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C7D2FE' },
+  roleIconPremium: { fontSize: 22, color: '#172554', fontWeight: '800' },
   roleCardCopy: { flex: 1, gap: 4, justifyContent: 'center' },
-  roleTitlePremium: { color: '#0F172A', fontSize: 16, fontWeight: '900', textAlign: 'right' },
+  roleTitlePremium: { color: '#172554', fontSize: 16, fontWeight: '900', textAlign: 'right' },
   roleDescriptionPremium: { color: '#64748B', fontSize: 12, textAlign: 'right', lineHeight: 18, marginTop: 2 },
-  roleActionBadge: { alignSelf: 'flex-end', backgroundColor: '#0D9488', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 6 },
+  roleActionBadge: { alignSelf: 'flex-end', backgroundColor: '#0891B2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 6 },
   roleActionBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   homeFooterPremium: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4 },
-  homeFooterDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#0D9488' },
-  homeFooterText: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+  homeFooterDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#0891B2' },
+  homeFooterText: { color: '#8794B8', fontSize: 11, fontWeight: '600' },
 
   // LOGIN PREMIUM
   loginSafe: { flex: 1, backgroundColor: '#FFFFFF' },
   loginPage: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28, justifyContent: 'center', gap: 10 },
-  loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-  loginBackText: { color: '#0F172A', fontSize: 13, fontWeight: '700' },
-  loginLogoCircle: { width: 88, height: 88, borderRadius: 22, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 2 },
+  loginBackButton: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#D8DDF5' },
+  loginBackText: { color: '#172554', fontSize: 13, fontWeight: '700' },
+  loginLogoCircle: { width: 88, height: 88, borderRadius: 22, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', marginBottom: 2 },
   loginLogo: { width: 62, height: 62 },
-  loginTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', textAlign: 'center' },
+  loginTitle: { fontSize: 22, fontWeight: '900', color: '#172554', textAlign: 'center' },
   loginSubtitle: { color: '#64748B', marginTop: 4, textAlign: 'center', lineHeight: 20, fontSize: 13 },
   loginForm: { width: '100%', gap: 4, marginTop: 8 },
   recoveryLink: { alignSelf: 'flex-end', paddingVertical: 6 },
-  recoveryLinkText: { color: '#0D9488', fontSize: 13, fontWeight: '800' },
-  loginGradientButton: { minHeight: 50, borderRadius: 14, marginVertical: 6, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A', elevation: 3 },
+  recoveryLinkText: { color: '#0891B2', fontSize: 13, fontWeight: '800' },
+  loginGradientButton: { minHeight: 50, borderRadius: 16, marginVertical: 6, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#4F46E5', borderWidth: 1, borderColor: '#818CF8', borderBottomWidth: 3, borderBottomColor: '#312E81', shadowColor: '#312E81', shadowOpacity: 0.28, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, 
   loginGradientButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', textAlign: 'center' },
   loginHeading: { alignItems: 'center', gap: 2, marginVertical: 6 },
   title: { fontSize: 20, fontWeight: '900', color: COLORS.navy, textAlign: 'right' },
   subtitleSmall: { color: COLORS.muted, marginTop: 2, textAlign: 'right', fontSize: 12, lineHeight: 16 },
 
   // BUTTONS PREMIUM
-  button: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 44, borderWidth: 1, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 6, elevation: 1 },
-  buttonPrimary: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-  buttonSecondary: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
+  button: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 44, borderWidth: 1, shadowColor: '#312E81', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 }, 
+  buttonPrimary: { backgroundColor: '#4F46E5', borderColor: '#4338CA', borderTopColor: '#818CF8', borderBottomWidth: 3, shadowColor: '#312E81', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, 
+  buttonSecondary: { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', borderBottomWidth: 3, shadowColor: '#6366F1', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 }, 
   buttonText: { fontWeight: '800', fontSize: 13, textAlign: 'center' },
   buttonPrimaryText: { color: '#FFFFFF' },
-  buttonSecondaryText: { color: '#0F172A' },
+  buttonSecondaryText: { color: '#312E81' }, 
   disabledButton: { opacity: 0.5 },
 
   // FIELDS
   fieldWrap: { marginVertical: 5 },
-  fieldLabel: { color: '#0F172A', fontWeight: '800', marginTop: 6, marginBottom: 5, textAlign: 'right', fontSize: 13 },
-  fieldLabelPremium: { color: '#0F172A', fontWeight: '900', marginTop: 14, marginBottom: 8, textAlign: 'right', fontSize: 14, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-end' },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#0F172A', fontSize: 14, minHeight: 46 },
+  fieldLabel: { color: '#172554', fontWeight: '800', marginTop: 6, marginBottom: 5, textAlign: 'right', fontSize: 13 },
+  fieldLabelPremium: { color: '#172554', fontWeight: '900', marginTop: 14, marginBottom: 8, textAlign: 'right', fontSize: 14, backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-end' },
+  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#172554', fontSize: 14, minHeight: 46 },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
 
   // SERVICE TILES WOW
   serviceTilesPremium: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginHorizontal: -4, marginBottom: 10 },
-  serviceTilePremium: { width: '31.3%', minHeight: 96, marginHorizontal: '1%', marginBottom: 8, paddingHorizontal: 6, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 16, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
-  detailTilePremium: { minHeight: 84, backgroundColor: '#F8FAFC' },
-  serviceTilePremiumSelected: { backgroundColor: '#0F172A', borderColor: '#0F172A', shadowOpacity: 0.15, elevation: 3 },
-  serviceIconCircle: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  serviceIconCircleSmall: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
+  serviceTilePremium: { width: '31.3%', minHeight: 96, marginHorizontal: '1%', marginBottom: 8, paddingHorizontal: 6, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#D8DDF5', borderRadius: 18, shadowColor: '#4F46E5', shadowOpacity: 0.13, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 3 }, 
+  detailTilePremium: { minHeight: 84, backgroundColor: '#F5F7FF' },
+  serviceTilePremiumSelected: { backgroundColor: '#4F46E5', borderColor: '#312E81', borderBottomWidth: 3, shadowColor: '#4338CA', shadowOpacity: 0.28, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 6 }, 
+  serviceIconCircle: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  serviceIconCircleSmall: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
   serviceIconCircleSelected: { backgroundColor: 'rgba(255,255,255,0.15)' },
   serviceTileIcon: { fontSize: 20, textAlign: 'center' },
   serviceTileIconSmall: { fontSize: 16, textAlign: 'center' },
-  serviceTileLabelPremium: { color: '#0F172A', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 15 },
-  serviceTileLabelPremiumSmall: { color: '#334155', fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 14 },
+  serviceTileLabelPremium: { color: '#172554', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 15 },
+  serviceTileLabelPremiumSmall: { color: '#373B65', fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 14 },
   serviceTileLabelPremiumSelected: { color: '#FFFFFF' },
 
   // CARDS PREMIUM
-  welcomeCard: { backgroundColor: '#0F172A', borderRadius: 16, padding: 14, marginBottom: 6, flexDirection: 'column', gap: 3 },
+  welcomeCard: { backgroundColor: '#172554', borderRadius: 16, padding: 14, marginBottom: 6, flexDirection: 'column', gap: 3 },
   welcomeTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textAlign: 'right' },
-  welcomeSub: { color: '#94A3B8', fontSize: 12, textAlign: 'right', marginTop: 2 },
-  formCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 12, marginVertical: 6, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
-  dataCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginVertical: 5, shadowColor: '#0F172A', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
-  orderCardPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 0, marginVertical: 6, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  welcomeSub: { color: '#8794B8', fontSize: 12, textAlign: 'right', marginTop: 2 },
+  formCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 16, padding: 12, marginVertical: 6, shadowColor: '#172554', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  dataCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 14, padding: 12, marginVertical: 5, shadowColor: '#172554', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  orderCardPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 16, padding: 0, marginVertical: 6, overflow: 'hidden', shadowColor: '#172554', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
   orderCardHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, backgroundColor: '#FFFFFF' },
-  orderCardBody: { padding: 12, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 6 },
+  orderCardBody: { padding: 12, backgroundColor: '#F5F7FF', borderTopWidth: 1, borderTopColor: '#EEF2FF', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusDotPending: { backgroundColor: '#F59E0B' },
   statusDotDone: { backgroundColor: '#10B981' },
-  cardTitlePremium: { color: '#0F172A', fontSize: 14, fontWeight: '900', textAlign: 'right', flex: 1 },
-  cardTitleSmall: { color: '#0F172A', fontSize: 13, fontWeight: '800', textAlign: 'right' },
+  cardTitlePremium: { color: '#172554', fontSize: 14, fontWeight: '900', textAlign: 'right', flex: 1 },
+  cardTitleSmall: { color: '#172554', fontSize: 13, fontWeight: '800', textAlign: 'right' },
   orderStatusSmall: { color: '#64748B', fontSize: 11, textAlign: 'right', marginTop: 2 },
-  expandIcon: { color: '#94A3B8', fontSize: 12, fontWeight: '800' },
-  offerCardPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 10, marginTop: 8 },
-  chatPanelPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 10, marginTop: 10 },
-  detail: { color: '#475569', marginTop: 4, textAlign: 'right', lineHeight: 19, fontSize: 13 },
-  detailRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  expandIcon: { color: '#8794B8', fontSize: 12, fontWeight: '800' },
+  offerCardPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 12, padding: 10, marginTop: 8 },
+  chatPanelPremium: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 12, padding: 10, marginTop: 10 },
+  detail: { color: '#596080', marginTop: 4, textAlign: 'right', lineHeight: 19, fontSize: 13 },
+  detailRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEF2FF' },
   detailLabel: { color: '#64748B', fontSize: 13, fontWeight: '600' },
-  detailValue: { color: '#0F172A', fontSize: 13, fontWeight: '800' },
-  detailValueGold: { color: '#0D9488', fontSize: 13, fontWeight: '900' },
-  detailSmall: { color: '#94A3B8', fontSize: 11, textAlign: 'right', marginTop: 2 },
-  serviceDescriptionBox: { backgroundColor: '#EFF6FF', borderRightWidth: 4, borderRightColor: '#2563EB', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginTop: 8, marginBottom: 6 },
-  serviceDescriptionLabel: { color: '#1D4ED8', fontSize: 14, fontWeight: '900', textAlign: 'right', marginBottom: 6 },
-  serviceDescriptionText: { color: '#0F172A', fontSize: 18, fontWeight: '600', lineHeight: 28, textAlign: 'right' },
-  detailBold: { color: '#0F172A', fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 6 },
-  sectionTitleSmall: { color: '#0F172A', fontSize: 13, fontWeight: '900', textAlign: 'right', marginTop: 10, marginBottom: 4 },
-  sectionTitle: { color: '#0F172A', fontSize: 16, fontWeight: '900', textAlign: 'right', marginTop: 12, marginBottom: 6 },
+  detailValue: { color: '#172554', fontSize: 13, fontWeight: '800' },
+  detailValueGold: { color: '#0891B2', fontSize: 13, fontWeight: '900' },
+  detailSmall: { color: '#8794B8', fontSize: 11, textAlign: 'right', marginTop: 2 },
+  serviceDescriptionBox: { backgroundColor: '#EEF2FF', borderRightWidth: 4, borderRightColor: '#4F46E5', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginTop: 8, marginBottom: 6 },
+  serviceDescriptionLabel: { color: '#4338CA', fontSize: 14, fontWeight: '900', textAlign: 'right', marginBottom: 6 },
+  serviceDescriptionText: { color: '#172554', fontSize: 18, fontWeight: '600', lineHeight: 28, textAlign: 'right' },
+  detailBold: { color: '#172554', fontSize: 13, fontWeight: '800', textAlign: 'right', marginTop: 6 },
+  sectionTitleSmall: { color: '#172554', fontSize: 13, fontWeight: '900', textAlign: 'right', marginTop: 10, marginBottom: 4 },
+  sectionTitle: { color: '#172554', fontSize: 16, fontWeight: '900', textAlign: 'right', marginTop: 12, marginBottom: 6 },
   errorText: { color: '#DC2626', textAlign: 'right', marginVertical: 6, fontSize: 12, lineHeight: 18 },
   successText: { color: '#059669', fontWeight: '900', textAlign: 'right', fontSize: 13 },
 
   // TABS PREMIUM
-  tabRowPremium: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginVertical: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
-  pillPremium: { borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 7, marginVertical: 2 },
-  pillPremiumActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-  pillPremiumText: { color: '#475569', fontSize: 12, fontWeight: '700' },
+  tabRowPremium: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginVertical: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E7EAFE' },
+  pillPremium: { borderRadius: 20, borderWidth: 1, borderColor: '#D8DDF5', backgroundColor: '#F5F7FF', paddingHorizontal: 12, paddingVertical: 7, marginVertical: 2 },
+  pillPremiumActive: { backgroundColor: '#4F46E5', borderColor: '#4338CA', borderBottomWidth: 2, elevation: 3 }, 
+  pillPremiumText: { color: '#596080', fontSize: 12, fontWeight: '700' },
   pillPremiumTextActive: { color: '#FFFFFF' },
   tabRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginVertical: 8, paddingHorizontal: 10 },
-  pill: { borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, marginVertical: 2 },
-  pillActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-  pillText: { color: '#475569', fontSize: 12, fontWeight: '700' },
+  pill: { borderRadius: 18, borderWidth: 1, borderColor: '#D8DDF5', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, marginVertical: 2 },
+  pillActive: { backgroundColor: '#4F46E5', borderColor: '#4338CA', borderBottomWidth: 2, elevation: 3 }, 
+  pillText: { color: '#596080', fontSize: 12, fontWeight: '700' },
   pillTextActive: { color: '#FFFFFF' },
 
   // WALLET
-  walletCard: { backgroundColor: '#0F172A', borderRadius: 20, padding: 18, marginVertical: 8, alignItems: 'center' },
-  walletTitle: { color: '#94A3B8', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  walletCard: { backgroundColor: '#172554', borderRadius: 20, padding: 18, marginVertical: 8, alignItems: 'center' },
+  walletTitle: { color: '#8794B8', fontSize: 13, fontWeight: '700', textAlign: 'center' },
   walletAmount: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 6, textAlign: 'center' },
 
   // NOTIFICATIONS PREMIUM
   bellButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
   bellText: { fontSize: 18 },
-  notificationPopupPremium: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 12, elevation: 10, maxHeight: 360 },
+  notificationPopupPremium: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 16, padding: 12, elevation: 10, maxHeight: 360 },
   notificationModalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-start', alignItems: 'center', paddingHorizontal: 14, paddingTop: 72 },
   notificationModalDismiss: { ...StyleSheet.absoluteFillObject },
-  notificationModalCard: { width: '100%', maxWidth: 440, maxHeight: '72%', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 18, padding: 12, elevation: 16 },
-  notificationModalHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 },
+  notificationModalCard: { width: '100%', maxWidth: 440, maxHeight: '72%', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 18, padding: 12, elevation: 16 },
+  notificationModalHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#D8DDF5', gap: 8 },
   notificationHeaderActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   notificationModalList: { flexGrow: 0, maxHeight: 420 },
-  notificationRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', borderRadius: 8, paddingHorizontal: 8, marginVertical: 2 },
+  notificationRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EEF2FF', borderRadius: 8, paddingHorizontal: 8, marginVertical: 2 },
   notificationUnread: { backgroundColor: '#FFFBEB', borderLeftWidth: 3, borderLeftColor: '#F59E0B' },
-  notificationRead: { backgroundColor: '#F8FAFC', opacity: 0.62 },
+  notificationRead: { backgroundColor: '#F5F7FF', opacity: 0.62 },
   notificationReadText: { color: '#64748B' },
-  notificationPopup: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 10, elevation: 10 },
+  notificationPopup: { position: 'absolute', zIndex: 20, top: 60, right: 10, left: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 16, padding: 10, elevation: 10 },
   notificationList: { maxHeight: 280 },
   notificationListContent: { paddingBottom: 4 },
   floatingControls: { position: 'absolute', left: 14, right: 14, bottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  floatingButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', elevation: 4 },
+  floatingButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4F46E5', borderWidth: 1, borderColor: '#818CF8', alignItems: 'center', justifyContent: 'center', shadowColor: '#312E81', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }, 
   floatingIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
   whatsappButton: { backgroundColor: '#10B981' },
   floatingWhatsApp: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
-  codeRowPremium: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F0FDFA', borderWidth: 1, borderColor: '#99F6E4', borderRadius: 12, padding: 10, marginVertical: 6 },
+  codeRowPremium: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 12, padding: 10, marginVertical: 6 },
   codeRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   roleActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 8 },
-  chatPanel: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 10, marginTop: 10 },
-  chatMessage: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 8, marginVertical: 3 },
-  chatMessageClient: { backgroundColor: '#EFF6FF', borderColor: '#DBEAFE' },
-  chatMessageTechnician: { backgroundColor: '#F0FDFA', borderColor: '#CCFBF1' },
-  chatMessageText: { color: '#0F172A', textAlign: 'right', lineHeight: 20, marginTop: 3, fontSize: 13 },
-  selectionGroup: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 4 },
-  groupTitle: { color: '#0F172A', fontWeight: '800', textAlign: 'right', fontSize: 13 },
-  choiceRow: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  choiceText: { color: '#334155', textAlign: 'right', fontSize: 13 },
-  headerRow: { padding: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  chatPanel: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 14, padding: 10, marginTop: 10 },
+  chatMessage: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 10, padding: 8, marginVertical: 3 },
+  chatMessageClient: { backgroundColor: '#EEF2FF', borderColor: '#E0E7FF' },
+  chatMessageTechnician: { backgroundColor: '#ECFEFF', borderColor: '#CFFAFE' },
+  chatMessageText: { color: '#172554', textAlign: 'right', lineHeight: 20, marginTop: 3, fontSize: 13 },
+  selectionGroup: { backgroundColor: '#FFFFFF', borderColor: '#D8DDF5', borderWidth: 1, borderRadius: 12, padding: 10, marginVertical: 4 },
+  groupTitle: { color: '#172554', fontWeight: '800', textAlign: 'right', fontSize: 13 },
+  choiceRow: { paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F5F7FF' },
+  choiceText: { color: '#373B65', textAlign: 'right', fontSize: 13 },
+  headerRow: { padding: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E7EAFE' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   statusText: { marginTop: 10, color: '#64748B', textAlign: 'center', fontSize: 13 },
   listPremium: { paddingHorizontal: 10, paddingBottom: 16, gap: 2 },
   list: { paddingHorizontal: 10, paddingBottom: 16 },
-  emptyText: { textAlign: 'center', color: '#94A3B8', padding: 24, fontSize: 13 },
+  emptyText: { textAlign: 'center', color: '#8794B8', padding: 24, fontSize: 13 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', padding: 20 },
-  ratingModal: { alignSelf: 'center', width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', maxHeight: '82%' },
+  ratingModal: { alignSelf: 'center', width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#D8DDF5', maxHeight: '82%' },
   ratingStarsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 10 },
   ratingStarsRowCompact: { marginVertical: 0, gap: 2, flexShrink: 1 },
-  ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
+  ratingStarButton: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF2FF' },
   ratingStarButtonCompact: { width: 30, height: 38, borderRadius: 8, backgroundColor: 'transparent' },
-  ratingStar: { fontSize: 24, color: '#CBD5E1' },
+  ratingStar: { fontSize: 24, color: '#C7D2FE' },
   ratingStarCompact: { fontSize: 25 },
   ratingSubmitRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
-  ratingSubmitButton: { backgroundColor: '#0D9488', minWidth: 64, height: 42, borderRadius: 12, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  ratingSubmitButton: { backgroundColor: '#0891B2', borderColor: '#0E7490', borderWidth: 1, borderBottomWidth: 3, minWidth: 64, height: 42, borderRadius: 14, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#0E7490', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, 
   ratingSubmitButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   ratingStarActive: { color: '#F59E0B' },
-  offerCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 12, marginTop: 8 },
+  offerCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8DDF5', borderRadius: 14, padding: 12, marginTop: 8 },
   categoryToggle: { paddingVertical: 5 },
 });
 
@@ -2211,10 +2211,10 @@ class StartupErrorBoundary extends React.Component {
   componentDidCatch(error, info) { console.error('Sonaa startup render error:', error, info?.componentStack); }
   render() {
     if (this.state.error) {
-      return <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 24, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#0F172A', textAlign: 'right', marginBottom: 12 }}>تعذر تشغيل شاشة صُنّاع</Text>
+      return <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F7FF', padding: 24, justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#172554', textAlign: 'right', marginBottom: 12 }}>تعذر تشغيل شاشة صُنّاع</Text>
         <Text selectable style={{ color: '#B91C1C', textAlign: 'left', marginBottom: 20 }}>{String(this.state.error?.message || this.state.error)}</Text>
-        <TouchableOpacity onPress={() => this.setState({ error: null })} style={{ backgroundColor: '#0F172A', padding: 14, borderRadius: 12, alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>إعادة المحاولة</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => this.setState({ error: null })} style={{ backgroundColor: '#172554', padding: 14, borderRadius: 12, alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>إعادة المحاولة</Text></TouchableOpacity>
       </SafeAreaView>;
     }
     return this.props.children;
@@ -2259,15 +2259,15 @@ function AppContent() {
 }
 
 const splashStyles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 999, elevation: 999, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  logoFrame: { width: 140, height: 140, borderRadius: 28, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F172A', shadowOpacity: 0.1, shadowRadius: 16, elevation: 5, overflow: 'hidden' },
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 999, elevation: 999, backgroundColor: '#F5F7FF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }, 
+  logoFrame: { width: 140, height: 140, borderRadius: 30, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#C7D2FE', alignItems: 'center', justifyContent: 'center', shadowColor: '#4F46E5', shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 7 }, elevation: 8, overflow: 'hidden' }, 
   logo: { width: 96, height: 96 },
   wordOrbit: { position: 'absolute', width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
-  spinningWord: { color: '#0D9488', fontSize: 18, fontWeight: '900', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.75)', paddingHorizontal: 5, borderRadius: 8 },
-  title: { marginTop: 20, color: '#0F172A', fontSize: 26, fontWeight: '900' },
-  caption: { marginTop: 6, color: '#0D9488', fontSize: 13, fontWeight: '700' },
-  loadingTrack: { marginTop: 22, width: 120, height: 4, borderRadius: 3, backgroundColor: '#E2E8F0', overflow: 'hidden' },
-  loadingFill: { width: '65%', height: '100%', backgroundColor: '#0D9488', borderRadius: 3 },
+  spinningWord: { color: '#0891B2', fontSize: 18, fontWeight: '900', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.75)', paddingHorizontal: 5, borderRadius: 8 },
+  title: { marginTop: 20, color: '#172554', fontSize: 26, fontWeight: '900' },
+  caption: { marginTop: 6, color: '#0891B2', fontSize: 13, fontWeight: '700' },
+  loadingTrack: { marginTop: 22, width: 120, height: 4, borderRadius: 3, backgroundColor: '#D8DDF5', overflow: 'hidden' },
+  loadingFill: { width: '65%', height: '100%', backgroundColor: '#0891B2', borderRadius: 3 },
 });
 
 export default function App() {
