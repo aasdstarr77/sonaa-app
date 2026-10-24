@@ -175,7 +175,7 @@ test('technician order cards label area and client budget and invite technicians
 });
 
 test('client service description is prominent and readable on technician job cards and accepted job details', () => {
-  assert.ok(app.includes('serviceDescriptionBox: { backgroundColor: \'#EFF6FF\''));
+  assert.ok(app.includes('serviceDescriptionBox: { backgroundColor: \'#EEF2FF\''));
   assert.ok(app.includes('serviceDescriptionText: { color: \'#0F172A\', fontSize: 18, fontWeight: \'600\', lineHeight: 28'));
   assert.ok(app.includes('تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description'));
   assert.ok(app.includes('تفاصيل الشغل من العميل</Text><Text style={styles.serviceDescriptionText}>{assignedDetails[sn].order.description'));
@@ -212,7 +212,7 @@ test('client current orders tab is labeled الطلبات الجارية', () =>
 test('client and technician notifications visually distinguish unread items and provide read all', () => {
   assert.equal(app.split('title="قراءة الكل" secondary onPress={markAllNotificationsRead}').length - 1, 2);
   assert.equal(app.split('(item.read || item.readAt) ? styles.notificationRead : styles.notificationUnread').length - 1, 2);
-  assert.ok(app.includes("notificationRead: { backgroundColor: '#F8FAFC', opacity: 0.62 }"));
+  assert.ok(app.includes("notificationRead: { backgroundColor: '#F5F7FF', opacity: 0.62 }"));
   assert.ok(app.includes("notificationReadText: { color: '#64748B' }"));
   assert.ok(app.includes("unread: 0 }));"));
 });
