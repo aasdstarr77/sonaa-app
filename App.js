@@ -1671,7 +1671,6 @@ function AppScreens({ onScreenChange }) {
       </View>
       <View style={styles.loginHeading}>
         <Text style={styles.loginTitle}>{authMode === 'client' ? 'أهلًا بيك في صُنّاع' : 'أهلًا بيك يا فني صُنّاع'}</Text>
-        <Text style={styles.loginSubtitle}>صُنّاع — كل خدمة تبدأ بخطوة</Text>
         <Text style={styles.loginSubtitle}>{authMode === 'client' ? 'سجّل دخولك وخلّي طلباتك أسهل.' : 'سجّل دخولك وتابع فرص الشغل المتاحة ليك.'}</Text>
       </View>
       <View style={styles.loginForm}>
@@ -1816,7 +1815,7 @@ function AppScreens({ onScreenChange }) {
     const displayedOffers = techData.offers.filter(item => tab === 'completed' ? item.orderStatus === 'تم الانتهاء' : item.orderStatus !== 'تم الانتهاء');
     const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => o.orderStatus !== 'تم الانتهاء').length})` }, { key: 'completed', label: `المكتملة (${techData.offers.filter(o => o.orderStatus === 'تم الانتهاء').length})` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }, { key: 'notifications', label: `الإشعارات${notifications.unread ? ` (${notifications.unread})` : ''}` }];
     return <SafeAreaView style={styles.safe}>
-      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
+      <View style={styles.headerRow}><View style={styles.flex}><Text style={styles.title}>صُنّاع — الفني</Text><Text style={styles.subtitle}>أهلًا {user.name || 'بك'} · {user.status || 'قيد المراجعة'}</Text></View><TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButton}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <Text style={styles.bellBadge}>{notifications.unread}</Text> : null}</TouchableOpacity><Button title="خروج" secondary onPress={logout} /></View>
       {user.status === 'معتمد' && (!user.technicianGuidelinesAcceptedAt || user.technicianGuidelinesVersion !== '2026-10-20-v1') ? <View style={styles.dataCard}><Text style={styles.cardTitle}>ميثاق التعامل المهني مع العملاء</Text><Text style={styles.detail}>اقرأ التعليمات التالية ووافق عليها قبل استخدام لوحة الفني:</Text><Text style={styles.detail}>١. التزم بسعر العرض الذي وافق عليه العميل. أي زيادة تحتاج موافقة صريحة مسجلة داخل المنصة قبل التنفيذ.</Text><Text style={styles.detail}>٢. تعامل باحترام وصدق، دون ضغط أو تهديد أو تضليل.</Text><Text style={styles.detail}>٣. قبل قبول العرض، استخدم الردود المسموحة فقط: «نعم»، «لا»، «حسب الاتفاق». ممنوع تبادل بيانات الاتصال أو التحايل على المنصة قبل القبول.</Text><Text style={styles.detail}>٤. لا تضغط إنهاء المهمة إلا بعد إنجازها فعلًا.</Text><Text style={styles.detail}>٥. احمِ بيانات العميل ولا تستخدمها خارج الطلب.</Text><Text style={styles.detail}>٦. يحق للطرفين التقييم بعد الإكمال؛ ممنوع الإكراه على تقييم إيجابي أو التلاعب بالتقييمات.</Text><Text style={styles.detail}>٧. المخالفات قد تؤدي إلى مراجعة الطلب أو تعليق الحساب أو إيقافه.</Text><TouchableOpacity onPress={() => setGuidelinesChecked(value => !value)} style={styles.roleActions}><Text style={styles.detail}>{guidelinesChecked ? '☑' : '□'} قرأت التعليمات وأوافق على الالتزام بها.</Text></TouchableOpacity><Button title="موافق ثم تأكيد" onPress={() => guidelinesChecked ? acceptTechnicianGuidelines() : Alert.alert('الموافقة مطلوبة', 'لازم تقرأ الميثاق وتحدد الموافقة أولًا.')} /></View> : null}
       <View style={styles.tabRow}>{tabs.map(item => <TouchableOpacity key={item.key} onPress={() => setTechData(v => ({ ...v, tab: item.key }))} style={[styles.pill, tab === item.key && styles.pillActive]}><Text style={[styles.pillText, tab === item.key && styles.pillTextActive]}>{item.label}</Text></TouchableOpacity>)}</View>
       {offerDraft ? <View style={styles.dataCard}>
@@ -2076,7 +2075,7 @@ function AppScreens({ onScreenChange }) {
           <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.homeLogoImage} resizeMode="contain" />
         </View>
         <Text style={styles.homeBrandTitle}>صُنّاع</Text>
-        <Text style={styles.homeTagline}>كل خدمة تبدأ بخطوة</Text>
+        <Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>
         <Text style={styles.homeIntro}>خدماتك وشغلك في مكان واحد، بخطوات بسيطة.</Text>
       </View>
       <View style={styles.roleCards}>
