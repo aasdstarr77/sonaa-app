@@ -152,6 +152,14 @@ test('technician price increase and client approval controls are wired to existi
   assert.ok(app.includes('لازم السعر الجديد يكون أعلى من السعر الحالي'));
 });
 
+test('technician sees a pending price-increase status in the chat to prevent duplicate requests', () => {
+  assert.ok(app.includes("تم تقديم طلبك، في انتظار رد العميل."));
+  assert.ok(app.includes("لا ترسل طلبًا آخر قبل رد العميل."));
+  assert.ok(app.includes("(orderChats[sn]?.priceChangeRequests||[]).map(request=>"));
+  assert.ok(app.includes("request.status==='مقبول'?'وافق العميل على زيادة السعر.'"));
+  assert.ok(app.includes("request.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.'"));
+});
+
 test('client and technician notifications continue polling while their app screen is open', () => {
   assert.match(app, /setInterval\(\(\) => loadRoleNotifications\(false\), 5000\)/);
   assert.match(app, /setInterval\(pollOpenChats, 3000\)/);
