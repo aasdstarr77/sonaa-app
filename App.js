@@ -1073,7 +1073,7 @@ function AppScreens({ onScreenChange }) {
     }
     const draft = ratingDrafts[sn] || {};
     if (ratingSubmittingRef.current.has(sn)) return;
-    const stars = Number(draft.stars || 5), comment = String(draft.comment || '').trim(), blockFuture = Boolean(draft.blockFuture);
+    const stars = Number(draft.stars || 5), comment = '', blockFuture = false;
     if (!Number.isInteger(stars) || stars < 1 || stars > 5 || (blockFuture && stars !== 1)) {
       Alert.alert('راجع التقييم', 'اختار من نجمة إلى 5 نجوم. منع التعامل متاح مع تقييم نجمة واحدة فقط.'); return;
     }
