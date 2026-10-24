@@ -19,11 +19,20 @@ const API_BASE = 'https://sonaa-backend-v2.vercel.app/api';
 const COLORS = { navy: '#0F172A', navy2: '#1E3A5F', blue: '#2563EB', gold: '#F59E0B', teal: '#0D9488', tealLight: '#CCFBF1', bg: '#F8FAFC', bgSoft: '#F1F5F9', text: '#0F172A', muted: '#64748B', border: '#E2E8F0', white: '#FFFFFF', red: '#DC2626' };
 
 async function api(path, options = {}) {
-  const { token, body, headers, ...fetchOptions } = options;
+  const { token, body, headers, signal: externalSignal, timeoutMs = 30000, ...fetchOptions } = options;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+  const abortFromCaller = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', abortFromCaller, { once: true });
+  }
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...fetchOptions,
+      signal: controller.signal,
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
@@ -33,8 +42,12 @@ async function api(path, options = {}) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('استغرق إرسال التقييم أكثر من 30 ثانية. راجع الاتصال ثم حاول مرة أخرى؛ ولو كان التقييم اتسجل بالفعل فالتطبيق سيتعامل مع ذلك.');
+    if (timedOut) throw new Error('الخادم لم يستجب خلال 30 ثانية. تحقق من الاتصال ثم حاول مرة أخرى.');
+    if (error?.name === 'AbortError') throw new Error('تم إلغاء الطلب قبل اكتماله.');
     throw new Error('تعذر الاتصال بالإنترنت أو بالخادم. تأكد من الاتصال ثم أعد المحاولة.');
+  } finally {
+    clearTimeout(timeout);
+    if (externalSignal) externalSignal.removeEventListener('abort', abortFromCaller);
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -44,7 +57,6 @@ async function api(path, options = {}) {
   }
   return data;
 }
-
 function toList(result, keys) {
   for (const key of keys) if (Array.isArray(result?.[key])) return result[key];
   return Array.isArray(result?.data) ? result.data : [];
