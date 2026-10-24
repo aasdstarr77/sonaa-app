@@ -113,10 +113,18 @@ test('Sonaa splash caption changes while the spinning logo word remains unchange
   assert.ok(!app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should not receive the splash-only tagline');
 });
 
-test('rating prompts are guarded synchronously after skip or successful/duplicate submission', () => {
-  assert.match(app, /ratingHandledRef = useRef\(new Set\(\)\)/);
-  assert.match(app, /ratingHandledRef\.current\.add\(`\$\{ratingStorageKey\}:\$\{sn\}`\)/);
-  assert.match(app, /!ratingHandledRef\.current\.has\(`\$\{ratingStorageKey\}:\$\{sn\}`\)/);
+test('completed jobs never trigger an automatic rating modal and manual rating remains available', () => {
+  assert.doesNotMatch(app, /setRatingPrompt\(\{ role: 'client', order: completedOrder \}\)/);
+  assert.doesNotMatch(app, /setRatingPrompt\(\{ role: 'fanni', order: completedOffer \}\)/);
+  assert.ok(app.includes('تقييم العملية يدويًا'), 'manual rating entry point should remain in account history');
+  assert.ok(app.includes("setRatingPrompt({ role: session.role, order: item })"), 'manual rating action should open the selected order');
+});
+
+test('blue keyboard send action sends messages in client, technician, and support chats', () => {
+  assert.ok(app.includes('returnKeyType="send" onSubmitEditing={() => sendOrderChat('), 'client chat should send from keyboard action');
+  assert.ok(app.includes('returnKeyType="send" onSubmitEditing={() => sendOrderChat(item)}'), 'technician chat should send from keyboard action');
+  assert.ok(app.includes('returnKeyType="send" onSubmitEditing={() => sendSupportMessage(false)}'), 'support chat should send from keyboard action');
+  assert.ok(app.includes('returnKeyType="send" onSubmitEditing={sendRecoveryMessage}'), 'recovery chat should send from keyboard action');
 });
 
 test('pre-acceptance chat exposes the server-approved quick questions and replies', () => {
