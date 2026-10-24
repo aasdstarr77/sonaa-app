@@ -96,10 +96,10 @@ test('rating modal and rating submission safely handle missing technician order 
   assert.match(app, /if \(!sn\) \{ setRatingPrompt\(null\); return; \}/);
 });
 
-test('Sonaa agreed tagline appears on login, opening splash, home, and technician screen', () => {
-  const tagline = 'كل خدمة تبدأ بخطوة';
-  assert.ok(app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login screen should show the full brand tagline');
-  assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'opening splash should show the agreed tagline');
-  assert.ok(app.includes('<Text style={styles.homeTagline}>كل خدمة تبدأ بخطوة</Text>'), 'home screen should show the agreed tagline');
-  assert.ok(app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should show the agreed tagline');
+test('Sonaa splash caption changes while the spinning logo word remains unchanged', () => {
+  assert.ok(app.includes('<Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>'), 'spinning logo word should remain unchanged');
+  assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'splash caption should use the agreed tagline');
+  assert.ok(app.includes('<Text style={styles.homeTagline}>صُنّاع.. بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should remain unchanged');
+  assert.ok(!app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login should not receive the splash-only tagline');
+  assert.ok(!app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should not receive the splash-only tagline');
 });
