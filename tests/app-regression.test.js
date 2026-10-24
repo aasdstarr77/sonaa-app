@@ -150,3 +150,11 @@ test('client and technician notifications continue polling while their app scree
   assert.match(app, /setInterval\(\(\) => loadRoleNotifications\(false\), 5000\)/);
   assert.match(app, /setInterval\(pollOpenChats, 3000\)/);
 });
+
+
+test('client service description is prominent and readable on technician job cards and accepted job details', () => {
+  assert.ok(app.includes('serviceDescriptionBox: { backgroundColor: \'#EFF6FF\''));
+  assert.ok(app.includes('serviceDescriptionText: { color: \'#0F172A\', fontSize: 18, fontWeight: \'600\', lineHeight: 28'));
+  assert.ok(app.includes('تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description'));
+  assert.ok(app.includes('تفاصيل الشغل من العميل</Text><Text style={styles.serviceDescriptionText}>{assignedDetails[sn].order.description'));
+});
