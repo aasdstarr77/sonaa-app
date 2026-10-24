@@ -103,7 +103,7 @@ test('rating modal and rating submission safely handle missing technician order 
   const submitEnd = app.indexOf('\n  async function ', submitStart + 10);
   assert.notEqual(submitStart, -1, 'rating submit handler should exist');
   assert.match(app.slice(submitStart, submitEnd), /!order \|\| typeof order !== 'object' \|\| !sn/);
-  assert.match(app, /if \(!sn\) \{ setRatingPrompt\(null\); return; \}/);
+  assert.match(app.slice(submitStart, submitEnd), /if \(!order \|\| typeof order !== 'object' \|\| !sn\) \{[\s\S]*?setRatingPrompt\(null\)/);
 });
 
 test('Sonaa splash caption changes while the spinning logo word remains unchanged', () => {
