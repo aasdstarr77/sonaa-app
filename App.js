@@ -2169,8 +2169,8 @@ const styles = StyleSheet.create({
   floatingControls: { position: 'absolute', left: 14, right: 14, bottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   floatingButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#4F46E5', borderWidth: 1, borderColor: '#818CF8', alignItems: 'center', justifyContent: 'center', shadowColor: '#312E81', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }, 
   floatingIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
-  whatsappButton: { backgroundColor: '#10B981' },
-  floatingWhatsApp: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  whatsappButton: { backgroundColor: '#312E81', borderColor: '#67E8F9', borderWidth: 1.5, shadowColor: '#4F46E5', shadowOpacity: 0.38, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+  floatingWhatsApp: { color: '#FFFFFF', fontSize: 21, fontWeight: '900' },
   codeRowPremium: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 12, padding: 10, marginVertical: 6 },
   codeRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   roleActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 8 },
@@ -2247,9 +2247,9 @@ function AppContent() {
     {showSplash ? <View style={splashStyles.overlay}>
       <View style={splashStyles.logoFrame}>
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={splashStyles.logo} resizeMode="contain" />
-        <View pointerEvents="none" style={splashStyles.wordOrbit}>
-          <Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>
-        </View>
+      </View>
+      <View style={splashStyles.letterOrbit}>
+        <Animated.Text style={[splashStyles.spinningLetter, { transform: [{ rotate: spinRotation }] }]}>ص</Animated.Text>
       </View>
       <Text style={splashStyles.title}>صُنّاع</Text>
       <Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>
@@ -2262,9 +2262,9 @@ const splashStyles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 999, elevation: 999, backgroundColor: '#F5F7FF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }, 
   logoFrame: { width: 140, height: 140, borderRadius: 30, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#C7D2FE', alignItems: 'center', justifyContent: 'center', shadowColor: '#4F46E5', shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 7 }, elevation: 8, overflow: 'hidden' }, 
   logo: { width: 96, height: 96 },
-  wordOrbit: { position: 'absolute', width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
-  spinningWord: { color: '#0891B2', fontSize: 18, fontWeight: '900', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.75)', paddingHorizontal: 5, borderRadius: 8 },
-  title: { marginTop: 20, color: '#172554', fontSize: 26, fontWeight: '900' },
+  letterOrbit: { height: 36, width: 44, marginTop: 10, alignItems: 'center', justifyContent: 'center' },
+  spinningLetter: { color: '#0891B2', fontSize: 28, fontWeight: '900', textAlign: 'center' },
+  title: { marginTop: 0, color: '#172554', fontSize: 26, fontWeight: '900' },
   caption: { marginTop: 6, color: '#0891B2', fontSize: 13, fontWeight: '700' },
   loadingTrack: { marginTop: 22, width: 120, height: 4, borderRadius: 3, backgroundColor: '#D8DDF5', overflow: 'hidden' },
   loadingFill: { width: '65%', height: '100%', backgroundColor: '#0891B2', borderRadius: 3 },

@@ -106,8 +106,10 @@ test('rating modal and rating submission safely handle missing technician order 
   assert.match(app.slice(submitStart, submitEnd), /if \(!order \|\| typeof order !== 'object' \|\| !sn\) \{[\s\S]*?setRatingPrompt\(null\)/);
 });
 
-test('Sonaa splash caption changes while the spinning logo word remains unchanged', () => {
-  assert.ok(app.includes('<Animated.Text style={[splashStyles.spinningWord, { transform: [{ rotate: spinRotation }] }]}>صُنّاع</Animated.Text>'), 'spinning logo word should remain unchanged');
+test('Sonaa splash keeps the brand word static and rotates only the letter ص above it', () => {
+  assert.ok(app.includes('<Animated.Text style={[splashStyles.spinningLetter, { transform: [{ rotate: spinRotation }] }]}>ص</Animated.Text>'), 'only the letter ص should rotate');
+  assert.ok(app.includes('<Text style={splashStyles.title}>صُنّاع</Text>'), 'the main brand word should remain static');
+  assert.ok(!app.includes('spinningWord'), 'the whole brand word must not rotate');
   assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'splash caption should use the agreed tagline');
   assert.ok(app.includes('<Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should retain the premium home design');
   assert.ok(!app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login should not receive the splash-only tagline');
@@ -232,4 +234,10 @@ test('client and technician chats render price-change requests in the same chron
   assert.ok(app.includes('onPress={()=>decideOrderPrice(order,entry,false)}'), 'client rejection remains connected to each pending request');
   assert.ok(app.includes("entry.status==='مقبول'?'وافق العميل على زيادة السعر.'"));
   assert.ok(app.includes("entry.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.'"));
+});
+
+test('client and technician support buttons keep their positions and use the new premium support color', () => {
+  assert.equal(app.split('onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}').length - 1, 2, 'client and technician support buttons should both remain in place');
+  assert.ok(app.includes("whatsappButton: { backgroundColor: '#312E81', borderColor: '#67E8F9', borderWidth: 1.5"), 'support button should use the new indigo/cyan styling');
+  assert.ok(app.includes("floatingWhatsApp: { color: '#FFFFFF', fontSize: 21"), 'support icon should remain clearly visible');
 });
