@@ -16,7 +16,8 @@ test('rating dismissal uses versioned encrypted storage and keeps migration keys
   assert.match(app, /sonaa\.rating\.dismissed\.v1:/);
   assert.match(app, /sonaa\.rating\.dismissed\.v2:/);
   assert.match(app, /SecureStore\.getItemAsync\(ratingStorageKey\)/);
-  assert.match(app, /SecureStore\.setItemAsync\(ratingStorageKey, JSON\.stringify\(merged\)\)/);
+  assert.match(app, /const serialized = JSON\.stringify\(merged\)/);
+  assert.match(app, /SecureStore\.setItemAsync\(ratingStorageKey, serialized\)/);
 });
 
 test('skipping a rating closes immediately and persists dismissal before returning', () => {
