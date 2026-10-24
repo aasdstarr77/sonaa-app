@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "web": "expo start --web",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build:apk": "npx expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "expo": "~51.0.0",
