@@ -188,6 +188,20 @@ test('client orders and technician offers are deduplicated by serial number on e
   assert.ok(app.includes("indexBySN.set(sn, result.length)"));
 });
 
+test('client previous completed orders expose a manual technician rating button without showing it for canceled or already-rated orders', () => {
+  assert.ok(app.includes("clientTab === 'previous' && ['تم الانتهاء','منتهي','مكتمل','مكتملة','completed','complete','finished']"));
+  assert.ok(app.includes('⭐ قيّم الفني'));
+  assert.ok(app.includes("setRatingPrompt({ role: 'client', order })"));
+  assert.ok(app.includes("(order.ratings || []).some(r => r.reviewerRole === 'client')"));
+});
+
+test('technician completed orders expose a manual client rating button only when not already rated', () => {
+  assert.ok(app.includes("tab === 'completed' && !alreadyRatedByTechnician"));
+  assert.ok(app.includes('⭐ قيّم العميل'));
+  assert.ok(app.includes("setRatingPrompt({ role: 'fanni', order: item })"));
+  assert.ok(app.includes("(item.ratings || []).some(r => r.reviewerRole === 'fanni')"));
+});
+
 test('client current orders tab is labeled الطلبات الجارية', () => {
   assert.ok(app.includes("{key:'current',label:'الطلبات الجارية'"));
   assert.ok(!app.includes("{key:'current',label:'جارية'"));
