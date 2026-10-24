@@ -1768,7 +1768,12 @@ function AppScreens({ onScreenChange }) {
   if (screen === 'technician' && session?.role === 'fanni') {
     const user = techData.profile || session.user || {};
     const tab = techData.tab;
-    const isAcceptedJob = item => item.accepted === true || ['تم اختيار فني', 'جاري التنفيذ', 'قيد التنفيذ'].includes(String(item.orderStatus || item.status || '').trim());
+    const isRejectedOffer = item => {
+      const status = String(item.orderStatus || item.status || '').trim();
+      return ['مرفوض', 'تم الرفض', 'تم رفض العرض', 'مرفوضة', 'rejected', 'declined'].includes(status.toLowerCase()) ||
+        (item.accepted === false && ['تم اختيار فني', 'جاري التنفيذ', 'قيد التنفيذ'].includes(status));
+    };
+    const isAcceptedJob = item => !isRejectedOffer(item) && (item.accepted === true || ['تم اختيار فني', 'جاري التنفيذ', 'قيد التنفيذ'].includes(String(item.orderStatus || item.status || '').trim()));
     const isCompletedJob = item => ['تم الانتهاء', 'مكتمل', 'مكتملة', 'completed', 'finished'].includes(String(item.orderStatus || item.status || '').trim().toLowerCase());
     const displayedOffers = techData.offers.filter(item => tab === 'currentJobs' ? isAcceptedJob(item) && !isCompletedJob(item) : tab === 'completed' ? isCompletedJob(item) : !isAcceptedJob(item) && !isCompletedJob(item));
     const tabs = [{ key: 'available', label: `الفرص (${techData.orders.length})` }, { key: 'offers', label: `عروضي (${techData.offers.filter(o => !isAcceptedJob(o) && !isCompletedJob(o)).length})` }, { key: 'currentJobs', label: `الطلبات الجارية (${techData.offers.filter(o => isAcceptedJob(o) && !isCompletedJob(o)).length})` }, { key: 'completed', label: `المكتملة` }, { key: 'wallet', label: 'المحفظة' }, { key: 'profile', label: 'حسابي' }];
@@ -1803,16 +1808,25 @@ function AppScreens({ onScreenChange }) {
                <Text style={styles.detail}>{item.area || ''} • {item.budget || 'ميزانية غير محددة'}</Text>
                <Text style={styles.detail}>تقييم العميل: ★ {Number(item.clientRatingAverage || 0).toFixed(1)} ({Number(item.clientRatingCount || 0)} تقييم) • ✓ {Number(item.clientCompletedJobs || 0)} مهمة مكتملة</Text>
                <Text style={styles.detailSmall}>{item.description || ''}</Text>
-               <Button title="تقديم عرض" onPress={() => sendOffer(item)} />
+               {(() => {
+                 const ownOffer = techData.offers.find(offer => getOrderSN(offer) === sn);
+                 const ownOfferRejected = ownOffer && isRejectedOffer(ownOffer);
+                 const ownOfferAccepted = ownOffer && isAcceptedJob(ownOffer);
+                 if (ownOfferRejected) return <TouchableOpacity disabled style={[styles.button, { backgroundColor: '#DC2626', borderColor: '#DC2626' }]}><Text style={[styles.buttonText, { color: '#FFFFFF' }]}>تم رفض عرضك</Text></TouchableOpacity>;
+                 if (ownOfferAccepted) return null;
+                 if (ownOffer) return <Button title="جاري انتظار الرد على عرضك" disabled onPress={() => {}} />;
+                 return <Button title="تقديم عرض" onPress={() => sendOffer(item)} />;
+               })()}
              </View>;
            }} />}
           {(tab === 'offers' || tab === 'currentJobs' || tab === 'completed') && <FlatList style={{ flex: 1 }} contentContainerStyle={styles.listPremium} data={displayedOffers} keyExtractor={(item, i) => String(item._id || item.orderSn || i)} ListEmptyComponent={<Text style={styles.emptyText}>{tab === 'currentJobs' ? 'مفيش طلبات جارية حاليًا.' : tab === 'completed' ? 'لسه مفيش خدمات مكتملة.' : 'لسه ماقدمتش عروض جديدة.'}</Text>} renderItem={({ item }) => {
              const sn = getOrderSN(item);
              return <View style={styles.orderCardPremium}>
                <Text style={styles.cardTitlePremium}>{item.service || 'خدمة'} — {sn}</Text>
-               <Text style={styles.detail}>الحالة: {item.orderStatus || '—'} • السعر: {item.price || '—'} جنيه</Text>
+               <Text style={styles.detail}>الحالة: {isRejectedOffer(item) ? 'تم رفض عرضك' : (item.orderStatus || '—')} • السعر: {item.price || '—'} جنيه</Text>
+               {isRejectedOffer(item) ? <TouchableOpacity disabled style={[styles.button, { backgroundColor: '#DC2626', borderColor: '#DC2626' }]}><Text style={[styles.buttonText, { color: '#FFFFFF' }]}>تم رفض عرضك</Text></TouchableOpacity> : null}
                {item.client ? <Text style={styles.detail}>تقييم العميل: ★ {Number(item.client.ratingAverage || 0).toFixed(1)} ({Number(item.client.ratingCount || 0)} تقييم) • ✓ {Number(item.client.completedJobs || 0)} مهمة مكتملة</Text> : null}
-               <View style={styles.roleActions}><Button title={orderChats[sn]?.open ? 'إخفاء المحادثة' : 'محادثة'} secondary onPress={() => toggleOrderChat(item, 'fanni')} />{item.orderStatus === 'تم اختيار فني' ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
+               <View style={styles.roleActions}>{!isRejectedOffer(item) ? <Button title={orderChats[sn]?.open ? 'إخفاء المحادثة' : 'محادثة'} secondary onPress={() => toggleOrderChat(item, 'fanni')} /> : null}{isAcceptedJob(item) && !isCompletedJob(item) ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
              </View>; }} />}
           {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><View style={styles.walletCard}><Text style={styles.walletTitle}>المحفظة 💰</Text><Text style={styles.walletAmount}>{Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على: 01152822263</Text></View><Field label="مبلغ الشحن" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Button title="إرسال طلب شحن" onPress={submitTopup} /></ScrollView>}
           {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitlePremium}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>المستوى: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || 0)} جنيه</Text></View><Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} /></ScrollView>}
