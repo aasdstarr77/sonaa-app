@@ -185,7 +185,7 @@ function AppScreens({ onScreenChange }) {
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const ratingAccountId = String(session?.user?.phone || session?.user?._id || session?.user?.id || 'account').trim().replace(/\s+/g, '');
-  const ratingStorageKey = `sonaa.rating.dismissed.v4:${session?.role || 'guest'}:${ratingAccountId}`;
+  const ratingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}:${ratingAccountId}`;
   const previousRatingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
   const legacyRatingStorageKey = `sonaa.rating.dismissed.v1:${session?.role || 'guest'}:${session?.user?._id || session?.user?.id || session?.user?.phone || 'account'}`;
   const oldestRatingStorageKey = `sonaa.rating.dismissed.v2:${session?.role || 'guest'}:${ratingAccountId}`;
@@ -1072,7 +1072,7 @@ function AppScreens({ onScreenChange }) {
       setDismissedRatings(merged);
       const serialized = JSON.stringify(merged);
       await Promise.all([
-        SecureStore.setItemAsync(ratingStorageKey, serialized),
+        SecureStore.setItemAsync(ratingStorageKey, JSON.stringify(merged)),
         SecureStore.setItemAsync(oldestRatingStorageKey, serialized),
         SecureStore.setItemAsync(legacyRatingStorageKey, serialized),
       ]);
