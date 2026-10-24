@@ -138,6 +138,12 @@ test('accepted technician jobs load private client details through the authorize
   assert.ok(app.includes('تفاصيل الشغل من العميل'));
 });
 
+test('accepted technician details request is not cancelled by its own loading-state update', () => {
+  assert.ok(app.includes(".then(result => { setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: result.order || result.data || null, error: '' } })); })"));
+  assert.ok(app.includes(".catch(error => { setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: null, error: error.message || 'تعذر تحميل تفاصيل العميل' } })); });"));
+  assert.ok(!app.includes("if (active) setAssignedDetails(current => ({ ...current, [sn]: { loading: false, order: result.order"));
+});
+
 test('technician price increase and client approval controls are wired to existing backend routes', () => {
   assert.ok(app.includes('/price-change'));
   assert.ok(app.includes('إرسال طلب الزيادة'));
