@@ -5,7 +5,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "expo": "~51.0.0",
