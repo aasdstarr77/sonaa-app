@@ -241,3 +241,22 @@ test('client and technician support buttons keep their positions and use the new
   assert.ok(app.includes("whatsappButton: { backgroundColor: '#312E81', borderColor: '#67E8F9', borderWidth: 1.5"), 'support button should use the new indigo/cyan styling');
   assert.ok(app.includes("floatingWhatsApp: { color: '#FFFFFF', fontSize: 21"), 'support icon should remain clearly visible');
 });
+
+test('technician available orders and offers are deduplicated on initial load and refresh', () => {
+  assert.ok(app.includes("orders: results[1].status === 'fulfilled' ? uniqueByOrderSN(toList(results[1].value, ['orders'])) : []"));
+  assert.ok(app.includes("offers: results[2].status === 'fulfilled' ? uniqueByOrderSN(toList(results[2].value, ['offers'])) : []"));
+  assert.ok(app.includes("orders: results[0].status === 'fulfilled' ? uniqueByOrderSN(toList(results[0].value, ['orders'])) : current.orders"));
+  assert.ok(app.includes("offers: results[1].status === 'fulfilled' ? uniqueByOrderSN(toList(results[1].value, ['offers'])) : current.offers"));
+});
+
+test('wallet transfer notice is limited to technician wallet and explains accepted transfer routes', () => {
+  const walletStart = app.indexOf("{tab === 'wallet' && <ScrollView");
+  const walletEnd = app.indexOf("</ScrollView>}", walletStart);
+  assert.notEqual(walletStart, -1);
+  const walletBody = app.slice(walletStart, walletEnd);
+  assert.ok(walletBody.includes('تنويه بخصوص التحويلات'));
+  assert.ok(walletBody.includes('من محفظة إلكترونية إلى محفظة إلكترونية'));
+  assert.ok(walletBody.includes('من إنستا باي إلى محفظة إلكترونية فقط'));
+  assert.ok(walletBody.includes('لا نقبل التحويل من إنستا باي إلى إنستا باي'));
+  assert.ok(app.includes('walletNotice:'));
+});
