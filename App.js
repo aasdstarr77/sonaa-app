@@ -150,6 +150,7 @@ function AppScreens({ onScreenChange }) {
   const clientFormYRef = useRef(0);
   const [clientData, setClientData] = useState({ orders: [], loading: false, error: '', sn: '', clientToken: '' });
   const [techData, setTechData] = useState({ profile: null, orders: [], offers: [], wallet: [], loading: false, error: '', tab: 'offers' });
+  const [walletTransferNumbers, setWalletTransferNumbers] = useState({ walletPhone1: '', walletPhone2: '' });
   const [assignedDetails, setAssignedDetails] = useState({});
   const [technicianSearch, setTechnicianSearch] = useState('');
   const [technicianServiceFilter, setTechnicianServiceFilter] = useState('الكل');
@@ -220,6 +221,23 @@ function AppScreens({ onScreenChange }) {
 
   const services = useMemo(() => categories.flatMap(category => (category.services || []).map(service => ({ category: category.label, service }))), [categories]);
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (screen !== 'technician' || techData.tab !== 'wallet' || session?.role !== 'fanni') return;
+    let active = true;
+    (async () => {
+      try {
+        const result = await api('/wallet-settings', { timeoutMs: 15000 });
+        if (active) setWalletTransferNumbers({
+          walletPhone1: String(result?.walletPhone1 || '').trim(),
+          walletPhone2: String(result?.walletPhone2 || '').trim(),
+        });
+      } catch (error) {
+        if (active) setWalletTransferNumbers({ walletPhone1: '', walletPhone2: '' });
+      }
+    })();
+    return () => { active = false; };
+  }, [screen, techData.tab, session?.role, reloadKey]);
   const ratingAccountId = String(session?.user?.phone || session?.user?._id || session?.user?.id || 'account').trim().replace(/\s+/g, '');
   const ratingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}:${ratingAccountId}`;
   const previousRatingStorageKey = `sonaa.rating.dismissed.v3:${session?.role || 'guest'}`;
@@ -1926,7 +1944,7 @@ function AppScreens({ onScreenChange }) {
                <View style={styles.roleActions}>{!isRejectedOffer(item) ? <Button title={orderChats[sn]?.open && String(orderChats[sn]?.targetOfferId||'')===String(item._id||item.offerId||item.id||'') ? 'إخفاء المحادثة' : 'محادثة'} secondary onPress={() => toggleOrderChat(item, 'fanni')} /> : null}{isAcceptedJob(item) && !isCompletedJob(item) ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
                {orderChats[sn]?.open && String(orderChats[sn]?.targetOfferId||'')===String(item._id||item.offerId||item.id||'') ? <View style={styles.chatPanelPremium}>{orderChats[sn]?.loading ? <Text style={styles.detail}>جاري تحميل المحادثة...</Text> : null}{orderChats[sn]?.error ? <Text style={styles.errorText}>{orderChats[sn].error}</Text> : null}{getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests).length===0 && !orderChats[sn]?.loading && !orderChats[sn]?.error ? <Text style={styles.detail}>لا توجد رسائل في هذه المحادثة حتى الآن.</Text> : null}{getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests).map((entry,j)=>entry._chatItemType==='message' ? <View key={String(entry._id||'message-'+j)} style={[styles.chatMessage, entry.senderRole==='fanni' ? styles.chatMessageTechnician : styles.chatMessageClient]}><Text style={styles.detailSmall}>{entry.senderRole==='fanni'?'أنت':'العميل'} • {dateLabel(entry.createdAt)}</Text><Text style={styles.chatMessageText}>{entry.text}</Text></View> : <View key={String(entry._id||entry.id||'price-'+j)} style={styles.offerCardPremium}><Text style={styles.cardTitleSmall}>طلب زيادة السعر</Text><Text style={styles.detail}>السعر السابق: {entry.oldPrice} جنيه • السعر المطلوب: {entry.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {entry.reason||'—'}</Text><Text style={styles.detailBold}>{entry.status==='قيد الموافقة'?'تم تقديم طلبك، في انتظار رد العميل.':entry.status==='مقبول'?'وافق العميل على زيادة السعر.':entry.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.':'حالة الطلب: '+(entry.status||'غير معروفة')}</Text></View>)}{!isAcceptedJob(item) && !isRejectedOffer(item) ? <View style={styles.roleActions}>{['نعم','لا','حسب الاتفاق'].map(reply=><Button key={reply} title={reply} secondary onPress={()=>sendOrderChat(item,reply)}/>)}</View> : null}{!isCompletedJob(item) ? <><Field label="رسالة للعميل" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} placeholder={item.accepted===true ? 'اكتب رسالة للعميل' : 'قبل القبول: نعم، لا، حسب الاتفاق'} returnKeyType="send" onSubmitEditing={() => sendOrderChat(item)} blurOnSubmit /><Button title="إرسال" onPress={()=>sendOrderChat(item)}/></> : null}</View> : null}
              </View>; }} />}
-          {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><View style={styles.walletCard}><Text style={styles.walletTitle}>المحفظة 💰</Text><Text style={styles.walletAmount}>{Number(user.walletBalance || user.balance || 0)} جنيه</Text><Text style={styles.detail}>التحويل على: 01152822263</Text></View><View style={styles.walletNotice}><Text style={styles.walletNoticeTitle}>⚠️ تنويه بخصوص التحويلات</Text><Text style={styles.walletNoticeText}>نقبل التحويل من محفظة إلكترونية إلى محفظة إلكترونية، أو من إنستا باي إلى محفظة إلكترونية فقط.</Text><Text style={styles.walletNoticeEmphasis}>لا نقبل التحويل من إنستا باي إلى إنستا باي.</Text></View><Field label="مبلغ الشحن" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Button title="إرسال طلب شحن" onPress={submitTopup} /></ScrollView>}
+          {tab === 'wallet' && <ScrollView contentContainerStyle={styles.page}><View style={styles.walletCard}><Text style={styles.walletTitle}>المحفظة 💰</Text><Text style={styles.walletAmount}>{Number(user.walletBalance || user.balance || 0)} جنيه</Text></View><View style={styles.dataCard}><Text style={styles.cardTitleSmall}>أرقام التحويل لشحن المحفظة</Text>{[1, 2].map(index => { const key = `walletPhone${index}`; const number = String(walletTransferNumbers[key] || '').trim(); const available = /^01[0-9]{9}$/.test(number); return <View key={key} style={styles.detailRow}><Text style={styles.detailValue}>{available ? number : `رقم التحويل ${index}: غير متاح`}</Text>{available ? <Button title="نسخ الرقم" secondary onPress={async () => { try { await Clipboard.setStringAsync(number); Alert.alert('تم النسخ', 'تم نسخ رقم المحفظة'); } catch (_) { Alert.alert('تعذر النسخ', 'انسخ الرقم يدويًا: ' + number); } }} /> : null}</View>; })}</View><View style={styles.walletNotice}><Text style={styles.walletNoticeTitle}>⚠️ تنويه بخصوص التحويلات</Text><Text style={styles.walletNoticeText}>نقبل التحويل من محفظة إلكترونية إلى محفظة إلكترونية، أو من إنستا باي إلى محفظة إلكترونية فقط.</Text><Text style={styles.walletNoticeEmphasis}>لا نقبل التحويل من إنستا باي إلى إنستا باي.</Text></View><Field label="مبلغ الشحن" value={topup.amount} onChangeText={v => setTopup(t => ({ ...t, amount: v }))} keyboardType="numeric" /><Field label="رقم المحوّل" value={topup.fromPhone} onChangeText={v => setTopup(t => ({ ...t, fromPhone: v }))} keyboardType="phone-pad" /><Button title="إرسال طلب شحن" onPress={submitTopup} /></ScrollView>}
           {tab === 'profile' && <ScrollView contentContainerStyle={styles.page}><View style={styles.dataCard}><Text style={styles.cardTitlePremium}>{user.name || 'الفني'}</Text><Text style={styles.detail}>الهاتف: {user.phone || ''}</Text><Text style={styles.detail}>المستوى: {user.level || 'مبتدئ'}</Text><Text style={styles.detail}>الرصيد: {Number(user.walletBalance || 0)} جنيه</Text></View><Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} /></ScrollView>}
         </>}
       </View>
