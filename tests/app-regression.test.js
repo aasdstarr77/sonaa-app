@@ -106,10 +106,12 @@ test('rating modal and rating submission safely handle missing technician order 
   assert.match(app.slice(submitStart, submitEnd), /if \(!order \|\| typeof order !== 'object' \|\| !sn\) \{[\s\S]*?setRatingPrompt\(null\)/);
 });
 
-test('Sonaa splash keeps the brand word static and rotates only the letter ص above it', () => {
-  assert.ok(app.includes('<Animated.Text style={[splashStyles.spinningLetter, { transform: [{ rotate: spinRotation }] }]}>ص</Animated.Text>'), 'only the letter ص should rotate');
+test('Sonaa splash removes the spinning letter and swings the logo like a pendulum', () => {
+  assert.ok(app.includes("const logoRotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['-18deg', '18deg'] })"), 'logo should interpolate between left and right angles');
+  assert.ok(app.includes('<Animated.Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={[splashStyles.logo, { transform: [{ rotate: logoRotation }] }]} resizeMode="contain" />'), 'the logo image itself should rotate');
+  assert.ok(!app.includes('spinningLetter'), 'the separate spinning letter should be removed');
+  assert.ok(!app.includes('<Animated.Text'), 'the splash should not animate a separate text letter');
   assert.ok(app.includes('<Text style={splashStyles.title}>صُنّاع</Text>'), 'the main brand word should remain static');
-  assert.ok(!app.includes('spinningWord'), 'the whole brand word must not rotate');
   assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'splash caption should use the agreed tagline');
   assert.ok(app.includes('<Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should retain the premium home design');
   assert.ok(!app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login should not receive the splash-only tagline');
