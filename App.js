@@ -2250,13 +2250,16 @@ function AppContent() {
   const showBrandHeader = !['home', 'login'].includes(currentScreen);
 
   useEffect(() => {
-    const animation = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1500, easing: Easing.linear, useNativeDriver: true }));
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(spin, { toValue: 1, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(spin, { toValue: 0, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
     animation.start();
     const timer = setTimeout(() => setShowSplash(false), 2200);
     return () => { animation.stop(); clearTimeout(timer); };
   }, [spin]);
 
-  const spinRotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const logoRotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['-18deg', '18deg'] });
 
   return <View style={styles.appRoot}>
     {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
@@ -2268,10 +2271,7 @@ function AppContent() {
     <View style={styles.appScreenArea}><AppScreens onScreenChange={setCurrentScreen} /></View>
     {showSplash ? <View style={splashStyles.overlay}>
       <View style={splashStyles.logoFrame}>
-        <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={splashStyles.logo} resizeMode="contain" />
-      </View>
-      <View style={splashStyles.letterOrbit}>
-        <Animated.Text style={[splashStyles.spinningLetter, { transform: [{ rotate: spinRotation }] }]}>ص</Animated.Text>
+        <Animated.Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={[splashStyles.logo, { transform: [{ rotate: logoRotation }] }]} resizeMode="contain" />
       </View>
       <Text style={splashStyles.title}>صُنّاع</Text>
       <Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>
@@ -2284,9 +2284,7 @@ const splashStyles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 999, elevation: 999, backgroundColor: '#F5F7FF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }, 
   logoFrame: { width: 140, height: 140, borderRadius: 30, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#C7D2FE', alignItems: 'center', justifyContent: 'center', shadowColor: '#4F46E5', shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 7 }, elevation: 8, overflow: 'hidden' }, 
   logo: { width: 96, height: 96 },
-  letterOrbit: { height: 36, width: 44, marginTop: 10, alignItems: 'center', justifyContent: 'center' },
-  spinningLetter: { color: '#0891B2', fontSize: 28, fontWeight: '900', textAlign: 'center' },
-  title: { marginTop: 0, color: '#172554', fontSize: 26, fontWeight: '900' },
+  title: { marginTop: 12, color: '#172554', fontSize: 26, fontWeight: '900' },
   caption: { marginTop: 6, color: '#0891B2', fontSize: 13, fontWeight: '700' },
   loadingTrack: { marginTop: 22, width: 120, height: 4, borderRadius: 3, backgroundColor: '#D8DDF5', overflow: 'hidden' },
   loadingFill: { width: '65%', height: '100%', backgroundColor: '#0891B2', borderRadius: 3 },
