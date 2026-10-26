@@ -16,6 +16,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 function VoiceRecorder({ value, onChange, disabled }) {
   const [recording, setRecording] = useState(null);
+  const recordingRef = useRef(null);
   const [recordingNow, setRecordingNow] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [sound, setSound] = useState(null);
@@ -35,7 +36,7 @@ function VoiceRecorder({ value, onChange, disabled }) {
       if (!permission.granted) { Alert.alert('السماح بالميكروفون', 'اسمح للتطبيق باستخدام الميكروفون لتسجيل وصف الطلب.'); return; }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const created = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(created.recording); setRecordingNow(true); setSeconds(0);
+      recordingRef.current = created.recording; setRecording(created.recording); setRecordingNow(true); setSeconds(0);
       timerRef.current = setInterval(() => {
         setSeconds(current => {
           if (current >= 29) { if (timerRef.current) clearInterval(timerRef.current); timerRef.current = null; finishRecording(); return 30; }
@@ -46,11 +47,12 @@ function VoiceRecorder({ value, onChange, disabled }) {
     finally { setBusy(false); }
   }
   async function finishRecording() {
-    if (!recording || busy) return;
+    const active = recordingRef.current;
+    if (!active || busy) return;
     setBusy(true);
     try {
       if (timerRef.current) clearInterval(timerRef.current); timerRef.current = null;
-      const active = recording; setRecording(null); setRecordingNow(false);
+      recordingRef.current = null; setRecording(null); setRecordingNow(false);
       await active.stopAndUnloadAsync();
       const uri = active.getURI();
       if (!uri) throw new Error('لم يتم حفظ التسجيل؛ حاول مرة أخرى.');

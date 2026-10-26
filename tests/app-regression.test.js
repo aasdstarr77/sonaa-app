@@ -301,3 +301,13 @@ test('voice recording dependencies match Expo SDK 51 and backend voice size vali
   assert.equal(packageJson.dependencies['expo-file-system'], '~17.0.1');
   assert.ok(app.includes('info.size > 360000'));
 });
+
+test('voice recorder auto-stop uses a stable recording reference after React state updates', () => {
+  const start = app.indexOf('function VoiceRecorder(');
+  const end = app.indexOf('function VoicePlayback(', start);
+  const recorder = app.slice(start, end);
+  assert.ok(recorder.includes('const recordingRef = useRef(null)'));
+  assert.ok(recorder.includes('recordingRef.current = created.recording'));
+  assert.ok(recorder.includes('const active = recordingRef.current'));
+  assert.ok(recorder.includes('finishRecording(); return 30;'));
+});
