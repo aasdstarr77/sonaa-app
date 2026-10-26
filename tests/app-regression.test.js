@@ -275,3 +275,29 @@ test('client request form Enter advances from detailed description to budget and
   assert.ok(budgetField[0].includes('returnKeyType="go"'), 'budget should show the submit keyboard action');
   assert.ok(budgetField[0].includes('onSubmitEditing={createOrder}'), 'Enter in the final field should submit the order');
 });
+
+test('mobile client can record, preview, delete, and submit voice order descriptions', () => {
+  assert.ok(app.includes("import { Audio } from 'expo-av'"));
+  assert.ok(app.includes("import * as FileSystem from 'expo-file-system/legacy'"));
+  assert.ok(app.includes('function VoiceRecorder({ value, onChange, disabled })'));
+  assert.ok(app.includes('Audio.RecordingOptionsPresets.HIGH_QUALITY'));
+  assert.ok(app.includes("onChange('data:audio/mp4;base64,' + base64)"));
+  assert.ok(app.includes("voiceRecordingData: ''"));
+  assert.ok(app.includes("...(form.voiceRecordingData ? { voiceRecordingData: form.voiceRecordingData } : {})"));
+  assert.ok(app.includes('description.length < 10 && !form.voiceRecordingData'));
+  assert.ok(app.includes('🔴 بدء التسجيل'));
+  assert.ok(app.includes('▶️ سماع التسجيل'));
+  assert.ok(app.includes('🗑 حذف'));
+});
+test('technician can play voice descriptions in available and accepted jobs through authenticated backend endpoint', () => {
+  assert.equal(app.split('function VoicePlayback({ orderSN, token, hasVoiceRecording })').length - 1, 1);
+  assert.ok(app.includes("API_BASE + '/orders/' + encodeURIComponent(String(orderSN)) + '/voice'"));
+  assert.ok(app.includes("headers: { Authorization: 'Bearer ' + token }"));
+  assert.ok(app.includes('<VoicePlayback orderSN={sn} token={session?.token} hasVoiceRecording={Boolean(item.hasVoiceRecording)} />'));
+  assert.ok(app.includes('assignedDetails[sn].order.hasVoiceRecording || item.hasVoiceRecording'));
+});
+test('voice recording dependencies match Expo SDK 51 and backend voice size validation', () => {
+  assert.equal(packageJson.dependencies['expo-av'], '~14.0.7');
+  assert.equal(packageJson.dependencies['expo-file-system'], '~17.0.1');
+  assert.ok(app.includes('info.size > 360000'));
+});

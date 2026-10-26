@@ -10,6 +10,107 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
+
+
+function VoiceRecorder({ value, onChange, disabled }) {
+  const [recording, setRecording] = useState(null);
+  const [recordingNow, setRecordingNow] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [sound, setSound] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const timerRef = useRef(null);
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+  async function stopPreview() {
+    if (sound) { try { await sound.stopAsync(); await sound.unloadAsync(); } catch (_) {} setSound(null); }
+    setPlaying(false);
+  }
+  async function startRecording() {
+    if (disabled || recordingNow || busy) return;
+    try {
+      setBusy(true);
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) { Alert.alert('السماح بالميكروفون', 'اسمح للتطبيق باستخدام الميكروفون لتسجيل وصف الطلب.'); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const created = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(created.recording); setRecordingNow(true); setSeconds(0);
+      timerRef.current = setInterval(() => {
+        setSeconds(current => {
+          if (current >= 29) { if (timerRef.current) clearInterval(timerRef.current); timerRef.current = null; finishRecording(); return 30; }
+          return current + 1;
+        });
+      }, 1000);
+    } catch (error) { Alert.alert('تعذر بدء التسجيل', error?.message || 'راجع إذن الميكروفون وحاول مرة أخرى.'); }
+    finally { setBusy(false); }
+  }
+  async function finishRecording() {
+    if (!recording || busy) return;
+    setBusy(true);
+    try {
+      if (timerRef.current) clearInterval(timerRef.current); timerRef.current = null;
+      const active = recording; setRecording(null); setRecordingNow(false);
+      await active.stopAndUnloadAsync();
+      const uri = active.getURI();
+      if (!uri) throw new Error('لم يتم حفظ التسجيل؛ حاول مرة أخرى.');
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists || !info.size || info.size > 360000) throw new Error('التسجيل كبير أو فارغ؛ سجّل وصفًا أقصر.');
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      if (!base64) throw new Error('التسجيل فارغ؛ حاول مرة أخرى.');
+      onChange('data:audio/mp4;base64,' + base64);
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+    } catch (error) { onChange(''); Alert.alert('تعذر حفظ التسجيل', error?.message || 'حاول تسجيل الوصف مرة أخرى.'); }
+    finally { setRecordingNow(false); setBusy(false); }
+  }
+  async function previewRecording() {
+    if (!value || busy || recordingNow) return;
+    if (playing) { await stopPreview(); return; }
+    try {
+      setBusy(true); await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      const created = await Audio.Sound.createAsync({ uri: value }, { shouldPlay: true });
+      setSound(created.sound); setPlaying(true);
+      created.sound.setOnPlaybackStatusUpdate(status => { if (status.didJustFinish) { created.sound.unloadAsync().catch(() => {}); setSound(null); setPlaying(false); } });
+    } catch (error) { Alert.alert('تعذر تشغيل التسجيل', error?.message || 'حاول مرة أخرى.'); }
+    finally { setBusy(false); }
+  }
+  return <View style={styles.voiceRecorderBox}>
+    <Text style={styles.voiceRecorderTitle}>🎙️ وصف الطلب بالتسجيل الصوتي (اختياري)</Text>
+    <Text style={styles.voiceRecorderHint}>تقدر تسجّل وصفك بدل الكتابة أو تضيفه مع الوصف المكتوب. الحد الأقصى 30 ثانية.</Text>
+    {recordingNow ? <Text style={styles.voiceRecorderTimer}>جاري التسجيل: {seconds} ثانية</Text> : null}
+    <View style={styles.voiceRecorderActions}>
+      {recordingNow
+        ? <TouchableOpacity style={[styles.voiceActionButton, styles.voiceStopButton]} onPress={finishRecording} disabled={busy}><Text style={styles.voiceActionText}>{busy ? 'جارٍ الحفظ...' : '⏹ إيقاف وحفظ'}</Text></TouchableOpacity>
+        : <TouchableOpacity style={[styles.voiceActionButton, styles.voiceRecordButton]} onPress={startRecording} disabled={disabled || busy}><Text style={styles.voiceActionText}>{busy ? 'لحظة...' : value ? '🔁 تسجيل من جديد' : '🔴 بدء التسجيل'}</Text></TouchableOpacity>}
+      {value && !recordingNow ? <TouchableOpacity style={[styles.voiceActionButton, styles.voiceListenButton]} onPress={previewRecording} disabled={busy}><Text style={styles.voiceActionText}>{playing ? '⏸ إيقاف الاستماع' : '▶️ سماع التسجيل'}</Text></TouchableOpacity> : null}
+      {value && !recordingNow ? <TouchableOpacity style={[styles.voiceActionButton, styles.voiceDeleteButton]} onPress={() => { stopPreview(); onChange(''); setSeconds(0); }} disabled={busy}><Text style={styles.voiceActionText}>🗑 حذف</Text></TouchableOpacity> : null}
+    </View>
+    {value && !recordingNow ? <Text style={styles.voiceRecorderSaved}>✓ التسجيل جاهز للإرسال</Text> : null}
+  </View>;
+}
+function VoicePlayback({ orderSN, token, hasVoiceRecording }) {
+  const [sound, setSound] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => () => { if (sound) sound.unloadAsync().catch(() => {}); }, [sound]);
+  async function togglePlayback() {
+    if (!hasVoiceRecording || loading) return;
+    if (playing && sound) { try { await sound.stopAsync(); await sound.unloadAsync(); } catch (_) {} setSound(null); setPlaying(false); return; }
+    try {
+      setLoading(true); await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      const uri = API_BASE + '/orders/' + encodeURIComponent(String(orderSN)) + '/voice';
+      const created = await Audio.Sound.createAsync({ uri, headers: { Authorization: 'Bearer ' + token } }, { shouldPlay: true });
+      setSound(created.sound); setPlaying(true);
+      created.sound.setOnPlaybackStatusUpdate(status => { if (status.didJustFinish) { created.sound.unloadAsync().catch(() => {}); setSound(null); setPlaying(false); } });
+    } catch (error) { Alert.alert('تعذر تشغيل وصف العميل', error?.message || 'تأكد من اتصال الإنترنت وحاول مرة أخرى.'); }
+    finally { setLoading(false); }
+  }
+  if (!hasVoiceRecording) return null;
+  return <TouchableOpacity style={[styles.voicePlaybackButton, (loading || !orderSN || !token) && { opacity: 0.6 }]} onPress={togglePlayback} disabled={loading || !orderSN || !token}>
+    <Text style={styles.voicePlaybackText}>{loading ? '⏳ جارٍ تحميل التسجيل...' : playing ? '⏹ إيقاف تسجيل العميل' : '🔊 استمع إلى وصف العميل الصوتي'}</Text>
+  </TouchableOpacity>;
+}
+
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -137,7 +238,7 @@ function AppScreens({ onScreenChange }) {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [authMode, setAuthMode] = useState('fanni');
-  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', budget: '', specialties: [] });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', voiceRecordingData: '', budget: '', specialties: [] });
   const registrationNameRef = useRef(null);
   const registrationPhoneRef = useRef(null);
   const registrationPasswordRef = useRef(null);
@@ -738,16 +839,16 @@ function AppScreens({ onScreenChange }) {
     setLoginLoading(true);
     try {
       const description = form.description.trim();
-      if (description.length < 10) {
-        Alert.alert('تفاصيل الخدمة مطلوبة', 'اكتب تفاصيل الشغل المطلوبة في 10 أحرف على الأقل عشان الفني يقدر يقدم لك عرضًا مضبوطًا.');
+      if (description.length < 10 && !form.voiceRecordingData) {
+        Alert.alert('تفاصيل الخدمة مطلوبة', 'اكتب وصفًا من 10 أحرف على الأقل أو سجّل وصف الطلب صوتيًا.');
         setLoginLoading(false);
         return;
       }
-      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, budget: form.budget.trim() };
+      const orderBody = { clientName: String(session.user?.name || form.name || '').trim(), phone: String(session.user?.phone || form.phone || '').trim(), service: form.service, area: form.area.trim(), address: form.address.trim(), description, ...(form.voiceRecordingData ? { voiceRecordingData: form.voiceRecordingData } : {}), budget: form.budget.trim() };
       const result = await api('/orders', { method: 'POST', token: session.token, body: orderBody });
       setClientData(current => ({ ...current, sn: result.sn || result.order?.sn || '', clientToken: result.clientToken || '' }));
       setClientTab('current');
-      setForm(current => ({ ...current, area: '', address: '', description: '', budget: '' }));
+      setForm(current => ({ ...current, area: '', address: '', description: '', voiceRecordingData: '', budget: '' }));
       setReloadKey(value => value + 1);
       Alert.alert('تم استلام الطلب', `كود المتابعة: ${result.sn || result.order?.sn || '—'}\nسيتم مراجعته من الإدارة.`);
     } catch (err) { Alert.alert('تعذر إنشاء الطلب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
@@ -1844,7 +1945,8 @@ function AppScreens({ onScreenChange }) {
         </View> : null}
         <View onLayout={event => { clientFormYRef.current = event.nativeEvent.layout.y; }} style={styles.formCard}><Field inputRef={clientAreaInputRef} label="المنطقة أو الحي *" value={form.area} onChangeText={v => updateForm('area', v)} placeholder="مثال: مدينة نصر أو شبرا" returnKeyType="next" returnKeyLabel="التالي" onSubmitEditing={() => clientAddressInputRef.current?.focus()} blurOnSubmit={false} />
         <Field inputRef={clientAddressInputRef} label="العنوان بالتفصيل *" value={form.address} onChangeText={v => updateForm('address', v)} placeholder="الشارع ورقم العقار وأقرب علامة مميزة" returnKeyType="next" returnKeyLabel="التالي" onSubmitEditing={() => clientDescriptionInputRef.current?.focus()} blurOnSubmit={false} />
-        <Field inputRef={clientDescriptionInputRef} label="تفاصيل الشغل المطلوبة *" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها" returnKeyType="next" returnKeyLabel="التالي" onSubmitEditing={() => clientBudgetInputRef.current?.focus()} blurOnSubmit />
+        <VoiceRecorder value={form.voiceRecordingData} onChange={value => updateForm('voiceRecordingData', value)} disabled={loginLoading} />
+        <Field inputRef={clientDescriptionInputRef} label="تفاصيل الشغل المطلوبة (اكتب وصفًا أو سجّل صوتيًا)" value={form.description} onChangeText={v => updateForm('description', v)} multiline placeholder="اكتب تفاصيل الخدمة اللي محتاجها" returnKeyType="next" returnKeyLabel="التالي" onSubmitEditing={() => clientBudgetInputRef.current?.focus()} blurOnSubmit />
         <Field inputRef={clientBudgetInputRef} label="ميزانية متوقعة (اختياري)" value={form.budget} onChangeText={v => updateForm('budget', v)} placeholder="مثال: من 300 إلى 500 جنيه" returnKeyType="go" returnKeyLabel="إرسال الطلب" onSubmitEditing={createOrder} blurOnSubmit />
         <Button title={loginLoading ? 'جاري إرسال الطلب...' : '🚀 إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} /></View>
       </>}</> : null}
@@ -1918,7 +2020,7 @@ function AppScreens({ onScreenChange }) {
                <Text style={styles.detail}>المنطقة: {item.area || 'غير محددة'} • ميزانية العميل: {item.budget !== undefined && item.budget !== null && String(item.budget).trim() !== '' ? `حوالي ${item.budget} جنيه` : 'غير محددة'}</Text>
                <Text style={styles.detail}>يمكنك تقديم عرضك بالسعر المناسب لك.</Text>
                <Text style={styles.detail}>تقييم العميل: ★ {Number(item.clientRatingAverage || 0).toFixed(1)} ({Number(item.clientRatingCount || 0)} تقييم) • ✓ {Number(item.clientCompletedJobs || 0)} مهمة مكتملة</Text>
-               <View style={styles.serviceDescriptionBox}><Text style={styles.serviceDescriptionLabel}>تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description || 'لم يضف العميل تفاصيل إضافية.'}</Text></View>
+               <View style={styles.serviceDescriptionBox}><Text style={styles.serviceDescriptionLabel}>تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description || 'لم يضف العميل تفاصيل مكتوبة.'}</Text><VoicePlayback orderSN={sn} token={session?.token} hasVoiceRecording={Boolean(item.hasVoiceRecording)} /></View>
                {(() => {
                  const ownOffer = techData.offers.find(offer => getOrderSN(offer) === sn);
                  const ownOfferRejected = ownOffer && isRejectedOffer(ownOffer);
@@ -1939,7 +2041,7 @@ function AppScreens({ onScreenChange }) {
                {tab === 'completed' && !alreadyRatedByTechnician ? <Button title="⭐ قيّم العميل" onPress={() => { setRatingDrafts(current => ({ ...current, [sn]: current[sn] || { stars: '5', comment: '', blockFuture: false } })); setRatingPrompt({ role: 'fanni', order: item }); }} /> : null}
                {isRejectedOffer(item) ? <TouchableOpacity disabled style={[styles.button, { backgroundColor: '#DC2626', borderColor: '#DC2626' }]}><Text style={[styles.buttonText, { color: '#FFFFFF' }]}>تم رفض عرضك</Text></TouchableOpacity> : null}
                {item.client ? <Text style={styles.detail}>تقييم العميل: ★ {Number(item.client.ratingAverage || 0).toFixed(1)} ({Number(item.client.ratingCount || 0)} تقييم) • ✓ {Number(item.client.completedJobs || 0)} مهمة مكتملة</Text> : null}
-               {isAcceptedJob(item) && !isCompletedJob(item) ? <View style={styles.formCard}><Text style={styles.cardTitleSmall}>تفاصيل العميل</Text>{assignedDetails[sn]?.loading ? <Text style={styles.detail}>جاري تحميل تفاصيل العميل...</Text> : null}{assignedDetails[sn]?.error ? <><Text style={styles.errorText}>{assignedDetails[sn].error}</Text><Button title="إعادة تحميل التفاصيل" secondary onPress={()=>setAssignedDetails(current=>{const next={...current};delete next[sn];return next;})}/></> : null}{assignedDetails[sn]?.order ? <><Text style={styles.detailBold}>العميل: {assignedDetails[sn].order.clientName || 'عميل'}</Text><Text style={styles.detail}>الخدمة التفصيلية: {assignedDetails[sn].order.service || item.service || '—'}</Text><Text style={styles.detail}>المنطقة: {assignedDetails[sn].order.area || item.area || '—'}</Text><Text style={styles.detail}>العنوان بالتفصيل: {assignedDetails[sn].order.address || '—'}</Text><View style={styles.serviceDescriptionBox}><Text style={styles.serviceDescriptionLabel}>تفاصيل الشغل من العميل</Text><Text style={styles.serviceDescriptionText}>{assignedDetails[sn].order.description || item.description || 'لم يضف العميل تفاصيل إضافية.'}</Text></View><Text style={styles.detail}>السعر المقبول: {assignedDetails[sn].order.acceptedOfferPrice ?? item.price ?? '—'} جنيه</Text>{assignedDetails[sn].order.clientPhone ? <Button title="📞 اتصال بالعميل" secondary onPress={()=>Linking.openURL('tel:'+String(assignedDetails[sn].order.clientPhone).replace(/[^0-9+]/g,''))}/> : <Text style={styles.detail}>رقم العميل غير متاح حاليًا.</Text>}</> : null}</View> : null}
+               {isAcceptedJob(item) && !isCompletedJob(item) ? <View style={styles.formCard}><Text style={styles.cardTitleSmall}>تفاصيل العميل</Text>{assignedDetails[sn]?.loading ? <Text style={styles.detail}>جاري تحميل تفاصيل العميل...</Text> : null}{assignedDetails[sn]?.error ? <><Text style={styles.errorText}>{assignedDetails[sn].error}</Text><Button title="إعادة تحميل التفاصيل" secondary onPress={()=>setAssignedDetails(current=>{const next={...current};delete next[sn];return next;})}/></> : null}{assignedDetails[sn]?.order ? <><Text style={styles.detailBold}>العميل: {assignedDetails[sn].order.clientName || 'عميل'}</Text><Text style={styles.detail}>الخدمة التفصيلية: {assignedDetails[sn].order.service || item.service || '—'}</Text><Text style={styles.detail}>المنطقة: {assignedDetails[sn].order.area || item.area || '—'}</Text><Text style={styles.detail}>العنوان بالتفصيل: {assignedDetails[sn].order.address || '—'}</Text><View style={styles.serviceDescriptionBox}><Text style={styles.serviceDescriptionLabel}>تفاصيل الشغل من العميل</Text><Text style={styles.serviceDescriptionText}>{assignedDetails[sn].order.description || item.description || 'لم يضف العميل تفاصيل مكتوبة.'}</Text><VoicePlayback orderSN={sn} token={session?.token} hasVoiceRecording={Boolean(assignedDetails[sn].order.hasVoiceRecording || item.hasVoiceRecording)} /></View><Text style={styles.detail}>السعر المقبول: {assignedDetails[sn].order.acceptedOfferPrice ?? item.price ?? '—'} جنيه</Text>{assignedDetails[sn].order.clientPhone ? <Button title="📞 اتصال بالعميل" secondary onPress={()=>Linking.openURL('tel:'+String(assignedDetails[sn].order.clientPhone).replace(/[^0-9+]/g,''))}/> : <Text style={styles.detail}>رقم العميل غير متاح حاليًا.</Text>}</> : null}</View> : null}
                {isAcceptedJob(item) && !isCompletedJob(item) ? <View style={styles.formCard}><Text style={styles.cardTitleSmall}>طلب زيادة السعر</Text><Text style={styles.detail}>السعر الحالي: {item.acceptedOfferPrice ?? item.client?.acceptedOfferPrice ?? item.priceNum ?? item.price ?? '—'} جنيه</Text><Field label="السعر الجديد بالجنيه" value={priceDrafts[sn]?.price || ''} onChangeText={value=>setPriceDrafts(current=>({...current,[sn]:{...(current[sn]||{}),price:value}}))} keyboardType="numeric" placeholder="السعر بعد الزيادة"/><Field label="سبب الزيادة" value={priceDrafts[sn]?.reason || ''} onChangeText={value=>setPriceDrafts(current=>({...current,[sn]:{...(current[sn]||{}),reason:value}}))} multiline placeholder="وضح سبب طلب الزيادة"/><Button title="إرسال طلب الزيادة" onPress={()=>requestOrderPriceChange(item)}/></View> : null}
                <View style={styles.roleActions}>{!isRejectedOffer(item) ? <Button title={orderChats[sn]?.open && String(orderChats[sn]?.targetOfferId||'')===String(item._id||item.offerId||item.id||'') ? 'إخفاء المحادثة' : 'محادثة'} secondary onPress={() => toggleOrderChat(item, 'fanni')} /> : null}{isAcceptedJob(item) && !isCompletedJob(item) ? <Button title="إنهاء الخدمة" onPress={() => completeTechnicianOrder(item)} /> : null}</View>
                {orderChats[sn]?.open && String(orderChats[sn]?.targetOfferId||'')===String(item._id||item.offerId||item.id||'') ? <View style={styles.chatPanelPremium}>{orderChats[sn]?.loading ? <Text style={styles.detail}>جاري تحميل المحادثة...</Text> : null}{orderChats[sn]?.error ? <Text style={styles.errorText}>{orderChats[sn].error}</Text> : null}{getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests).length===0 && !orderChats[sn]?.loading && !orderChats[sn]?.error ? <Text style={styles.detail}>لا توجد رسائل في هذه المحادثة حتى الآن.</Text> : null}{getOrderChatTimeline(orderChats[sn]?.messages, orderChats[sn]?.priceChangeRequests).map((entry,j)=>entry._chatItemType==='message' ? <View key={String(entry._id||'message-'+j)} style={[styles.chatMessage, entry.senderRole==='fanni' ? styles.chatMessageTechnician : styles.chatMessageClient]}><Text style={styles.detailSmall}>{entry.senderRole==='fanni'?'أنت':'العميل'} • {dateLabel(entry.createdAt)}</Text><Text style={styles.chatMessageText}>{entry.text}</Text></View> : <View key={String(entry._id||entry.id||'price-'+j)} style={styles.offerCardPremium}><Text style={styles.cardTitleSmall}>طلب زيادة السعر</Text><Text style={styles.detail}>السعر السابق: {entry.oldPrice} جنيه • السعر المطلوب: {entry.newPrice} جنيه</Text><Text style={styles.detail}>السبب: {entry.reason||'—'}</Text><Text style={styles.detailBold}>{entry.status==='قيد الموافقة'?'تم تقديم طلبك، في انتظار رد العميل.':entry.status==='مقبول'?'وافق العميل على زيادة السعر.':entry.status==='مرفوض'?'رفض العميل الزيادة؛ السعر السابق ما زال ساريًا.':'حالة الطلب: '+(entry.status||'غير معروفة')}</Text></View>)}{!isAcceptedJob(item) && !isRejectedOffer(item) ? <View style={styles.roleActions}>{['نعم','لا','حسب الاتفاق'].map(reply=><Button key={reply} title={reply} secondary onPress={()=>sendOrderChat(item,reply)}/>)}</View> : null}{!isCompletedJob(item) ? <><Field label="رسالة للعميل" value={chatDrafts[sn]||''} onChangeText={value=>setChatDrafts(current=>({...current,[sn]:value}))} placeholder={item.accepted===true ? 'اكتب رسالة للعميل' : 'قبل القبول: نعم، لا، حسب الاتفاق'} returnKeyType="send" onSubmitEditing={() => sendOrderChat(item)} blurOnSubmit /><Button title="إرسال" onPress={()=>sendOrderChat(item)}/></> : null}</View> : null}
@@ -2141,6 +2243,17 @@ const styles = StyleSheet.create({
   detailValue: { color: '#172554', fontSize: 13, fontWeight: '800' },
   detailValueGold: { color: '#0891B2', fontSize: 13, fontWeight: '900' },
   detailSmall: { color: '#8794B8', fontSize: 11, textAlign: 'right', marginTop: 2 },
+  voiceRecorderBox: { backgroundColor: '#ECFEFF', borderWidth: 1, borderColor: '#A5F3FC', borderRadius: 14, padding: 12, marginBottom: 8, gap: 8 },
+  voiceRecorderTitle: { color: '#172554', fontSize: 15, fontWeight: '900', textAlign: 'right' },
+  voiceRecorderHint: { color: '#475569', fontSize: 12, lineHeight: 19, textAlign: 'right' },
+  voiceRecorderTimer: { color: '#B91C1C', fontSize: 14, fontWeight: '900', textAlign: 'center' },
+  voiceRecorderActions: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7 },
+  voiceActionButton: { minHeight: 40, borderRadius: 10, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  voiceRecordButton: { backgroundColor: '#DC2626' }, voiceStopButton: { backgroundColor: '#991B1B' }, voiceListenButton: { backgroundColor: '#312E81' }, voiceDeleteButton: { backgroundColor: '#64748B' },
+  voiceActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  voiceRecorderSaved: { color: '#047857', fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  voicePlaybackButton: { marginTop: 10, backgroundColor: '#312E81', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 12, alignItems: 'center' },
+  voicePlaybackText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', textAlign: 'center' },
   serviceDescriptionBox: { backgroundColor: '#EEF2FF', borderRightWidth: 4, borderRightColor: '#4F46E5', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginTop: 8, marginBottom: 6 },
   serviceDescriptionLabel: { color: '#4338CA', fontSize: 14, fontWeight: '900', textAlign: 'right', marginBottom: 6 },
   serviceDescriptionText: { color: '#172554', fontSize: 18, fontWeight: '600', lineHeight: 28, textAlign: 'right' },
