@@ -316,3 +316,11 @@ test('Expo native config requests microphone permission for voice recording', ()
   const config = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
   assert.ok(config.expo.plugins.some(plugin => Array.isArray(plugin) && plugin[0] === 'expo-av' && plugin[1].microphonePermission));
 });
+
+
+test('technician account tab exposes Edit My Details and specialty edits are optional', () => {
+  assert.ok(app.includes(`{tab === 'profile' && <ScrollView`), 'technician account tab should exist');
+  assert.ok(app.includes('Button title="✏️ تعديل بياناتي" onPress={beginProfileEdit}'), 'technician account tab should open profile editing');
+  assert.ok(app.includes('التخصصات والخدمات (اختياري)'), 'specialty selection should be labelled optional');
+  assert.ok(!app.includes("اختار تخصصًا واحدًا على الأقل."), 'saving profile edits should not require selecting a specialty');
+});
