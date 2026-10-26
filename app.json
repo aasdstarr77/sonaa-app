@@ -30,7 +30,13 @@
     },
     "owner": "sonaa2030",
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "السماح لصُنّاع بتسجيل وصف الطلب الصوتي."
+        }
+      ]
     ]
   }
 }

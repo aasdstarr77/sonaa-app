@@ -311,3 +311,8 @@ test('voice recorder auto-stop uses a stable recording reference after React sta
   assert.ok(recorder.includes('const active = recordingRef.current'));
   assert.ok(recorder.includes('finishRecording(); return 30;'));
 });
+
+test('Expo native config requests microphone permission for voice recording', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
+  assert.ok(config.expo.plugins.some(plugin => Array.isArray(plugin) && plugin[0] === 'expo-av' && plugin[1].microphonePermission));
+});
