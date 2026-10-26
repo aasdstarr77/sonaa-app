@@ -491,7 +491,7 @@ function AppScreens({ onScreenChange }) {
   }, [screen, offerDraft, notificationsOpen, session]);
 
   useEffect(() => {
-    if (!['client', 'clientRegister', 'technicianRegister'].includes(screen)) return;
+    if (!['client', 'clientRegister', 'technicianRegister', 'profileEdit'].includes(screen)) return;
     let mounted = true;
     async function loadPublicData() {
       setServicesLoading(true); setServicesError('');
