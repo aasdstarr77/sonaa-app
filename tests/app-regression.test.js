@@ -278,7 +278,7 @@ test('client request form Enter advances from detailed description to budget and
 
 test('mobile client can record, preview, delete, and submit voice order descriptions', () => {
   assert.ok(app.includes("import { Audio } from 'expo-av'"));
-  assert.ok(app.includes("import * as FileSystem from 'expo-file-system/legacy'"));
+  assert.ok(app.includes("import * as FileSystem from 'expo-file-system'"));
   assert.ok(app.includes('function VoiceRecorder({ value, onChange, disabled })'));
   assert.ok(app.includes('Audio.RecordingOptionsPresets.HIGH_QUALITY'));
   assert.ok(app.includes("onChange('data:audio/mp4;base64,' + base64)"));
