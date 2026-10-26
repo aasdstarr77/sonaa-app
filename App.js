@@ -313,6 +313,8 @@ function AppScreens({ onScreenChange }) {
   const [supportLoading, setSupportLoading] = useState(false);
   const [supportError, setSupportError] = useState('');
   const [accountPasswordForm, setAccountPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', loading: false, error: '' });
+  const [profileEditForm, setProfileEditForm] = useState({ name: '', phone: '', areas: '', specialties: [], loading: false, error: '', message: '' });
+  const [profileEditOpenCategory, setProfileEditOpenCategory] = useState('');
   const [recoveryForm, setRecoveryForm] = useState({ role: 'client', phone: '', token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' });
   const [adminSupportCases, setAdminSupportCases] = useState([]);
   const [adminSupportSelected, setAdminSupportSelected] = useState(null);
@@ -1543,6 +1545,40 @@ function AppScreens({ onScreenChange }) {
     return () => clearInterval(timer);
   }, [screen, adminData.tab, session?.token, adminSupportSelected?._id, adminRecoverySelected?.id, adminRecoverySelected?._id]);
 
+  function beginProfileEdit() {
+    const user = session?.role === 'fanni' ? (techData.profile || session.user || {}) : (session?.user || {});
+    setProfileEditForm({ name: String(user.name || ''), phone: String(user.phone || ''), areas: Array.isArray(user.areas) ? user.areas.join('، ') : '', specialties: Array.isArray(user.specialties) ? [...user.specialties] : [], loading: false, error: '', message: user.pendingProfileChange?.requestedAt ? 'لديك طلب تعديل بيانات قيد مراجعة الإدارة.' : '' });
+    setProfileEditOpenCategory(''); setScreen('profileEdit');
+  }
+  function toggleProfileEditSpecialty(specialty) {
+    setProfileEditForm(current => {
+      if (current.specialties.includes(specialty)) return { ...current, specialties: current.specialties.filter(item => item !== specialty), error: '' };
+      if (current.specialties.length >= 20) return { ...current, error: 'يمكنك اختيار 20 تخصصًا كحد أقصى.' };
+      return { ...current, specialties: [...current.specialties, specialty], error: '' };
+    });
+  }
+  async function saveProfileEdits() {
+    if (!session || profileEditForm.loading) return;
+    const phone = String(profileEditForm.phone || '').replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setProfileEditForm(current => ({ ...current, error: 'رقم الهاتف لازم يكون 11 رقمًا ويبدأ بـ 01.' })); return; }
+    if (session.role === 'client') {
+      const name = String(profileEditForm.name || '').trim();
+      if (name.length < 2 || name.length > 50) { setProfileEditForm(current => ({ ...current, error: 'اكتب الاسم بشكل صحيح (من حرفين إلى 50 حرفًا).' })); return; }
+      setProfileEditForm(current => ({ ...current, loading: true, error: '', message: '' }));
+      try { const result = await api('/client/me', { method: 'PATCH', token: session.token, body: { name, phone } }); const nextSession = { ...session, user: { ...session.user, ...(result.client || { name, phone }) } }; await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession)); setSession(nextSession); setProfileEditForm(current => ({ ...current, loading: false, error: '', message: result.message || 'تم تحديث بيانات حسابك بنجاح.' })); }
+      catch (error) { setProfileEditForm(current => ({ ...current, loading: false, error: error.message || 'تعذر حفظ البيانات.' })); }
+      return;
+    }
+    if (session.role !== 'fanni') return;
+    if (session.user?.pendingProfileChange?.requestedAt || techData.profile?.pendingProfileChange?.requestedAt) { setProfileEditForm(current => ({ ...current, error: 'لديك طلب تعديل بيانات قيد مراجعة الإدارة. انتظر القرار قبل إرسال طلب جديد.' })); return; }
+    const specialties = [...new Set(profileEditForm.specialties.map(value => String(value).trim()).filter(Boolean))];
+    const areas = [...new Set(String(profileEditForm.areas || '').split(/[،,؛;\n]/).map(value => value.trim()).filter(value => value.length >= 2))];
+    if (!specialties.length) { setProfileEditForm(current => ({ ...current, error: 'اختار تخصصًا واحدًا على الأقل.' })); return; }
+    if (!areas.length || areas.length > 30 || areas.some(area => area.length > 60)) { setProfileEditForm(current => ({ ...current, error: 'اكتب منطقة عمل واحدة على الأقل، وكل منطقة لا تزيد عن 60 حرفًا.' })); return; }
+    setProfileEditForm(current => ({ ...current, loading: true, error: '', message: '' }));
+    try { const result = await api('/fanni/me', { method: 'PATCH', token: session.token, body: { phone, specialties, areas } }); const updatedUser = result.user || { ...session.user, pendingProfileChange: result.pendingProfileChange }; const nextSession = { ...session, user: { ...session.user, ...updatedUser, pendingProfileChange: result.pendingProfileChange || updatedUser.pendingProfileChange } }; await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession)); setSession(nextSession); setTechData(current => ({ ...current, profile: { ...(current.profile || session.user), ...updatedUser, pendingProfileChange: result.pendingProfileChange || updatedUser.pendingProfileChange } })); setProfileEditForm(current => ({ ...current, loading: false, error: '', message: result.message || 'تم إرسال طلب تعديل بياناتك للإدارة للمراجعة.' })); }
+    catch (error) { setProfileEditForm(current => ({ ...current, loading: false, error: error.message || 'تعذر إرسال طلب تعديل البيانات.' })); }
+  }
   async function changeAccountPassword() {
     if (!session) return;
     const currentPassword = accountPasswordForm.currentPassword;
@@ -1858,6 +1894,7 @@ function AppScreens({ onScreenChange }) {
         <View style={styles.detailRow}><Text style={styles.detailLabel}>نوع الحساب</Text><Text style={styles.detailValue}>{isClientAccount ? 'عميل' : session?.role === 'fanni' ? 'فني' : 'إدارة'}</Text></View>
         {session?.role === 'fanni' && session?.user?.walletBalance != null ? <View style={styles.detailRow}><Text style={styles.detailLabel}>الرصيد</Text><Text style={styles.detailValueGold}>{String(session.user.walletBalance)} جنيه</Text></View> : null}
       </View>
+      {['client', 'fanni'].includes(session?.role) ? <Button title="✏️ تعديل بياناتي" onPress={beginProfileEdit} /> : null}
       <Button title="تغيير كلمة المرور" onPress={() => setScreen('changePassword')} />
       {['client', 'fanni'].includes(session?.role) ? <>
         <Text style={styles.sectionTitle}>سجل الخدمات والتقييمات</Text>
@@ -1875,6 +1912,35 @@ function AppScreens({ onScreenChange }) {
     </ScrollView></SafeAreaView>;
   }
 
+  if (screen === 'profileEdit') {
+    const isClientProfile = session?.role === 'client';
+    const currentUser = session?.role === 'fanni' ? (techData.profile || session.user || {}) : (session?.user || {});
+    const hasPendingTechEdit = session?.role === 'fanni' && Boolean(currentUser?.pendingProfileChange?.requestedAt);
+    return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
+      <Button title="‹ رجوع إلى حسابي" secondary onPress={() => setScreen('account')} />
+      <Text style={styles.title}>تعديل بياناتي</Text>
+      {isClientProfile ? <>
+        <Field label="الاسم بالكامل" value={profileEditForm.name} onChangeText={value => setProfileEditForm(current => ({ ...current, name: value, error: '' }))} autoCapitalize="words" />
+        <Field label="رقم الهاتف" value={profileEditForm.phone} onChangeText={value => setProfileEditForm(current => ({ ...current, phone: value, error: '' }))} keyboardType="phone-pad" />
+        <Text style={styles.detail}>رقم الهاتف لازم يكون 11 رقمًا ويبدأ بـ 01، وما يكونش مسجل لحساب آخر.</Text>
+      </> : <>
+        <Field label="رقم الهاتف" value={profileEditForm.phone} onChangeText={value => setProfileEditForm(current => ({ ...current, phone: value, error: '' }))} keyboardType="phone-pad" />
+        <Text style={styles.sectionTitle}>التخصصات والخدمات *</Text>
+        <Text style={styles.detail}>اختار التخصصات اللي بتقدمها، بحد أقصى 20 تخصصًا.</Text>
+        {categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length; const open = profileEditOpenCategory === category.label; return <View key={category.label} style={styles.selectionGroup}>
+          <TouchableOpacity onPress={() => setProfileEditOpenCategory(open ? '' : category.label)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {chosenCount} مختار {open ? '▲' : '▼'}</Text></TouchableOpacity>
+          {open ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleProfileEditSpecialty(service)} style={styles.choiceRow}><Text style={styles.choiceText}>{profileEditForm.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
+        </View>; })}
+        <Field label="مناطق العمل (افصل بين المناطق بفاصلة)" value={profileEditForm.areas} onChangeText={value => setProfileEditForm(current => ({ ...current, areas: value, error: '' }))} placeholder="مثال: مدينة نصر، مصر الجديدة" multiline />
+        <Text style={styles.detail}>تعديل بيانات الفني يُرسل للإدارة للمراجعة، وتظل بياناتك الحالية كما هي حتى الموافقة.</Text>
+        {hasPendingTechEdit ? <Text style={styles.warningText}>عندك طلب تعديل بيانات بالفعل قيد مراجعة الإدارة. انتظر القرار قبل إرسال طلب جديد.</Text> : null}
+      </>}
+      {profileEditForm.error ? <Text style={styles.errorText}>{profileEditForm.error}</Text> : null}
+      {profileEditForm.message ? <Text style={styles.successText}>{profileEditForm.message}</Text> : null}
+      <Button title={profileEditForm.loading ? 'جاري الحفظ...' : isClientProfile ? 'حفظ التعديلات' : 'إرسال طلب التعديل للإدارة'} onPress={saveProfileEdits} disabled={profileEditForm.loading || hasPendingTechEdit} />
+      <Button title="إلغاء" secondary onPress={() => setScreen('account')} disabled={profileEditForm.loading} />
+    </ScrollView></SafeAreaView>;
+  }
   if (screen === 'changePassword') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="‹ رجوع إلى حسابي" secondary onPress={() => setScreen('account')} /><Text style={styles.title}>تغيير كلمة المرور</Text><Field label="كلمة المرور الحالية" value={accountPasswordForm.currentPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, currentPassword: v }))} secureTextEntry /><Field label="كلمة المرور الجديدة" value={accountPasswordForm.newPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={accountPasswordForm.confirmPassword} onChangeText={v => setAccountPasswordForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title={accountPasswordForm.loading ? 'جاري الحفظ...' : 'حفظ كلمة المرور'} onPress={changeAccountPassword} disabled={accountPasswordForm.loading} />{accountPasswordForm.error ? <Text style={styles.errorText}>{accountPasswordForm.error}</Text> : null}</ScrollView></SafeAreaView>;
 
   if (screen === 'passwordRecovery') return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><Button title="‹ رجوع لتسجيل الدخول" secondary onPress={() => setScreen('login')} /><Text style={styles.title}>استعادة كلمة المرور</Text>{!recoveryForm.token ? <><Field label="رقم الهاتف المسجل" value={recoveryForm.phone} onChangeText={v => setRecoveryForm(c => ({ ...c, phone: v }))} keyboardType="phone-pad" /><Button title={recoveryForm.loading ? 'جاري إرسال الطلب...' : 'فتح طلب دعم'} onPress={startPasswordRecovery} disabled={recoveryForm.loading} /></> : <><Text style={styles.sectionTitle}>محادثة استعادة الحساب</Text><Text style={styles.detail}>{recoveryForm.info}</Text>{recoveryForm.messages.map((m,i) => <View key={String(m._id||i)} style={styles.chatMessage}><Text style={styles.detail}>{m.senderRole === 'admin' ? 'الدعم' : 'أنت'} • {dateLabel(m.createdAt)}</Text><Text style={styles.chatMessageText}>{m.text}</Text></View>)}<Field label="رسالة للدعم" value={recoveryForm.text} onChangeText={v => setRecoveryForm(c => ({ ...c, text: v }))} returnKeyType="send" onSubmitEditing={sendRecoveryMessage} blurOnSubmit /><Button title="إرسال رسالة للدعم" onPress={sendRecoveryMessage} disabled={recoveryForm.loading} /><Field label="رمز الاستعادة الذي أرسله الدعم" value={recoveryForm.code} onChangeText={v => setRecoveryForm(c => ({ ...c, code: v }))} keyboardType="number-pad" /><Button title="التحقق من الرمز" secondary onPress={verifyRecoveryCode} disabled={recoveryForm.loading} /><Field label="كلمة المرور الجديدة" value={recoveryForm.newPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, newPassword: v }))} secureTextEntry /><Field label="تأكيد كلمة المرور الجديدة" value={recoveryForm.confirmPassword} onChangeText={v => setRecoveryForm(c => ({ ...c, confirmPassword: v }))} secureTextEntry /><Button title="حفظ كلمة المرور الجديدة" onPress={resetRecoveredPassword} disabled={recoveryForm.loading} /><Button title="تحديث المحادثة" secondary onPress={refreshPasswordRecovery} /></>}{recoveryForm.error ? <Text style={styles.errorText}>{recoveryForm.error}</Text> : null}</ScrollView></SafeAreaView>;
