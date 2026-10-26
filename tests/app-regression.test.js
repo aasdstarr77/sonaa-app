@@ -324,3 +324,8 @@ test('technician account tab exposes Edit My Details and specialty edits are opt
   assert.ok(app.includes('التخصصات والخدمات (اختياري)'), 'specialty selection should be labelled optional');
   assert.ok(!app.includes("اختار تخصصًا واحدًا على الأقل."), 'saving profile edits should not require selecting a specialty');
 });
+
+test('technician profile edit loads the shared service categories before rendering specialty choices', () => {
+  assert.match(app, /\['client', 'clientRegister', 'technicianRegister', 'profileEdit'\]\.includes\(screen\)/);
+  assert.ok(app.includes('categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length;'));
+});
