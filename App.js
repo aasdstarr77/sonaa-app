@@ -499,7 +499,7 @@ function AppScreens({ onScreenChange }) {
       setServicesLoading(true); setServicesError('');
       try {
         const serviceResult = await api('/services');
-        if (!Array.isArray(serviceResult.categories)) throw new Error('قائمة الخدمات من الخادم غير صحيحة');
+        if (!Array.isArray(serviceResult.categories) || serviceResult.categories.length === 0) throw new Error('قائمة الخدمات من الخادم غير متاحة حاليًا');
         if (!mounted) return;
         setCategories(serviceResult.categories);
         setSelected(current => current && serviceResult.categories.some(item => item.label === current.label)
@@ -1988,6 +1988,17 @@ function AppScreens({ onScreenChange }) {
         onSubmitEditing={isClient ? registerClient : registerTechnician} blurOnSubmit />
       {!isClient && <>
         <Text style={styles.sectionTitle}>اختار الخدمات اللي بتقدمها</Text>
+        {servicesLoading && categories.length === 0 ? <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+          <ActivityIndicator color={COLORS.teal} />
+          <Text style={[styles.detail, { textAlign: 'center' }]}>جاري تحميل الخدمات...</Text>
+        </View> : null}
+        {!servicesLoading && servicesError && categories.length === 0 ? <View style={{ backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 12, padding: 12, marginBottom: 10 }}>
+          <Text style={[styles.errorText, { textAlign: 'center' }]}>تعذر تحميل الخدمات. تحقق من اتصال الإنترنت ثم أعد المحاولة.</Text>
+          <TouchableOpacity onPress={() => setReloadKey(value => value + 1)} disabled={servicesLoading}
+            style={{ alignSelf: 'center', backgroundColor: COLORS.teal, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, marginTop: 6 }}>
+            <Text style={{ color: COLORS.white, fontWeight: '900', fontSize: 13 }}>إعادة تحميل الخدمات</Text>
+          </TouchableOpacity>
+        </View> : null}
         {categories.map(category => <View key={category.label} style={styles.selectionGroup}>
           <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
           {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
