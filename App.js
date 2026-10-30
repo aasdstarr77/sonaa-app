@@ -240,7 +240,7 @@ function AppScreens({ onScreenChange }) {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [authMode, setAuthMode] = useState('fanni');
-  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', address: '', description: '', voiceRecordingData: '', budget: '', specialties: [] });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '', service: '', area: '', areas: '', address: '', description: '', voiceRecordingData: '', budget: '', specialties: [] });
   const registrationNameRef = useRef(null);
   const registrationPhoneRef = useRef(null);
   const registrationPasswordRef = useRef(null);
@@ -258,6 +258,8 @@ function AppScreens({ onScreenChange }) {
   const [technicianSearch, setTechnicianSearch] = useState('');
   const [technicianServiceFilter, setTechnicianServiceFilter] = useState('الكل');
   const [guidelinesChecked, setGuidelinesChecked] = useState(false);
+  const [guidelinesReachedEnd, setGuidelinesReachedEnd] = useState(false);
+  const [guidelinesViewportHeight, setGuidelinesViewportHeight] = useState(0);
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
   const [clientTab, setClientTab] = useState('current');
@@ -829,9 +831,29 @@ function AppScreens({ onScreenChange }) {
   async function registerTechnician() {
     if (form.password !== form.confirmPassword) { Alert.alert('كلمة السر', 'كلمتا السر غير متطابقتين.'); return; }
     if (!form.specialties.length) { Alert.alert('بيانات ناقصة', 'اختار خدمة واحدة على الأقل.'); return; }
+    const areas = [...new Set(String(form.areas || '').split(/[,،\\n]/).map(area => area.trim()).filter(Boolean))];
+    if (!areas.length || areas.some(area => area.length < 2 || area.length > 60) || areas.length > 30) {
+      Alert.alert('مناطق العمل', 'اكتب منطقة عمل واحدة على الأقل. افصل بين المناطق بفاصلة، وكل منطقة من حرفين إلى 60 حرفًا، وبحد أقصى 30 منطقة.');
+      return;
+    }
+    if (!guidelinesReachedEnd) {
+      Alert.alert('ميثاق صُنّاع', 'لازم تقرأ الميثاق حتى آخره قبل الموافقة.');
+      return;
+    }
+    if (!guidelinesChecked) {
+      Alert.alert('الموافقة مطلوبة', 'علّم على مربع قرأت وأوافق على ميثاق صُنّاع لإكمال التسجيل.');
+      return;
+    }
     setLoginLoading(true);
     try {
-      const result = await api('/fanni/register', { method: 'POST', body: { name: form.name.trim(), phone: form.phone.trim(), password: form.password, specialties: form.specialties } });
+      const result = await api('/fanni/register', { method: 'POST', body: {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        password: form.password,
+        specialties: form.specialties,
+        areas,
+        guidelinesAccepted: true
+      } });
       Alert.alert('تم إرسال التسجيل', result.message || 'حسابك قيد مراجعة الإدارة.');
       setUsername(form.phone); setPassword(''); setScreen('login'); setAuthMode('fanni');
     } catch (err) { Alert.alert('تعذر تسجيل الفني', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
@@ -1947,7 +1969,10 @@ function AppScreens({ onScreenChange }) {
   if (screen === 'clientRegister' || screen === 'technicianRegister') {
     const isClient = screen === 'clientRegister';
     return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
-      <Button title="‹ رجوع" secondary onPress={() => setScreen('home')} />
+      <Button title="‹ رجوع" secondary onPress={() => {
+        if (!isClient) { setGuidelinesChecked(false); setGuidelinesReachedEnd(false); setGuidelinesViewportHeight(0); }
+        setScreen('home');
+      }} />
       <Text style={styles.title}>{isClient ? 'إنشاء حساب عميل' : 'تسجيل فني جديد'}</Text>
       <Field label="الاسم" value={form.name} onChangeText={v => updateForm('name', v)} autoCapitalize="words"
         inputRef={registrationNameRef} returnKeyType="next" returnKeyLabel="التالي"
@@ -1967,8 +1992,51 @@ function AppScreens({ onScreenChange }) {
           <TouchableOpacity onPress={() => setSelected(current => current?.label === category.label ? null : category)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {(category.services || []).length} {selected?.label === category.label ? '▲' : '▼'}</Text></TouchableOpacity>
           {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
         </View>)}
+
+        <Field label="مناطق العمل (اكتب المناطق وافصل بينها بفاصلة) *" value={form.areas} onChangeText={value => updateForm('areas', value)} placeholder="مثال: مدينة نصر، مصر الجديدة، المعادي" multiline />
+        <Text style={styles.detail}>اكتب كل المناطق التي تستطيع العمل فيها. افصل بين كل منطقة والأخرى بفاصلة.</Text>
+
+        <Text style={styles.sectionTitle}>ميثاق صُنّاع – التعامل المهني مع العملاء</Text>
+        <Text style={styles.detail}>اقرأ الميثاق كاملًا. لن تتمكن من الموافقة أو إرسال طلب التسجيل قبل الوصول إلى نهاية النص.</Text>
+        <View style={{ height: 240, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, overflow: 'hidden', backgroundColor: COLORS.white }}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            onLayout={event => setGuidelinesViewportHeight(event.nativeEvent.layout.height)}
+            onContentSizeChange={(width, height) => {
+              if (guidelinesViewportHeight && height <= guidelinesViewportHeight + 8) setGuidelinesReachedEnd(true);
+            }}
+            onScroll={event => {
+              const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+              if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 18) setGuidelinesReachedEnd(true);
+            }}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ padding: 14, gap: 12 }}
+          >
+            <Text style={styles.detail}>١. التزم بسعر العرض الذي وافق عليه العميل. أي زيادة تحتاج موافقة صريحة مسجلة داخل المنصة قبل التنفيذ.</Text>
+            <Text style={styles.detail}>٢. تعامل باحترام وصدق، دون ضغط أو تهديد أو تضليل.</Text>
+            <Text style={styles.detail}>٣. قبل قبول العرض، الردود المسموحة «نعم»، «لا»، «حسب الاتفاق». ممنوع تبادل بيانات الاتصال أو التحايل على المنصة قبل القبول.</Text>
+            <Text style={styles.detail}>٤. لا تضغط إنهاء المهمة إلا بعد إنجازها فعلًا.</Text>
+            <Text style={styles.detail}>٥. احمِ بيانات العميل ولا تستخدمها خارج الطلب.</Text>
+            <Text style={styles.detail}>٦. يحق للطرفين التقييم بعد الإكمال؛ ممنوع الإكراه على تقييم إيجابي أو التلاعب بالتقييمات.</Text>
+            <Text style={styles.detail}>٧. المخالفات قد تؤدي إلى مراجعة الطلب أو تعليق الحساب أو إيقافه.</Text>
+            <Text style={styles.detail}>بالضغط على الموافقة، تؤكد أنك قرأت التعليمات وفهمتها وتتعهد بالالتزام بها أثناء استخدام منصة صُنّاع.</Text>
+          </ScrollView>
+        </View>
+        <TouchableOpacity disabled={!guidelinesReachedEnd} onPress={() => setGuidelinesChecked(value => !value)} activeOpacity={0.8}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, opacity: guidelinesReachedEnd ? 1 : 0.45 }}>
+          <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: guidelinesChecked ? COLORS.teal : COLORS.muted, backgroundColor: guidelinesChecked ? COLORS.teal : COLORS.white, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: COLORS.white, fontWeight: '900' }}>{guidelinesChecked ? '✓' : ''}</Text>
+          </View>
+          <Text style={[styles.detail, { flex: 1, fontWeight: '800', color: COLORS.text }]}>
+            {guidelinesReachedEnd ? 'قرأت ميثاق صُنّاع كاملًا وأوافق على الالتزام به.' : 'مرّر الميثاق حتى نهايته لتفعيل الموافقة.'}
+          </Text>
+        </TouchableOpacity>
       </>}
-      <Button title={loginLoading ? 'جاري التسجيل...' : isClient ? 'إنشاء حساب' : 'إرسال طلب التسجيل'} onPress={isClient ? registerClient : registerTechnician} disabled={loginLoading} />
+      <Button title={loginLoading ? 'جاري التسجيل...' : isClient ? 'إنشاء حساب' : 'إرسال طلب التسجيل'}
+        onPress={isClient ? registerClient : registerTechnician}
+        disabled={loginLoading || (!isClient && (!guidelinesReachedEnd || !guidelinesChecked))}
+      />
     </ScrollView></SafeAreaView>;
   }
 
