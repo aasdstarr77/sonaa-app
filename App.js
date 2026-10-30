@@ -831,7 +831,7 @@ function AppScreens({ onScreenChange }) {
   async function registerTechnician() {
     if (form.password !== form.confirmPassword) { Alert.alert('كلمة السر', 'كلمتا السر غير متطابقتين.'); return; }
     if (!form.specialties.length) { Alert.alert('بيانات ناقصة', 'اختار خدمة واحدة على الأقل.'); return; }
-    const areas = [...new Set(String(form.areas || '').split(/[,،\\n]/).map(area => area.trim()).filter(Boolean))];
+    const areas = [...new Set(String(form.areas || '').split(/[,،\n]/).map(area => area.trim()).filter(Boolean))];
     if (!areas.length || areas.some(area => area.length < 2 || area.length > 60) || areas.length > 30) {
       Alert.alert('مناطق العمل', 'اكتب منطقة عمل واحدة على الأقل. افصل بين المناطق بفاصلة، وكل منطقة من حرفين إلى 60 حرفًا، وبحد أقصى 30 منطقة.');
       return;
