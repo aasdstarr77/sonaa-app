@@ -508,7 +508,7 @@ function AppScreens({ onScreenChange }) {
         await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession));
       }
       setSession(nextSession);
-      if (role === 'client') setClientTab('current');
+      if (role === 'client') setClientTab('new');
       if (role === 'fanni') setTechData(current => ({ ...current, tab: 'offers' }));
       setPassword('');
       setScreen(role === 'admin' ? 'admin' : role === 'client' ? 'client' : 'technician');
@@ -526,7 +526,7 @@ function AppScreens({ onScreenChange }) {
       const nextSession = { token: result.token, user: result.client, role: 'client' };
       await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession));
       setSession(nextSession);
-      setClientTab('current');
+      setClientTab('new');
       setScreen('client');
     } catch (err) { Alert.alert('تعذر إنشاء الحساب', err.message || 'راجع البيانات وحاول مرة أخرى.'); }
     finally { setLoginLoading(false); }
