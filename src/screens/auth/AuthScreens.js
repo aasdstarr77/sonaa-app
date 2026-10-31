@@ -17,7 +17,7 @@ export function LoginScreen({ authMode, username, setUsername, password, setPass
         <Text style={styles.loginSubtitle}>{authMode === 'client' ? 'سجّل دخولك وخلّي طلباتك أسهل.' : 'سجّل دخولك وتابع فرص الشغل المتاحة ليك.'}</Text>
       </View>
       <View style={styles.loginForm}>
-        <Field label="رقم الهاتف أو البريد الإلكتروني" value={username} onChangeText={setUsername} placeholder="اكتب رقم الهاتف أو البريد الإلكتروني" keyboardType="default" />
+        <Field label="رقم الهاتف" value={username} onChangeText={setUsername} placeholder="اكتب رقم الهاتف" keyboardType="phone-pad" />
         <Field label="كلمة السر" value={password} onChangeText={setPassword} secureTextEntry placeholder="اكتب كلمة السر" returnKeyType="go" onSubmitEditing={handleLogin} blurOnSubmit />
         <TouchableOpacity accessibilityRole="button" onPress={() => { setRecoveryForm({ role: authMode, phone: username, token: '', id: '', messages: [], text: '', code: '', newPassword: '', confirmPassword: '', loading: false, error: '', info: '' }); setScreen('passwordRecovery'); }} style={styles.recoveryLink}>
           <Text style={styles.recoveryLinkText}>نسيت كلمة السر؟ استعادة</Text>
