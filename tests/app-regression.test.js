@@ -116,7 +116,7 @@ test('Sonaa splash removes the spinning letter and swings the logo like a pendul
   assert.ok(!app.includes('<Animated.Text'), 'the splash should not animate a separate text letter');
   assert.ok(app.includes('<Text style={splashStyles.title}>صُنّاع</Text>'), 'the main brand word should remain static');
   assert.ok(app.includes('<Text style={splashStyles.caption}>كل خدمة تبدأ بخطوة</Text>'), 'splash caption should use the agreed tagline');
-  assert.ok(app.includes('<Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>'), 'home tagline should retain the premium home design');
+  assert.ok(app.includes('<Text style={styles.homeTaglinePremium}>كُلُّ خِدْمَةٍ تَبْدَأُ بِخُطْوَةٍ</Text>'), 'home tagline should retain the premium home design');
   assert.ok(!app.includes('صُنّاع — كل خدمة تبدأ بخطوة'), 'login should not receive the splash-only tagline');
   assert.ok(!app.includes('<Text style={styles.subtitle}>كل خدمة تبدأ بخطوة</Text>'), 'technician screen should not receive the splash-only tagline');
 });
