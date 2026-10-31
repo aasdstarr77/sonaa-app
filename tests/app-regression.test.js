@@ -4,7 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const app = fs.readFileSync(path.join(root, 'App.js'), 'utf8');
+function collectJavaScript(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap(entry => {
+    const fullPath = path.join(directory, entry.name);
+    return entry.isDirectory() ? collectJavaScript(fullPath) : /\.js$/.test(entry.name) ? [fs.readFileSync(fullPath, 'utf8')] : [];
+  }).join('\n');
+}
+const app = fs.readFileSync(path.join(root, 'App.js'), 'utf8') + '\n' + collectJavaScript(path.join(root, 'src'));
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 test('app points to the production Sonaa API', () => {
@@ -66,10 +72,7 @@ test('required runtime packages are declared', () => {
 });
 
 test('client order cards define order inside the client orders map callback', () => {
-  const clientScreenStart = app.indexOf("if (screen === 'client' && session?.role === 'client')");
-  assert.notEqual(clientScreenStart, -1, 'client screen renderer should exist');
-  const clientScreenEnd = app.indexOf("\n  if (screen === '", clientScreenStart + 10);
-  const clientScreen = app.slice(clientScreenStart, clientScreenEnd === -1 ? undefined : clientScreenEnd);
+  const clientScreen = fs.readFileSync(path.join(root, 'src/screens/client/ClientDashboard.js'), 'utf8');
   assert.match(
     clientScreen,
     /clientData\.orders\.filter\([\s\S]*?\)\.map\(\(order, i\) => \{[\s\S]*?const sn = getOrderSN\(order\)/,
@@ -179,8 +182,8 @@ test('technician order cards label area and client budget and invite technicians
 });
 
 test('client service description is prominent and readable on technician job cards and accepted job details', () => {
-  assert.ok(app.includes('serviceDescriptionBox: { backgroundColor: \'#EEF2FF\''));
-  assert.ok(app.includes('serviceDescriptionText: { color: \'#172554\', fontSize: 18, fontWeight: \'600\', lineHeight: 28'));
+  assert.ok(app.includes('serviceDescriptionBox: { backgroundColor: COLORS.indigo50'));
+  assert.ok(app.includes('serviceDescriptionText: { color: COLORS.navy, fontSize: 18, fontWeight: \'600\', lineHeight: 28'));
   assert.ok(app.includes('تفاصيل الخدمة من العميل</Text><Text style={styles.serviceDescriptionText}>{item.description'));
   assert.ok(app.includes('تفاصيل الشغل من العميل</Text><Text style={styles.serviceDescriptionText}>{assignedDetails[sn].order.description'));
 });
@@ -216,8 +219,8 @@ test('client current orders tab is labeled الطلبات الجارية', () =>
 test('client and technician notifications visually distinguish unread items and provide read all', () => {
   assert.equal(app.split('title="قراءة الكل" secondary onPress={markAllNotificationsRead}').length - 1, 2);
   assert.equal(app.split('(item.read || item.readAt) ? styles.notificationRead : styles.notificationUnread').length - 1, 2);
-  assert.ok(app.includes("notificationRead: { backgroundColor: '#F5F7FF', opacity: 0.62 }"));
-  assert.ok(app.includes("notificationReadText: { color: '#64748B' }"));
+  assert.ok(app.includes("notificationRead: { backgroundColor: COLORS.background, opacity: 0.62 }"));
+  assert.ok(app.includes("notificationReadText: { color: COLORS.muted }"));
   assert.ok(app.includes("unread: 0 }));"));
 });
 
@@ -240,8 +243,8 @@ test('client and technician chats render price-change requests in the same chron
 
 test('client and technician support buttons keep their positions and use the new premium support color', () => {
   assert.equal(app.split('onPress={openWhatsAppSupport} style={[styles.floatingButton,styles.whatsappButton]}').length - 1, 2, 'client and technician support buttons should both remain in place');
-  assert.ok(app.includes("whatsappButton: { backgroundColor: '#312E81', borderColor: '#67E8F9', borderWidth: 1.5"), 'support button should use the new indigo/cyan styling');
-  assert.ok(app.includes("floatingWhatsApp: { color: '#FFFFFF', fontSize: 21"), 'support icon should remain clearly visible');
+  assert.ok(app.includes("whatsappButton: { backgroundColor: COLORS.indigo900, borderColor: COLORS.cyan400, borderWidth: 1.5"), 'support button should use the new indigo/cyan styling');
+  assert.ok(app.includes("floatingWhatsApp: { color: COLORS.white, fontSize: 21"), 'support icon should remain clearly visible');
 });
 
 test('technician available orders and offers are deduplicated on initial load and refresh', () => {
@@ -328,4 +331,109 @@ test('technician account tab exposes Edit My Details and specialty edits are opt
 test('technician profile edit loads the shared service categories before rendering specialty choices', () => {
   assert.match(app, /\['client', 'clientRegister', 'technicianRegister', 'profileEdit'\]\.includes\(screen\)/);
   assert.ok(app.includes('categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length;'));
+});
+
+
+test('modular screen files are connected and app assets resolve from their new locations', () => {
+  const screen = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const appEntry = fs.readFileSync(path.join(root, 'App.js'), 'utf8');
+  assert.match(screen, /import \{ API_BASE, api \} from '\.\.\/services\/api';/);
+  assert.match(screen, /from '\.\/auth\/AuthScreens'/);
+  assert.match(screen, /from '\.\/account\/AccountScreens'/);
+  assert.ok(!screen.includes('require("./assets/'), 'screen assets must use the path relative to src/screens');
+  assert.match(screen, /require\('\.\.\/\.\.\/assets\/LOGO_UPLOAD_HERE\/logo\.png'\)/);
+  assert.match(appEntry, /from '\.\/src\/screens\/AppScreens'/);
+});
+
+test('authentication and account screens are extracted from the main screen controller', () => {
+  const authScreens = fs.readFileSync(path.join(root, 'src/screens/auth/AuthScreens.js'), 'utf8');
+  const accountScreens = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
+  for (const name of ['LoginScreen', 'ChangePasswordScreen', 'PasswordRecoveryScreen']) assert.match(authScreens, new RegExp('export function ' + name));
+  for (const name of ['AccountScreen', 'ProfileEditScreen']) assert.match(accountScreens, new RegExp('export function ' + name));
+});
+
+
+test('extracted screen modules contain component bodies, not the old screen condition wrappers', () => {
+  const authScreens = fs.readFileSync(path.join(root, 'src/screens/auth/AuthScreens.js'), 'utf8');
+  const accountScreens = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
+  assert.ok(!authScreens.includes("if (screen === 'login')"));
+  assert.ok(!accountScreens.includes("if (screen === 'account')"));
+  assert.ok(!accountScreens.includes("if (screen === 'profileEdit')"));
+  assert.match(authScreens, /return <SafeAreaView style=\{styles\.loginSafe\}>/);
+  assert.match(accountScreens, /return <SafeAreaView style=\{styles\.safe\}>/);
+  assert.match(authScreens, /require\('\.\.\/\.\.\/\.\.\/assets\/LOGO_UPLOAD_HERE\/logo\.png'\)/);
+});
+
+
+test('support and admin dashboards are separate feature modules and wired to screen navigation', () => {
+  const screen = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const support = fs.readFileSync(path.join(root, 'src/screens/support/SupportScreen.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  assert.match(screen, /from '\.\/support\/SupportScreen'/);
+  assert.match(screen, /from '\.\/admin\/AdminDashboard'/);
+  assert.match(screen, /<SupportScreen session=\{session\}/);
+  assert.match(screen, /<AdminDashboard session=\{session\}/);
+  assert.match(support, /export function SupportScreen/);
+  assert.match(admin, /export function AdminDashboard/);
+  assert.ok(!support.includes("if (screen === 'support'"));
+  assert.ok(!admin.includes("if (screen === 'admin'"));
+});
+
+
+test('client and technician dashboards are split into dedicated feature modules', () => {
+  const screen = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const client = fs.readFileSync(path.join(root, 'src/screens/client/ClientDashboard.js'), 'utf8');
+  const technician = fs.readFileSync(path.join(root, 'src/screens/technician/TechnicianDashboard.js'), 'utf8');
+  assert.match(screen, /from '\.\/client\/ClientDashboard'/);
+  assert.match(screen, /from '\.\/technician\/TechnicianDashboard'/);
+  assert.match(screen, /<ClientDashboard context=\{screenContext\}/);
+  assert.match(screen, /<TechnicianDashboard context=\{screenContext\}/);
+  assert.match(client, /export function ClientDashboard/);
+  assert.match(technician, /export function TechnicianDashboard/);
+  assert.match(client, /const \{ screen, setScreen/);
+  assert.match(technician, /const \{ screen, setScreen/);
+});
+
+
+test('application state is grouped in a dedicated hook without changing state ownership', () => {
+  const screen = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const hook = fs.readFileSync(path.join(root, 'src/hooks/useAppState.js'), 'utf8');
+  assert.match(screen, /import \{ useAppState \} from '\.\.\/hooks\/useAppState';/);
+  assert.match(screen, /const appState = useAppState\(\)/);
+  assert.match(hook, /export function useAppState\(\)/);
+  assert.match(hook, /const \[session, setSession\] = useState\(null\)/);
+  assert.match(hook, /const \[clientData, setClientData\] = useState/);
+  assert.match(hook, /const \[techData, setTechData\] = useState/);
+  assert.match(hook, /const services = useMemo/);
+  assert.match(hook, /return \{[\s\S]*?session[\s\S]*?clientData[\s\S]*?techData/);
+});
+
+
+test('navigation and push registration are isolated in dedicated hooks', () => {
+  const screen = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const navigation = fs.readFileSync(path.join(root, 'src/hooks/useScreenNavigation.js'), 'utf8');
+  const push = fs.readFileSync(path.join(root, 'src/hooks/usePushNotifications.js'), 'utf8');
+  assert.match(screen, /useScreenNavigation\(onScreenChange\)/);
+  assert.match(screen, /usePushNotifications\(session\)/);
+  assert.match(navigation, /export function useScreenNavigation/);
+  assert.match(push, /export function usePushNotifications/);
+  assert.match(push, /getExpoPushTokenAsync/);
+  assert.match(push, /push-token/);
+  assert.match(push, /Notifications\.setNotificationHandler/);
+});
+
+
+test('client, technician, admin, and support use separate page palette surfaces', () => {
+  const styles = fs.readFileSync(path.join(root, 'src/theme/styles.js'), 'utf8');
+  const colors = fs.readFileSync(path.join(root, 'src/theme/colors.js'), 'utf8');
+  const technician = fs.readFileSync(path.join(root, 'src/screens/technician/TechnicianDashboard.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  const support = fs.readFileSync(path.join(root, 'src/screens/support/SupportScreen.js'), 'utf8');
+  for (const page of ['home', 'login', 'client', 'technician', 'admin', 'support', 'splash']) assert.match(colors, new RegExp('^  ' + page + ':', 'm'));
+  assert.match(styles, /technicianSafe: \{ flex: 1, backgroundColor: PAGE_COLORS\.technician\.background \}/);
+  assert.match(styles, /adminSafe: \{ flex: 1, backgroundColor: PAGE_COLORS\.admin\.background \}/);
+  assert.match(styles, /supportSafe: \{ flex: 1, backgroundColor: PAGE_COLORS\.support\.background \}/);
+  assert.match(technician, /styles\.technicianSafe/);
+  assert.match(admin, /styles\.adminSafe/);
+  assert.match(support, /styles\.supportSafe/);
 });

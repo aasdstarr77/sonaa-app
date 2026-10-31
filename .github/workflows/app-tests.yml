@@ -2,9 +2,10 @@ name: App Automated Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'refactor/app-organization-2026-10-31' ]
     paths:
       - 'tests/**'
+      - 'src/**'
       - 'App.js'
       - 'app.json'
       - 'package.json'
@@ -26,3 +27,5 @@ jobs:
         run: npm install --legacy-peer-deps
       - name: Run automated tests
         run: node --test tests/*.test.js
+      - name: Bundle Android JavaScript (no APK)
+        run: npx expo export --platform android --output-dir /tmp/sonaa-app-export
