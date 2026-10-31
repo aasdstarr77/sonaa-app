@@ -1649,8 +1649,8 @@ function AppScreens({ onScreenChange }) {
           <Image source={require('../../assets/LOGO_UPLOAD_HERE/logo.png')} style={styles.homeLogoImage} resizeMode="contain" />
         </View>
         <Text style={styles.homeBrandTitlePremium}>صُنّاع</Text>
-        <Text style={styles.homeTaglinePremium}>بنوصّل الخدمة بالفرصة</Text>
-        <Text style={styles.homeIntroPremium}>خدماتك وشغلك في مكان واحد، بخطوات بسيطة وسريعة.</Text>
+        <Text style={styles.homeTaglinePremium}>كُلُّ خِدْمَةٍ تَبْدَأُ بِخُطْوَةٍ</Text>
+        <Text style={styles.homeIntroPremium}>أكثر من عشرين مهنة في مكان واحد، وطلب خدمتك بخطوات بسيطة وسريعة.</Text>
       </View>
       <View style={styles.roleCardsPremium}>
         <TouchableOpacity activeOpacity={0.88} onPress={() => goLogin('client')} style={[styles.roleCardPremium, styles.clientRoleCardPremium]}>

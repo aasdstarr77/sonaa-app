@@ -2,7 +2,7 @@
   "expo": {
     "name": "sonaa",
     "slug": "sonaa",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "platforms": [
@@ -10,11 +10,11 @@
     ],
     "android": {
       "package": "com.sonaa.app",
-      "versionCode": 11,
+      "versionCode": 12,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F5F7FF"
+        "backgroundColor": "#F4F8FC"
       }
     },
     "extra": {
@@ -26,7 +26,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F8FAFC"
+      "backgroundColor": "#F4F8FC"
     },
     "owner": "sonaa2030",
     "plugins": [
