@@ -52,7 +52,6 @@ export function TechnicianDashboard({ context }) {
           <Button title="خروج" logout onPress={() => setLogoutConfirmOpen(true)} />
         </View>
         <View style={styles.clientHeaderRight}>
-          <View style={[styles.clientAvatarSmall, {backgroundColor: COLORS.navy}]}><Text style={styles.clientAvatarText}>{(user.name || 'ف')[0]}</Text></View>
           <View style={styles.clientHeaderInfo}>
             <Text style={styles.clientNameSmall} numberOfLines={1}>{user.name || 'الفني'} • {user.level || 'مبتدئ'}</Text>
             <Text style={styles.clientRoleSmall}>{user.status || 'قيد المراجعة'} • {Number(user.walletBalance || 0)} جنيه</Text>

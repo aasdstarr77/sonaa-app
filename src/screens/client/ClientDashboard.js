@@ -43,7 +43,6 @@ export function ClientDashboard({ context }) {
           <Button title="خروج" logout onPress={() => setLogoutConfirmOpen(true)} />
         </View>
         <View style={styles.clientHeaderRight}>
-          <View style={styles.clientAvatarSmall}><Text style={styles.clientAvatarText}>{(session.user?.name || 'ع')[0]}</Text></View>
           <View style={styles.clientHeaderInfo}>
             <Text style={styles.clientNameSmall} numberOfLines={1}>أهلًا {session.user?.name || 'بك'}</Text>
             <Text style={styles.clientRoleSmall}>عميل صُنّاع</Text>

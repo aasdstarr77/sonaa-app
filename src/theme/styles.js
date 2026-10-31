@@ -6,6 +6,8 @@ export const styles = StyleSheet.create({
   brandHeaderSafe: { backgroundColor: PAGE_COLORS.home.background },
   // FIXED COMPACT HEADER - لا ياخذ نص الشاشة
   brandHeader: { height: 48, minHeight: 48, maxHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.paleIndigo },
+  brandHeaderAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.teal, borderWidth: 1, borderColor: COLORS.cyan300, alignItems: 'center', justifyContent: 'center', marginRight: 9 },
+  brandHeaderAvatarText: { color: COLORS.white, fontSize: 14, fontWeight: '900' },
   brandHeaderLogo: { width: 30, height: 30 },
   brandHeaderTitle: { color: PAGE_COLORS.home.primary, fontSize: 18, fontWeight: '900', marginLeft: 8, letterSpacing: 0.3 },
   appScreenArea: { flex: 1 },
