@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { styles } from '../theme/styles';
 import { COLORS } from '../theme/colors';
-function Button({ title, onPress, secondary = false, disabled = false }) {
-  return <TouchableOpacity disabled={disabled} onPress={onPress} activeOpacity={0.85} style={[styles.button, secondary ? styles.buttonSecondary : styles.buttonPrimary, disabled && styles.disabledButton]}>
-    <Text style={[styles.buttonText, secondary ? styles.buttonSecondaryText : styles.buttonPrimaryText]}>{title}</Text>
+function Button({ title, onPress, secondary = false, danger = false, disabled = false }) {
+  return <TouchableOpacity disabled={disabled} onPress={onPress} activeOpacity={0.85} style={[styles.button, danger ? styles.buttonDanger : secondary ? styles.buttonSecondary : styles.buttonPrimary, disabled && styles.disabledButton]}>
+    <Text style={[styles.buttonText, danger ? styles.buttonDangerText : secondary ? styles.buttonSecondaryText : styles.buttonPrimaryText]}>{title}</Text>
   </TouchableOpacity>;
 }
 function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', multiline = false, autoCapitalize = 'none', returnKeyType = 'default', returnKeyLabel, onSubmitEditing, blurOnSubmit = false, inputRef }) {

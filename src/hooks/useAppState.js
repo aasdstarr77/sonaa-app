@@ -34,7 +34,7 @@ export function useAppState() {
   const [guidelinesViewportHeight, setGuidelinesViewportHeight] = useState(0);
   const [adminData, setAdminData] = useState({ orders: [], fannis: [], clients: [], topups: [], complaints: [], loading: false, error: '', tab: 'orders' });
   const [topup, setTopup] = useState({ amount: '', fromPhone: '', reference: '', method: 'vodafone_cash' });
-  const [clientTab, setClientTab] = useState('current');
+  const [clientTab, setClientTab] = useState('new');
   const [clientServiceSearch, setClientServiceSearch] = useState('');
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [subservicePickerOpen, setSubservicePickerOpen] = useState(false);
