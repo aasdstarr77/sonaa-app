@@ -71,6 +71,8 @@ export function ClientDashboard({ context }) {
         <Button title={loginLoading ? 'جاري إرسال الطلب...' : '🚀 إرسال طلب الخدمة'} onPress={createOrder} disabled={loginLoading} /></View>
       </>}</> : null}
       {clientData.sn ? <View style={styles.codeRowPremium}><Text selectable style={styles.successText}>كود الطلب: {clientData.sn}</Text><Button title="نسخ" secondary onPress={() => copyOrderCode(clientData.sn)} /></View> : null}
+      {clientTab === 'current' && !clientData.orders.some(order => !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(order.status)) ? <View style={styles.formCard}><Text style={styles.emptyText}>لا توجد طلبات جارية لديك حاليًا.</Text></View> : null}
+      {clientTab === 'previous' && !clientData.orders.some(order => ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(order.status)) ? <View style={styles.formCard}><Text style={styles.emptyText}>لا توجد طلبات سابقة حتى الآن.</Text></View> : null}
       {['current', 'previous'].includes(clientTab) ? clientData.orders.filter(order => clientTab === 'previous' ? ['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(order.status) : !['تم الانتهاء','منتهي','ملغي','مؤرشف','منتهي - اعتذار'].includes(order.status)).map((order, i) => {
         const sn = getOrderSN(order), expanded = Boolean(expandedClientOrders[sn]), rating = ratingDrafts[sn];
         return <View key={String(order._id || sn || i)} style={styles.orderCardPremium}>
