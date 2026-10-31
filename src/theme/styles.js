@@ -9,7 +9,10 @@ export const styles = StyleSheet.create({
   brandHeaderAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.teal, borderWidth: 1, borderColor: COLORS.cyan300, alignItems: 'center', justifyContent: 'center', marginRight: 9 },
   brandHeaderAvatarText: { color: COLORS.white, fontSize: 14, fontWeight: '900' },
   brandHeaderLogo: { width: 30, height: 30 },
-  brandHeaderTitle: { color: PAGE_COLORS.home.primary, fontSize: 18, fontWeight: '900', marginLeft: 8, letterSpacing: 0.3 },
+  brandHeaderTitleWrap: { width: 68, height: 30, marginLeft: 8, justifyContent: 'center', overflow: 'hidden' },
+  brandHeaderTitle: { color: PAGE_COLORS.home.primary, fontSize: 18, fontWeight: '900', letterSpacing: 0.3, alignSelf: 'flex-start' },
+  brandHeaderShimmer: { position: 'absolute', top: -2, left: 0, width: 25, height: 34, opacity: 0.82 },
+  brandHeaderShimmerGradient: { flex: 1 },
   appScreenArea: { flex: 1 },
 
   safe: { flex: 1, backgroundColor: PAGE_COLORS.client.background },
