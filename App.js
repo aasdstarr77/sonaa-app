@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, View, Text, Image } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import AppScreens from './src/screens/AppScreens';
 import StartupErrorBoundary from './src/components/StartupErrorBoundary';
@@ -8,8 +9,14 @@ import { splashStyles } from './src/theme/splashStyles';
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState('home');
+  const [headerInitial, setHeaderInitial] = useState('');
+  const handleScreenChange = useCallback((screen, initial) => {
+    setCurrentScreen(screen);
+    if (initial !== undefined) setHeaderInitial(initial);
+  }, []);
   const [showSplash, setShowSplash] = useState(true);
   const spin = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
   const showBrandHeader = !['home', 'login'].includes(currentScreen);
 
   useEffect(() => {
@@ -23,15 +30,33 @@ function AppContent() {
   }, [spin]);
 
   const logoRotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['-18deg', '18deg'] });
+  const shimmerTranslate = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-76, 76] });
+
+  useEffect(() => {
+    const animation = Animated.loop(Animated.sequence([
+      Animated.delay(650),
+      Animated.timing(shimmer, { toValue: 1, duration: 1050, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(shimmer, { toValue: 0, duration: 0, useNativeDriver: true }),
+      Animated.delay(1050),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [shimmer]);
 
   return <View style={styles.appRoot}>
     {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
       <View style={styles.brandHeader}>
+        {headerInitial ? <View style={styles.brandHeaderAvatar}><Text style={styles.brandHeaderAvatarText}>{headerInitial}</Text></View> : null}
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
-        <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
+        <View style={styles.brandHeaderTitleWrap}>
+          <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
+          <Animated.View pointerEvents="none" style={[styles.brandHeaderShimmer, { transform: [{ translateX: shimmerTranslate }] }]}>
+            <LinearGradient colors={['transparent', 'rgba(255,255,255,0.95)', 'rgba(100,220,238,0.72)', 'transparent']} locations={[0, 0.42, 0.58, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.brandHeaderShimmerGradient} />
+          </Animated.View>
+        </View>
       </View>
     </SafeAreaView> : null}
-    <View style={styles.appScreenArea}><AppScreens onScreenChange={setCurrentScreen} /></View>
+    <View style={styles.appScreenArea}><AppScreens onScreenChange={handleScreenChange} /></View>
     {showSplash ? <View style={splashStyles.overlay}>
       <View style={splashStyles.logoFrame}>
         <Animated.Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={[splashStyles.logo, { transform: [{ rotate: logoRotation }] }]} resizeMode="contain" />
