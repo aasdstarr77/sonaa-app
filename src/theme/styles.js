@@ -79,10 +79,12 @@ export const styles = StyleSheet.create({
   // BUTTONS PREMIUM
   button: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginVertical: 3, minHeight: 44, borderWidth: 1, shadowColor: COLORS.indigo900, shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 }, 
   buttonPrimary: { backgroundColor: COLORS.blue, borderColor: COLORS.indigo700, borderTopColor: COLORS.indigo400, borderBottomWidth: 3, shadowColor: COLORS.indigo900, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, 
-  buttonSecondary: { backgroundColor: COLORS.indigo50, borderColor: COLORS.indigo200, borderBottomWidth: 3, shadowColor: COLORS.indigo500, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 }, 
+  buttonSecondary: { backgroundColor: COLORS.indigo50, borderColor: COLORS.indigo200, borderBottomWidth: 3, shadowColor: COLORS.indigo500, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  buttonDanger: { backgroundColor: COLORS.red, borderColor: '#FCA5A5', borderTopColor: '#F87171', borderBottomWidth: 3, borderBottomColor: COLORS.redDeep, shadowColor: COLORS.redDeep, shadowOpacity: 0.28, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, 
   buttonText: { fontWeight: '800', fontSize: 13, textAlign: 'center' },
   buttonPrimaryText: { color: COLORS.white },
-  buttonSecondaryText: { color: COLORS.indigo900 }, 
+  buttonSecondaryText: { color: COLORS.indigo900 },
+  buttonDangerText: { color: COLORS.white }, 
   disabledButton: { opacity: 0.5 },
 
   // FIELDS

@@ -31,7 +31,7 @@ export function ClientDashboard({ context }) {
         <View style={styles.clientHeaderLeft}>
           <TouchableOpacity onPress={() => { setNotificationsOpen(v => !v); setReloadKey(v => v + 1); }} style={styles.bellButtonSmall}><Text style={styles.bellText}>🔔</Text>{notifications.unread > 0 ? <View style={styles.bellBadgeDot}><Text style={styles.bellBadgeText}>{notifications.unread}</Text></View> : null}</TouchableOpacity>
           <Button title="حسابي" secondary onPress={() => setScreen('account')} />
-          <Button title="خروج" secondary onPress={() => setLogoutConfirmOpen(true)} />
+          <Button title="خروج" danger onPress={() => setLogoutConfirmOpen(true)} />
         </View>
         <View style={styles.clientHeaderRight}>
           <View style={styles.clientAvatarSmall}><Text style={styles.clientAvatarText}>{(session.user?.name || 'ع')[0]}</Text></View>
