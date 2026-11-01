@@ -430,7 +430,8 @@ test('navigation and push registration are isolated in dedicated hooks', () => {
   const screen = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
   const navigation = fs.readFileSync(path.join(root, 'src/hooks/useScreenNavigation.js'), 'utf8');
   const push = fs.readFileSync(path.join(root, 'src/hooks/usePushNotifications.js'), 'utf8');
-  assert.match(screen, /useScreenNavigation\(onScreenChange\)/);
+  assert.match(screen, /useScreenNavigation\(\)/);
+  assert.match(screen, /onScreenChange\?\.\(screen, headerInitial\)/);
   assert.match(screen, /usePushNotifications\(session\)/);
   assert.match(navigation, /export function useScreenNavigation/);
   assert.match(push, /export function usePushNotifications/);
