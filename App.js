@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, View, Text, Image } from 'react-native';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Mask, Rect, Stop, Text as SvgText } from 'react-native-svg';
-
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import AppScreens from './src/screens/AppScreens';
 import StartupErrorBoundary from './src/components/StartupErrorBoundary';
@@ -16,9 +14,11 @@ function AppContent() {
     setCurrentScreen(screen);
     if (initial !== undefined) setHeaderInitial(initial);
   }, []);
-  const [showSplash, setShowSplash] = useState(true);
+  const [authRestoring, setAuthRestoring] = useState(true);
+  const [splashMinimumElapsed, setSplashMinimumElapsed] = useState(false);
   const spin = useRef(new Animated.Value(0)).current;
-  const shimmerX = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+  const showSplash = authRestoring || !splashMinimumElapsed;
   const showBrandHeader = !['home', 'login'].includes(currentScreen);
 
   useEffect(() => {
@@ -27,22 +27,23 @@ function AppContent() {
       Animated.timing(spin, { toValue: 0, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
     ]));
     animation.start();
-    const timer = setTimeout(() => setShowSplash(false), 2200);
+    const timer = setTimeout(() => setSplashMinimumElapsed(true), 2200);
     return () => { animation.stop(); clearTimeout(timer); };
   }, [spin]);
 
   const logoRotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['-18deg', '18deg'] });
+  const shimmerTranslate = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-76, 76] });
+
   useEffect(() => {
-    shimmerX.setValue(0);
-    const animation = Animated.loop(Animated.timing(shimmerX, {
-      toValue: -163,
-      duration: 2100,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }));
+    const animation = Animated.loop(Animated.sequence([
+      Animated.delay(650),
+      Animated.timing(shimmer, { toValue: 1, duration: 1050, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(shimmer, { toValue: 0, duration: 0, useNativeDriver: true }),
+      Animated.delay(1050),
+    ]));
     animation.start();
     return () => animation.stop();
-  }, [shimmerX]);
+  }, [shimmer]);
 
   return <View style={styles.appRoot}>
     {showBrandHeader ? <SafeAreaView style={styles.brandHeaderSafe}>
@@ -51,27 +52,13 @@ function AppContent() {
         <Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={styles.brandHeaderLogo} resizeMode="contain" />
         <View style={styles.brandHeaderTitleWrap}>
           <Text style={styles.brandHeaderTitle}>صُنّاع</Text>
-          <Svg pointerEvents="none" width={68} height={30} viewBox="0 0 68 30" style={{ position: 'absolute', top: 0, left: 0 }}>
-            <Defs>
-              <Mask id="sonaaBrandTextMask" maskUnits="userSpaceOnUse" x="0" y="0" width="68" height="30">
-                <SvgText x="34" y="22" textAnchor="middle" fontSize="18" fontWeight="900" letterSpacing="0.3" fill="#fff">صُنّاع</SvgText>
-              </Mask>
-              <SvgLinearGradient id="sonaaBrandShine" x1="0" y1="0" x2="231" y2="0" gradientUnits="userSpaceOnUse">
-                <Stop offset="0%" stopColor="#173c6c" />
-                <Stop offset="38%" stopColor="#173c6c" />
-                <Stop offset="46%" stopColor="#16a6a1" stopOpacity="0.72" />
-                <Stop offset="50%" stopColor="#ffffff" />
-                <Stop offset="54%" stopColor="#a5f3fc" />
-                <Stop offset="63%" stopColor="#173c6c" />
-                <Stop offset="100%" stopColor="#173c6c" />
-              </SvgLinearGradient>
-            </Defs>
-            <AnimatedRect x={shimmerX} y="0" width="231" height="30" fill="url(#sonaaBrandShine)" mask="url(#sonaaBrandTextMask)" />
-          </Svg>
+          <Animated.View pointerEvents="none" style={[styles.brandHeaderShimmer, { transform: [{ translateX: shimmerTranslate }] }]}>
+            <LinearGradient colors={['transparent', 'rgba(255,255,255,0.95)', 'rgba(100,220,238,0.72)', 'transparent']} locations={[0, 0.42, 0.58, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.brandHeaderShimmerGradient} />
+          </Animated.View>
         </View>
       </View>
     </SafeAreaView> : null}
-    <View style={styles.appScreenArea}><AppScreens onScreenChange={handleScreenChange} /></View>
+    <View style={styles.appScreenArea}><AppScreens onScreenChange={handleScreenChange} onAuthRestoringChange={setAuthRestoring} /></View>
     {showSplash ? <View style={splashStyles.overlay}>
       <View style={splashStyles.logoFrame}>
         <Animated.Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={[splashStyles.logo, { transform: [{ rotate: logoRotation }] }]} resizeMode="contain" />

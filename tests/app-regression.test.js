@@ -109,6 +109,23 @@ test('rating modal and rating submission safely handle missing technician order 
   assert.match(app.slice(submitStart, submitEnd), /if \(!order \|\| typeof order !== 'object' \|\| !sn\) \{[\s\S]*?setRatingPrompt\(null\)/);
 });
 
+test('brand header keeps one straight word with the animated shimmer layered over it', () => {
+  const appEntry = fs.readFileSync(path.join(root, 'App.js'), 'utf8');
+  assert.ok(appEntry.includes('<Text style={styles.brandHeaderTitle}>صُنّاع</Text>'), 'brand word should be rendered once as native text');
+  assert.ok(appEntry.includes('Animated.View pointerEvents="none" style={[styles.brandHeaderShimmer'), 'shimmer should be an overlay, not another text layer');
+  assert.ok(appEntry.includes('<LinearGradient colors={['), 'the shine gradient should remain animated over the word');
+  assert.ok(!appEntry.includes('react-native-svg'), 'the SVG mask that caused duplicate glyph rendering should not be used');
+  assert.equal((appEntry.match(/brandHeaderTitle}>صُنّاع/g) || []).length, 1, 'header should contain exactly one brand word');
+});
+
+test('startup splash stays visible until saved account restoration finishes', () => {
+  const appEntry = fs.readFileSync(path.join(root, 'App.js'), 'utf8');
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  assert.ok(appEntry.includes('authRestoring || !splashMinimumElapsed'), 'splash should cover the startup screen while session restoration is running');
+  assert.ok(appEntry.includes('onAuthRestoringChange={setAuthRestoring}'), 'app shell should receive the session restoration state');
+  assert.ok(screens.includes('onAuthRestoringChange?.(authRestoring)'), 'screen should report when saved account restoration completes');
+});
+
 test('Sonaa splash removes the spinning letter and swings the logo like a pendulum', () => {
   assert.ok(app.includes("const logoRotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['-18deg', '18deg'] })"), 'logo should interpolate between left and right angles');
   assert.ok(app.includes('<Animated.Image source={require("./assets/LOGO_UPLOAD_HERE/logo.png")} style={[splashStyles.logo, { transform: [{ rotate: logoRotation }] }]} resizeMode="contain" />'), 'the logo image itself should rotate');
