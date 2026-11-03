@@ -2,7 +2,7 @@ name: App Automated Tests
 
 on:
   push:
-    branches: [ main, 'refactor/app-organization-2026-10-31' ]
+    branches: [ main, 'refactor/app-organization-2026-10-31', 'feature/sync-web-updates-20261103' ]
     paths:
       - 'tests/**'
       - 'src/**'

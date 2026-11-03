@@ -4,6 +4,8 @@ on:
     branches: [ main ]
     paths:
       - 'App.js'
+      - 'src/**'
+      - 'tests/**'
       - 'app.json'
       - 'assets/**'
       - 'package.json'

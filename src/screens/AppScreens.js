@@ -1469,11 +1469,21 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   }
   async function adminBulkRegionAction(ids, action) {
     const selectedIds = [...new Set((ids || []).map(String).filter(Boolean))];
-    if (!selectedIds.length) return;
+    const currentRegions = Array.isArray(adminExtras.regions) ? adminExtras.regions : [];
+    const eligibleIds = selectedIds.filter(id => {
+      const region = currentRegions.find(item => String(item._id || item.id) === id);
+      if (!region) return false;
+      if (action === 'show') return region.isDeleted !== true && region.isActive === false;
+      if (action === 'hide') return region.isDeleted !== true && region.isActive !== false;
+      if (action === 'restore') return region.isDeleted === true;
+      if (action === 'delete') return region.isDeleted !== true;
+      return false;
+    });
+    if (!eligibleIds.length) { Alert.alert('إدارة المناطق', 'لا توجد مناطق محددة تحتاج إلى هذا الإجراء.'); return; }
     const config = { show: { method: 'PATCH', body: { isActive: true } }, hide: { method: 'PATCH', body: { isActive: false } }, restore: { method: 'PATCH', body: { isDeleted: false } }, delete: { method: 'DELETE', body: {} } }[action];
     if (!config) return;
     let succeeded = 0, failed = 0;
-    for (const id of selectedIds) { try { await api('/admin/regions/' + encodeURIComponent(id), { method: config.method, token: session.token, body: config.body }); succeeded++; } catch (_) { failed++; } }
+    for (const id of eligibleIds) { try { await api('/admin/regions/' + encodeURIComponent(id), { method: config.method, token: session.token, body: config.body }); succeeded++; } catch (_) { failed++; } }
     await adminLoadRegions();
     Alert.alert('إدارة المناطق', 'تم تنفيذ ' + succeeded + ' عملية' + (failed ? '، وفشل ' + failed : '') + '.');
   }
