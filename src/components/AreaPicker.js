@@ -5,6 +5,7 @@ import { filterAreaOptions, isReservedAreaLabel } from '../utils/area-helpers';
 
 export default function AreaPicker({ label, options = [], value, onChange, multiple = false, maxSelections = 30, inputRef }) {
   const [query, setQuery] = useState('');
+  const [showResults, setShowResults] = useState(multiple || !value);
   const selected = multiple
     ? (Array.isArray(value) ? value.filter(area => !isReservedAreaLabel(area)) : [])
     : (value && !isReservedAreaLabel(value) ? [value] : []);
@@ -14,6 +15,7 @@ export default function AreaPicker({ label, options = [], value, onChange, multi
     if (!multiple) {
       onChange?.(area);
       setQuery('');
+      setShowResults(false);
       return;
     }
     const exists = selected.includes(area);
@@ -37,13 +39,14 @@ export default function AreaPicker({ label, options = [], value, onChange, multi
       {!multiple && selected.length ? (
         <View style={styles.selectedSingle}>
           <Text style={styles.selectedText}>{selected[0]}</Text>
-          <TouchableOpacity onPress={() => onChange?.('')}><Text style={styles.changeText}>تغيير</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => { onChange?.(''); setShowResults(true); }}><Text style={styles.changeText}>تغيير</Text></TouchableOpacity>
         </View>
       ) : null}
       <TextInput
         ref={inputRef}
         value={query}
-        onChangeText={setQuery}
+        onChangeText={value => { setQuery(value); setShowResults(true); }}
+        onFocus={() => setShowResults(true)}
         placeholder="ابحث عن المنطقة أو الحي"
         placeholderTextColor={COLORS.placeholder}
         style={styles.search}
@@ -52,21 +55,23 @@ export default function AreaPicker({ label, options = [], value, onChange, multi
         returnKeyType="search"
         accessibilityLabel="البحث عن منطقة"
       />
-      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.results} contentContainerStyle={styles.resultsContent}>
-        {filtered.length ? filtered.map(area => {
-          const active = selected.includes(area);
-          const limitReached = multiple && !active && selected.length >= maxSelections;
-          return (
-            <TouchableOpacity key={area} disabled={limitReached} onPress={() => toggleArea(area)}
-              accessibilityRole={multiple ? 'checkbox' : 'button'}
-              accessibilityState={{ checked: active, disabled: limitReached }}
-              style={[styles.option, active && styles.optionActive, limitReached && styles.optionDisabled]}>
-              <Text style={[styles.optionText, active && styles.optionTextActive]}>{area}</Text>
-              <Text style={[styles.check, active && styles.checkActive]}>{active ? '✓' : multiple ? '＋' : 'اختيار'}</Text>
-            </TouchableOpacity>
-          );
-        }) : <Text style={styles.empty}>لا توجد مناطق مطابقة للبحث.</Text>}
-      </ScrollView>
+      {showResults ? (
+        <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.results} contentContainerStyle={styles.resultsContent}>
+          {filtered.length ? filtered.map(area => {
+            const active = selected.includes(area);
+            const limitReached = multiple && !active && selected.length >= maxSelections;
+            return (
+              <TouchableOpacity key={area} disabled={limitReached} onPress={() => toggleArea(area)}
+                accessibilityRole={multiple ? 'checkbox' : 'button'}
+                accessibilityState={{ checked: active, disabled: limitReached }}
+                style={[styles.option, active && styles.optionActive, limitReached && styles.optionDisabled]}>
+                <Text style={[styles.optionText, active && styles.optionTextActive]}>{area}</Text>
+                <Text style={[styles.check, active && styles.checkActive]}>{active ? '✓' : multiple ? '＋' : 'اختيار'}</Text>
+              </TouchableOpacity>
+            );
+          }) : <Text style={styles.empty}>لا توجد مناطق مطابقة للبحث.</Text>}
+        </ScrollView>
+      ) : null}
       {multiple ? <Text style={styles.hint}>تم اختيار {selected.length} من {maxSelections} منطقة كحد أقصى.</Text> : null}
     </View>
   );
