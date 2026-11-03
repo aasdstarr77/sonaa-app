@@ -11,7 +11,7 @@ export function AdminDashboard({
   session, adminData, setAdminData, adminExtras, adminRegionDraft, setAdminRegionDraft,
   adminLoadRegions, adminAddRegion, adminEditRegion, adminToggleRegion, adminDeleteRegion,
   adminRestoreRegion, adminBulkRegionAction, categories = [], areas = [],
-  adminProfileEdit, setAdminProfileEdit, adminBeginProfileEdit, toggleAdminProfileSpecialty,
+  adminProfileEdit, setAdminProfileEdit, adminPendingProfileEdits = [], reviewAdminProfileEdit, adminBeginProfileEdit, toggleAdminProfileSpecialty,
   adminSaveProfileEdit, loadAdminSupportCases, setScreen, logout, publishOrder, moderateTechnician
 }) {
   const tab = adminData.tab;
@@ -30,7 +30,7 @@ export function AdminDashboard({
   const items = tab === 'levels' || tab === 'roles' ? adminData.fannis : adminData[tab] || [];
   const tabs = [
     { key: 'orders', label: 'الطلبات' }, { key: 'fannis', label: 'الفنيون' },
-    { key: 'clients', label: 'العملاء' }, { key: 'regions', label: 'المناطق' },
+    { key: 'clients', label: 'العملاء' }, { key: 'profileEdits', label: 'طلبات تعديل البيانات' }, { key: 'regions', label: 'المناطق' },
     { key: 'topups', label: 'الشحن' }, { key: 'complaints', label: 'الشكاوى' },
     { key: 'support', label: 'الدعم' }
   ];
@@ -54,7 +54,34 @@ export function AdminDashboard({
       </TouchableOpacity>)}
     </ScrollView>
 
-    {tab === 'regions' ? <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.listPremium} keyboardShouldPersistTaps="handled">
+    {tab === 'profileEdits' ? <FlatList
+      style={{ flex: 1 }}
+      data={adminPendingProfileEdits}
+      keyExtractor={(item, i) => String(item._id || item.id || i)}
+      contentContainerStyle={styles.listPremium}
+      ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات تعديل بيانات معلّقة حاليًا.</Text>}
+      renderItem={({ item }) => {
+        const pending = item.pendingProfileChange || {};
+        const before = pending.before || { phone: item.phone, specialties: item.specialties || [], areas: item.areas || [] };
+        const changed = new Set(Array.isArray(pending.changedFields) ? pending.changedFields : []);
+        const isChanged = key => changed.size ? changed.has(key) : (key === 'phone' ? String(pending.phone || '') !== String(before.phone || '') : JSON.stringify(pending[key] || []) !== JSON.stringify(before[key] || []));
+        const display = value => Array.isArray(value) ? value.join('، ') || '—' : String(value || '—');
+        return <View style={styles.dataCard}>
+          <Text style={styles.cardTitleSmall}>{item.name || 'فني'}</Text>
+          <Text style={styles.detailSmall}>طلب تعديل بيانات • {pending.requestedAt ? new Date(pending.requestedAt).toLocaleString('ar-EG') : '—'}</Text>
+          <Text style={styles.sectionTitle}>البيانات الحالية</Text>
+          <Text style={styles.detail}>الهاتف: {display(before.phone)}{"\n"}التخصصات: {display(before.specialties)}{"\n"}مناطق العمل: {display(before.areas)}</Text>
+          <Text style={styles.sectionTitle}>البيانات المطلوبة</Text>
+          {['phone', 'specialties', 'areas'].map(key => <View key={key} style={{ padding: 8, borderRadius: 9, borderWidth: 1, borderColor: isChanged(key) ? '#D97706' : COLORS.border, backgroundColor: isChanged(key) ? '#FEF3C7' : COLORS.white, marginBottom: 5 }}>
+            <Text style={styles.detail}>{key === 'phone' ? 'رقم الهاتف' : key === 'specialties' ? 'التخصصات' : 'مناطق العمل'}{isChanged(key) ? ' — مطلوب تغييره' : ' — لم يطلب تغييره'}: {display(pending[key])}</Text>
+          </View>)}
+          <View style={styles.roleActions}>
+            <Button title="موافقة واعتماد" onPress={() => reviewAdminProfileEdit?.(item, 'approve')} />
+            <Button title="رفض الطلب" secondary onPress={() => reviewAdminProfileEdit?.(item, 'reject')} />
+          </View>
+        </View>;
+      }}
+    /> : tab === 'regions' ? <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.listPremium} keyboardShouldPersistTaps="handled">
       <View style={styles.dataCard}>
         <Text style={styles.cardTitlePremium}>إدارة مناطق الخدمة</Text>
         <View style={styles.roleActions}>
