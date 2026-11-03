@@ -1,9 +1,11 @@
 name: Build APK Final
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'feature/sync-web-updates-20261103' ]
     paths:
       - 'App.js'
+      - 'src/**'
+      - 'tests/**'
       - 'app.json'
       - 'assets/**'
       - 'package.json'
@@ -53,5 +55,5 @@ jobs:
           ./gradlew assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: sonaa-apk-main
+          name: sonaa-apk-final
           path: android/app/build/outputs/apk/release/app-release.apk

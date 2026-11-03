@@ -13,6 +13,8 @@ import { API_BASE, api } from '../services/api';
 import { COLORS } from '../theme/colors';
 import { styles } from '../theme/styles';
 import { getOrderChatTimeline, toList, dateLabel, getServiceEmoji } from '../utils/app-helpers';
+import { isReservedAreaLabel } from '../utils/area-helpers';
+import AreaPicker from '../components/AreaPicker';
 import { Button, Field } from '../components/FormControls';
 import VoiceRecorder from '../components/VoiceRecorder';
 import VoicePlayback from '../components/VoicePlayback';
@@ -29,7 +31,7 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   const { screen, setScreenState, screenHistoryRef, screenRef, setScreen } = useScreenNavigation();
   const appState = useAppState();
-  const { categories, setCategories, selected, setSelected, servicesLoading, setServicesLoading, servicesError, setServicesError, reloadKey, setReloadKey, session, setSession, authRestoring, setAuthRestoring, username, setUsername, password, setPassword, loginLoading, setLoginLoading, authMode, setAuthMode, form, setForm, clientData, setClientData, techData, setTechData, walletTransferNumbers, setWalletTransferNumbers, assignedDetails, setAssignedDetails, technicianSearch, setTechnicianSearch, technicianServiceFilter, setTechnicianServiceFilter, guidelinesChecked, setGuidelinesChecked, guidelinesReachedEnd, setGuidelinesReachedEnd, guidelinesViewportHeight, setGuidelinesViewportHeight, adminData, setAdminData, topup, setTopup, clientTab, setClientTab, clientServiceSearch, setClientServiceSearch, servicePickerOpen, setServicePickerOpen, subservicePickerOpen, setSubservicePickerOpen, ratingPrompt, setRatingPrompt, dismissedRatings, setDismissedRatings, ratingDismissalsLoaded, setRatingDismissalsLoaded, ratingDismissalsLoadedFor, setRatingDismissalsLoadedFor, clientTrackSN, setClientTrackSN, clientTrackedOrder, setClientTrackedOrder, clientTrackError, setClientTrackError, clientTrackLoading, setClientTrackLoading, clientComplaint, setClientComplaint, clientComplaintTrack, setClientComplaintTrack, expandedClientOrders, setExpandedClientOrders, expandedTechnicianOrders, setExpandedTechnicianOrders, notificationsOpen, setNotificationsOpen, offerDraft, setOfferDraft, notifications, setNotifications, orderChats, setOrderChats, chatDrafts, setChatDrafts, priceDrafts, setPriceDrafts, ratingDrafts, setRatingDrafts, ratingSubmitting, setRatingSubmitting, adminUsers, setAdminUsers, adminExtras, setAdminExtras, adminServiceDraft, setAdminServiceDraft, adminServiceEdit, setAdminServiceEdit, adminRegionDraft, setAdminRegionDraft, adminAnnouncementDraft, setAdminAnnouncementDraft, adminFaqDraft, setAdminFaqDraft, adminReportFilters, setAdminReportFilters, adminWallet, setAdminWallet, adminUsersLoading, setAdminUsersLoading, broadcast, setBroadcast, supportCases, setSupportCases, supportCase, setSupportCase, supportDraft, setSupportDraft, supportSubject, setSupportSubject, supportLoading, setSupportLoading, supportError, setSupportError, accountPasswordForm, setAccountPasswordForm, profileEditForm, setProfileEditForm, profileEditOpenCategory, setProfileEditOpenCategory, recoveryForm, setRecoveryForm, adminSupportCases, setAdminSupportCases, adminSupportSelected, setAdminSupportSelected, adminSupportDraft, setAdminSupportDraft, adminRecoveryCases, setAdminRecoveryCases, adminRecoverySelected, setAdminRecoverySelected, adminRecoveryCode, setAdminRecoveryCode, adminRecoveryDraft, setAdminRecoveryDraft, registrationNameRef, registrationPhoneRef, registrationPasswordRef, registrationConfirmPasswordRef, clientAreaInputRef, clientAddressInputRef, clientDescriptionInputRef, clientBudgetInputRef, clientServiceDetailYRef, clientFormYRef, clientScrollRef, chatScrollRef, clientChatScrollRefs, clientChatAtBottomRef, ratingSubmittingRef, orderChatsRef, acceptedChatAutoOpenedRef, dismissedRatingsRef, ratingHandledRef, ratingStatusSnapshotRef, services, updateForm } = appState;
+  const { categories, setCategories, areas, setAreas, adminProfileEdit, setAdminProfileEdit, adminPendingProfileEdits, setAdminPendingProfileEdits, selected, setSelected, servicesLoading, setServicesLoading, servicesError, setServicesError, reloadKey, setReloadKey, session, setSession, authRestoring, setAuthRestoring, username, setUsername, password, setPassword, loginLoading, setLoginLoading, authMode, setAuthMode, form, setForm, clientData, setClientData, techData, setTechData, walletTransferNumbers, setWalletTransferNumbers, assignedDetails, setAssignedDetails, technicianSearch, setTechnicianSearch, technicianServiceFilter, setTechnicianServiceFilter, guidelinesChecked, setGuidelinesChecked, guidelinesReachedEnd, setGuidelinesReachedEnd, guidelinesViewportHeight, setGuidelinesViewportHeight, adminData, setAdminData, topup, setTopup, clientTab, setClientTab, clientServiceSearch, setClientServiceSearch, servicePickerOpen, setServicePickerOpen, subservicePickerOpen, setSubservicePickerOpen, ratingPrompt, setRatingPrompt, dismissedRatings, setDismissedRatings, ratingDismissalsLoaded, setRatingDismissalsLoaded, ratingDismissalsLoadedFor, setRatingDismissalsLoadedFor, clientTrackSN, setClientTrackSN, clientTrackedOrder, setClientTrackedOrder, clientTrackError, setClientTrackError, clientTrackLoading, setClientTrackLoading, clientComplaint, setClientComplaint, clientComplaintTrack, setClientComplaintTrack, expandedClientOrders, setExpandedClientOrders, expandedTechnicianOrders, setExpandedTechnicianOrders, notificationsOpen, setNotificationsOpen, offerDraft, setOfferDraft, notifications, setNotifications, orderChats, setOrderChats, chatDrafts, setChatDrafts, priceDrafts, setPriceDrafts, ratingDrafts, setRatingDrafts, ratingSubmitting, setRatingSubmitting, adminUsers, setAdminUsers, adminExtras, setAdminExtras, adminServiceDraft, setAdminServiceDraft, adminServiceEdit, setAdminServiceEdit, adminRegionDraft, setAdminRegionDraft, adminAnnouncementDraft, setAdminAnnouncementDraft, adminFaqDraft, setAdminFaqDraft, adminReportFilters, setAdminReportFilters, adminWallet, setAdminWallet, adminUsersLoading, setAdminUsersLoading, broadcast, setBroadcast, supportCases, setSupportCases, supportCase, setSupportCase, supportDraft, setSupportDraft, supportSubject, setSupportSubject, supportLoading, setSupportLoading, supportError, setSupportError, accountPasswordForm, setAccountPasswordForm, profileEditForm, setProfileEditForm, profileEditOpenCategory, setProfileEditOpenCategory, recoveryForm, setRecoveryForm, adminSupportCases, setAdminSupportCases, adminSupportSelected, setAdminSupportSelected, adminSupportDraft, setAdminSupportDraft, adminRecoveryCases, setAdminRecoveryCases, adminRecoverySelected, setAdminRecoverySelected, adminRecoveryCode, setAdminRecoveryCode, adminRecoveryDraft, setAdminRecoveryDraft, registrationNameRef, registrationPhoneRef, registrationPasswordRef, registrationConfirmPasswordRef, clientAreaInputRef, clientAddressInputRef, clientDescriptionInputRef, clientBudgetInputRef, clientServiceDetailYRef, clientFormYRef, clientScrollRef, chatScrollRef, clientChatScrollRefs, clientChatAtBottomRef, ratingSubmittingRef, orderChatsRef, acceptedChatAutoOpenedRef, dismissedRatingsRef, ratingHandledRef, ratingStatusSnapshotRef, services, updateForm } = appState;
   const pushTokenRef = usePushNotifications(session);
   const headerInitial = screen === 'client'
     ? String(session?.user?.name || 'ع').trim().charAt(0)
@@ -209,14 +211,17 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   }, [screen, offerDraft, notificationsOpen, session]);
 
   useEffect(() => {
-    if (!['client', 'clientRegister', 'technicianRegister', 'profileEdit'].includes(screen)) return;
+    if (!['client', 'technician', 'admin', 'clientRegister', 'technicianRegister', 'profileEdit'].includes(screen)) return;
     let mounted = true;
     async function loadPublicData() {
       setServicesLoading(true); setServicesError('');
       try {
-        const serviceResult = await api('/services');
+        const [serviceResponse, areaResponse] = await Promise.allSettled([api('/services'), api('/areas')]);
+        if (serviceResponse.status !== 'fulfilled') throw serviceResponse.reason;
+        const serviceResult = serviceResponse.value;
         if (!Array.isArray(serviceResult.categories) || serviceResult.categories.length === 0) throw new Error('قائمة الخدمات من الخادم غير متاحة حاليًا');
         if (!mounted) return;
+        setAreas(areaResponse.status === 'fulfilled' && Array.isArray(areaResponse.value?.areas) ? areaResponse.value.areas.filter(area => !isReservedAreaLabel(area)) : []);
         setCategories(serviceResult.categories);
         setSelected(current => current && serviceResult.categories.some(item => item.label === current.label)
           ? serviceResult.categories.find(item => item.label === current.label) : null);
@@ -303,10 +308,14 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
         api('/admin/topup-requests?limit=100', { token: session.token }),
         api('/admin/complaints?limit=100', { token: session.token }),
         api('/support/admin?needsHuman=true', { token: session.token }),
+        api('/admin/regions', { token: session.token }),
+        api('/admin/fanni-profile-edits', { token: session.token }),
       ]);
       if (!mounted) return;
       const failed = results.find(item => item.status === 'rejected');
       setAdminSupportCases(results[5]?.status === 'fulfilled' ? toList(results[5].value, ['supportCases', 'items']) : []);
+      setAdminExtras(current => ({ ...current, regions: results[6]?.status === 'fulfilled' ? toList(results[6].value, ['regions', 'items']) : current.regions }));
+      setAdminPendingProfileEdits(results[7]?.status === 'fulfilled' ? toList(results[7].value, ['requests', 'items', 'fannis']) : []);
       setAdminData({
         orders: results[0].status === 'fulfilled' ? toList(results[0].value, ['orders', 'items']) : [],
         fannis: results[1].status === 'fulfilled' ? toList(results[1].value, ['fannis', 'items']) : [],
@@ -547,9 +556,9 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   async function registerTechnician() {
     if (form.password !== form.confirmPassword) { Alert.alert('كلمة السر', 'كلمتا السر غير متطابقتين.'); return; }
     if (!form.specialties.length) { Alert.alert('بيانات ناقصة', 'اختار خدمة واحدة على الأقل.'); return; }
-    const areas = [...new Set(String(form.areas || '').split(/[,،\n]/).map(area => area.trim()).filter(Boolean))];
-    if (!areas.length || areas.some(area => area.length < 2 || area.length > 60) || areas.length > 30) {
-      Alert.alert('مناطق العمل', 'اكتب منطقة عمل واحدة على الأقل. افصل بين المناطق بفاصلة، وكل منطقة من حرفين إلى 60 حرفًا، وبحد أقصى 30 منطقة.');
+    const selectedAreas = [...new Set((Array.isArray(form.areas) ? form.areas : []).map(area => String(area).trim()).filter(area => areas.includes(area) && !isReservedAreaLabel(area)))];
+    if (!selectedAreas.length || selectedAreas.some(area => area.length < 2 || area.length > 60) || selectedAreas.length > 30) {
+      Alert.alert('مناطق العمل', 'اختار منطقة عمل واحدة على الأقل من القائمة المعتمدة، وبحد أقصى 30 منطقة.');
       return;
     }
     if (!guidelinesReachedEnd) {
@@ -567,7 +576,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
         phone: form.phone.trim(),
         password: form.password,
         specialties: form.specialties,
-        areas,
+        areas: selectedAreas,
         guidelinesAccepted: true
       } });
       Alert.alert('تم إرسال التسجيل', result.message || 'حسابك قيد مراجعة الإدارة.');
@@ -577,7 +586,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   }
 
   async function createOrder() {
-    if (!form.service || form.area.trim().length < 2 || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة واكتب المنطقة والعنوان بالتفصيل.'); return; }
+    if (!form.service || !areas.includes(form.area) || isReservedAreaLabel(form.area) || form.address.trim().length < 2) { Alert.alert('بيانات ناقصة', 'اختار الخدمة والمنطقة من القائمة المعتمدة واكتب العنوان بالتفصيل.'); return; }
     setLoginLoading(true);
     try {
       const description = form.description.trim();
@@ -1285,7 +1294,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
 
   function beginProfileEdit() {
     const user = session?.role === 'fanni' ? (techData.profile || session.user || {}) : (session?.user || {});
-    setProfileEditForm({ name: String(user.name || ''), phone: String(user.phone || ''), areas: Array.isArray(user.areas) ? user.areas.join('، ') : '', specialties: Array.isArray(user.specialties) ? [...user.specialties] : [], loading: false, error: '', message: user.pendingProfileChange?.requestedAt ? 'لديك طلب تعديل بيانات قيد مراجعة الإدارة.' : '' });
+    setProfileEditForm({ name: String(user.name || ''), phone: String(user.phone || ''), areas: Array.isArray(user.areas) ? user.areas.filter(area => !isReservedAreaLabel(area) && (!areas.length || areas.includes(area))) : [], specialties: Array.isArray(user.specialties) ? [...user.specialties] : [], loading: false, error: '', message: user.pendingProfileChange?.requestedAt ? 'لديك طلب تعديل بيانات قيد مراجعة الإدارة.' : '' });
     setProfileEditOpenCategory(''); setScreen('profileEdit');
   }
   function toggleProfileEditSpecialty(specialty) {
@@ -1310,10 +1319,10 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     if (session.role !== 'fanni') return;
     if (session.user?.pendingProfileChange?.requestedAt || techData.profile?.pendingProfileChange?.requestedAt) { setProfileEditForm(current => ({ ...current, error: 'لديك طلب تعديل بيانات قيد مراجعة الإدارة. انتظر القرار قبل إرسال طلب جديد.' })); return; }
     const specialties = [...new Set(profileEditForm.specialties.map(value => String(value).trim()).filter(Boolean))];
-    const areas = [...new Set(String(profileEditForm.areas || '').split(/[،,؛;\n]/).map(value => value.trim()).filter(value => value.length >= 2))];
-    if (!areas.length || areas.length > 30 || areas.some(area => area.length > 60)) { setProfileEditForm(current => ({ ...current, error: 'اكتب منطقة عمل واحدة على الأقل، وكل منطقة لا تزيد عن 60 حرفًا.' })); return; }
+    const selectedAreas = [...new Set((Array.isArray(profileEditForm.areas) ? profileEditForm.areas : []).map(value => String(value).trim()).filter(value => areas.includes(value) && !isReservedAreaLabel(value)))];
+    if (!selectedAreas.length || selectedAreas.length > 30 || selectedAreas.some(area => area.length > 60)) { setProfileEditForm(current => ({ ...current, error: 'اختار منطقة عمل واحدة على الأقل من القائمة المعتمدة، وبحد أقصى 30 منطقة.' })); return; }
     setProfileEditForm(current => ({ ...current, loading: true, error: '', message: '' }));
-    try { const result = await api('/fanni/me', { method: 'PATCH', token: session.token, body: { phone, specialties, areas } }); const updatedUser = result.user || { ...session.user, pendingProfileChange: result.pendingProfileChange }; const nextSession = { ...session, user: { ...session.user, ...updatedUser, pendingProfileChange: result.pendingProfileChange || updatedUser.pendingProfileChange } }; await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession)); setSession(nextSession); setTechData(current => ({ ...current, profile: { ...(current.profile || session.user), ...updatedUser, pendingProfileChange: result.pendingProfileChange || updatedUser.pendingProfileChange } })); setProfileEditForm(current => ({ ...current, loading: false, error: '', message: result.message || 'تم إرسال طلب تعديل بياناتك للإدارة للمراجعة.' })); }
+    try { const result = await api('/fanni/me', { method: 'PATCH', token: session.token, body: { phone, specialties, areas: selectedAreas } }); const updatedUser = result.user || { ...session.user, pendingProfileChange: result.pendingProfileChange }; const nextSession = { ...session, user: { ...session.user, ...updatedUser, pendingProfileChange: result.pendingProfileChange || updatedUser.pendingProfileChange } }; await SecureStore.setItemAsync('sonaa.auth.session.v1', JSON.stringify(nextSession)); setSession(nextSession); setTechData(current => ({ ...current, profile: { ...(current.profile || session.user), ...updatedUser, pendingProfileChange: result.pendingProfileChange || updatedUser.pendingProfileChange } })); setProfileEditForm(current => ({ ...current, loading: false, error: '', message: result.message || 'تم إرسال طلب تعديل بياناتك للإدارة للمراجعة.' })); }
     catch (error) { setProfileEditForm(current => ({ ...current, loading: false, error: error.message || 'تعذر إرسال طلب تعديل البيانات.' })); }
   }
   async function changeAccountPassword() {
@@ -1433,11 +1442,75 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     try { const result = await api('/admin/pricing', { method: 'PUT', token: session.token, body: { check: Number(p.check), commission: Number(p.commission), minOffer: Number(p.minOffer), maxOffer: Number(p.maxOffer) } }); Alert.alert('تم الحفظ', result.message || 'تم حفظ الأسعار والعمولات.'); setReloadKey(v => v + 1); }
     catch (err) { Alert.alert('تعذر حفظ الأسعار', err.message || 'حاول مرة أخرى.'); }
   }
+  async function adminLoadRegions() {
+    try { const result = await api('/admin/regions', { token: session.token }); setAdminExtras(current => ({ ...current, regions: toList(result, ['regions', 'items']) })); }
+    catch (err) { Alert.alert('تعذر تحميل المناطق', err.message || 'حاول مرة أخرى.'); }
+  }
   async function adminAddRegion() {
     const name = adminRegionDraft.trim().replace(/\s+/g, ' ');
     if (name.length < 2 || name.length > 100) { Alert.alert('اسم المنطقة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
-    try { const result = await api('/admin/regions', { method: 'POST', token: session.token, body: { name } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة المنطقة.'); setAdminRegionDraft(''); setReloadKey(v => v + 1); }
+    try { const result = await api('/admin/regions', { method: 'POST', token: session.token, body: { name } }); Alert.alert('تمت الإضافة', result.message || 'تمت إضافة المنطقة.'); setAdminRegionDraft(''); await adminLoadRegions(); setReloadKey(v => v + 1); }
     catch (err) { Alert.alert('تعذر إضافة المنطقة', err.message || 'قد تكون المنطقة موجودة بالفعل.'); }
+  }
+  async function adminEditRegion(id, name) {
+    const clean = String(name || '').trim().replace(/\s+/g, ' ');
+    if (clean.length < 2 || clean.length > 100) { Alert.alert('اسم المنطقة', 'اكتب اسمًا من حرفين إلى 100 حرف.'); return; }
+    try { const result = await api('/admin/regions/' + encodeURIComponent(id), { method: 'PATCH', token: session.token, body: { name: clean } }); Alert.alert('تم التعديل', result.message || 'تم تحديث المنطقة.'); await adminLoadRegions(); }
+    catch (err) { Alert.alert('تعذر تعديل المنطقة', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminToggleRegion(region) {
+    try { const result = await api('/admin/regions/' + encodeURIComponent(region._id || region.id), { method: 'PATCH', token: session.token, body: { isActive: region.isActive === false } }); Alert.alert('تم التحديث', result.message || 'تم تحديث حالة المنطقة.'); await adminLoadRegions(); }
+    catch (err) { Alert.alert('تعذر تحديث المنطقة', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminDeleteRegion(region) {
+    Alert.alert('حذف المنطقة', 'سيتم حذفها من الاختيارات الجديدة مع الاحتفاظ بالطلبات القديمة. هل تريد المتابعة؟', [{ text: 'إلغاء', style: 'cancel' }, { text: 'حذف', style: 'destructive', onPress: async () => { try { const result = await api('/admin/regions/' + encodeURIComponent(region._id || region.id), { method: 'DELETE', token: session.token }); Alert.alert('تم الحذف', result.message || 'تم حذف المنطقة.'); await adminLoadRegions(); } catch (err) { Alert.alert('تعذر حذف المنطقة', err.message || 'حاول مرة أخرى.'); } } }]);
+  }
+  async function adminRestoreRegion(region) {
+    try { const result = await api('/admin/regions/' + encodeURIComponent(region._id || region.id), { method: 'PATCH', token: session.token, body: { isDeleted: false } }); Alert.alert('تمت الاستعادة', result.message || 'تمت استعادة المنطقة.'); await adminLoadRegions(); }
+    catch (err) { Alert.alert('تعذر استعادة المنطقة', err.message || 'حاول مرة أخرى.'); }
+  }
+  async function adminBulkRegionAction(ids, action) {
+    const selectedIds = [...new Set((ids || []).map(String).filter(Boolean))];
+    const currentRegions = Array.isArray(adminExtras.regions) ? adminExtras.regions : [];
+    const eligibleIds = selectedIds.filter(id => {
+      const region = currentRegions.find(item => String(item._id || item.id) === id);
+      if (!region) return false;
+      if (action === 'show') return region.isDeleted !== true && region.isActive === false;
+      if (action === 'hide') return region.isDeleted !== true && region.isActive !== false;
+      if (action === 'restore') return region.isDeleted === true;
+      if (action === 'delete') return region.isDeleted !== true;
+      return false;
+    });
+    if (!eligibleIds.length) { Alert.alert('إدارة المناطق', 'لا توجد مناطق محددة تحتاج إلى هذا الإجراء.'); return; }
+    const config = { show: { method: 'PATCH', body: { isActive: true } }, hide: { method: 'PATCH', body: { isActive: false } }, restore: { method: 'PATCH', body: { isDeleted: false } }, delete: { method: 'DELETE', body: {} } }[action];
+    if (!config) return;
+    let succeeded = 0, failed = 0;
+    for (const id of eligibleIds) { try { await api('/admin/regions/' + encodeURIComponent(id), { method: config.method, token: session.token, body: config.body }); succeeded++; } catch (_) { failed++; } }
+    await adminLoadRegions();
+    Alert.alert('إدارة المناطق', 'تم تنفيذ ' + succeeded + ' عملية' + (failed ? '، وفشل ' + failed : '') + '.');
+  }
+  async function adminBulkRenameRegions(rows) {
+    const changes = [...new Map((Array.isArray(rows) ? rows : []).map(item => [
+      String(item?.id || ''),
+      { id: String(item?.id || ''), name: String(item?.name || '').trim().replace(/\s+/g, ' ') }
+    ]).values())].filter(item => item.id);
+    if (!changes.length || changes.some(item => item.name.length < 2 || item.name.length > 100)) {
+      Alert.alert('تعديل أسماء المناطق', 'راجع الأسماء؛ كل اسم يجب أن يكون من حرفين إلى 100 حرف.');
+      return false;
+    }
+    let succeeded = 0, failed = 0;
+    for (const item of changes) {
+      try {
+        await api('/admin/regions/' + encodeURIComponent(item.id), {
+          method: 'PATCH', token: session.token, body: { name: item.name }
+        });
+        succeeded++;
+      } catch (_) { failed++; }
+    }
+    await adminLoadRegions();
+    setReloadKey(value => value + 1);
+    Alert.alert('تعديل أسماء المناطق', 'تم تعديل ' + succeeded + ' منطقة' + (failed ? '، وتعذر تعديل ' + failed : '') + '.');
+    return failed === 0;
   }
   async function adminSaveSettings() {
     const value = adminExtras.settings;
@@ -1468,6 +1541,69 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     if (!/^SN\d{6}$/.test(sn)) { Alert.alert('كود الطلب', 'كود الطلب غير صالح.'); return; }
     const label = action === 'cancel' ? 'إلغاء' : 'أرشفة';
     Alert.alert(label + ' الطلب ' + sn, 'هل تؤكد ' + label + ' الطلب؟ سيتم تسجيل الإجراء في سجل الإدارة.', [{ text: 'رجوع', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { const result = await api('/admin/orders/' + encodeURIComponent(sn) + '/' + action, { method: 'POST', token: session.token, body: { reason: 'إجراء إداري من تطبيق صُنّاع' } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث الطلب.'); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر ' + label + ' الطلب', err.message || 'راجع حالة الطلب.'); } } }]);
+  }
+  async function refreshAdminProfileEdits() {
+    try {
+      const result = await api('/admin/fanni-profile-edits', { token: session.token });
+      setAdminPendingProfileEdits(toList(result, ['requests', 'items', 'fannis']));
+    } catch (err) {
+      Alert.alert('تعذر تحميل طلبات تعديل البيانات', err.message || 'حاول مرة أخرى.');
+    }
+  }
+
+  async function reviewAdminProfileEdit(item, action) {
+    const id = String(item?._id || item?.id || '');
+    if (!id || !['approve', 'reject'].includes(action)) return;
+    const label = action === 'approve' ? 'اعتماد البيانات الجديدة لهذا الفني؟' : 'رفض الطلب والإبقاء على البيانات الحالية؟';
+    Alert.alert('مراجعة طلب تعديل البيانات', label, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: action === 'approve' ? 'موافقة' : 'رفض', style: action === 'reject' ? 'destructive' : 'default', onPress: async () => {
+        try {
+          const result = await api('/admin/fanni-profile-edits/' + encodeURIComponent(id) + '/' + action, { method: 'POST', token: session.token, body: { reason: action === 'reject' ? 'مراجعة الطلب من تطبيق صُنّاع' : '' } });
+          Alert.alert('تمت المراجعة', result.message || 'تم تحديث حالة الطلب.');
+          const refreshed = await api('/admin/fanni-profile-edits', { token: session.token });
+          setAdminPendingProfileEdits(toList(refreshed, ['requests', 'items', 'fannis']));
+          setReloadKey(v => v + 1);
+        } catch (err) { Alert.alert('تعذرت مراجعة الطلب', err.message || 'حاول مرة أخرى.'); }
+      } }
+    ]);
+  }
+
+  async function adminBeginProfileEdit(item, role) {
+    const id = String(role === 'fanni' ? (item?._id || item?.id || '') : (item?.id || item?._id || ''));
+    if (!id) { Alert.alert('تعديل الحساب', 'معرّف الحساب غير متاح.'); return; }
+    setAdminProfileEdit({ open: true, role, id, name: String(item?.name || ''), phone: String(item?.phone || ''), specialties: Array.isArray(item?.specialties) ? [...item.specialties] : [], areas: Array.isArray(item?.areas) ? item.areas.filter(area => !isReservedAreaLabel(area)) : [], loading: true, error: '', message: '' });
+    try {
+      const result = await api(role === 'fanni' ? '/admin/fannis/' + encodeURIComponent(id) + '/profile' : '/admin/client-accounts/' + encodeURIComponent(id) + '/profile', { token: session.token });
+      const user = role === 'fanni' ? result.fanni : result.client;
+      setAdminProfileEdit(current => ({ ...current, name: String(user?.name || current.name), phone: String(user?.phone || current.phone), specialties: Array.isArray(user?.specialties) ? user.specialties : current.specialties, areas: Array.isArray(user?.areas) ? user.areas.filter(area => !isReservedAreaLabel(area)) : current.areas, loading: false }));
+    } catch (err) { setAdminProfileEdit(current => ({ ...current, loading: false, error: err.message || 'تعذر تحميل بيانات الحساب.' })); }
+  }
+  function toggleAdminProfileSpecialty(specialty) {
+    setAdminProfileEdit(current => ({ ...current, specialties: current.specialties.includes(specialty) ? current.specialties.filter(item => item !== specialty) : current.specialties.length >= 20 ? current.specialties : [...current.specialties, specialty], error: '' }));
+  }
+  async function adminSaveProfileEdit() {
+    if (!adminProfileEdit.id || adminProfileEdit.loading) return;
+    const phone = String(adminProfileEdit.phone || '').replace(/[^0-9]/g, '');
+    if (!/^01[0-9]{9}$/.test(phone)) { setAdminProfileEdit(current => ({ ...current, error: 'رقم الهاتف لازم يكون 11 رقمًا ويبدأ بـ 01.' })); return; }
+    setAdminProfileEdit(current => ({ ...current, loading: true, error: '', message: '' }));
+    try {
+      let result;
+      if (adminProfileEdit.role === 'client') {
+        const name = String(adminProfileEdit.name || '').trim();
+        if (name.length < 2 || name.length > 50) throw new Error('اكتب اسم العميل بشكل صحيح.');
+        result = await api('/admin/client-accounts/' + encodeURIComponent(adminProfileEdit.id) + '/profile', { method: 'PATCH', token: session.token, body: { name, phone } });
+        setAdminData(current => ({ ...current, clients: current.clients.map(item => String(item.id || item._id) === adminProfileEdit.id ? { ...item, name, phone } : item) }));
+      } else {
+        const specialties = [...new Set(adminProfileEdit.specialties.map(value => String(value).trim()).filter(Boolean))];
+        const selectedAreas = [...new Set(adminProfileEdit.areas.map(value => String(value).trim()).filter(value => areas.includes(value) && !isReservedAreaLabel(value)))];
+        if (!specialties.length || specialties.length > 20) throw new Error('اختار تخصصًا واحدًا على الأقل، وبحد أقصى 20 تخصصًا.');
+        if (!selectedAreas.length || selectedAreas.length > 30) throw new Error('اختار منطقة عمل واحدة على الأقل من القائمة المعتمدة.');
+        result = await api('/admin/fannis/' + encodeURIComponent(adminProfileEdit.id) + '/profile', { method: 'PATCH', token: session.token, body: { phone, specialties, areas: selectedAreas } });
+        setAdminData(current => ({ ...current, fannis: current.fannis.map(item => String(item._id || item.id) === adminProfileEdit.id ? { ...item, phone, specialties, areas: selectedAreas } : item) }));
+      }
+      setAdminProfileEdit(current => ({ ...current, loading: false, message: result.message || 'تم حفظ البيانات بنجاح.' }));
+    } catch (err) { setAdminProfileEdit(current => ({ ...current, loading: false, error: err.message || 'تعذر حفظ البيانات.' })); }
   }
   async function adminClientAction(phone, action) {
     if (!phone) return Alert.alert('بيانات العميل', 'رقم الهاتف غير متاح.');
@@ -1547,7 +1683,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   const goLogin = mode => { setAuthMode(mode); setUsername(''); setPassword(''); setScreen('login'); };
   const toggleArray = (key, value) => updateForm(key, form[key].includes(value) ? form[key].filter(item => item !== value) : [...form[key], value]);
 
-  const screenContext = { screen, setScreenState, screenHistoryRef, screenRef, pushTokenRef, setScreen, categories, setCategories, selected, setSelected, servicesLoading, setServicesLoading, servicesError, setServicesError, reloadKey, setReloadKey, session, setSession, authRestoring, setAuthRestoring, username, setUsername, password, setPassword, loginLoading, setLoginLoading, authMode, setAuthMode, form, setForm, registrationNameRef, registrationPhoneRef, registrationPasswordRef, registrationConfirmPasswordRef, clientAreaInputRef, clientAddressInputRef, clientDescriptionInputRef, clientBudgetInputRef, clientServiceDetailYRef, clientFormYRef, clientData, setClientData, techData, setTechData, walletTransferNumbers, setWalletTransferNumbers, assignedDetails, setAssignedDetails, technicianSearch, setTechnicianSearch, technicianServiceFilter, setTechnicianServiceFilter, guidelinesChecked, setGuidelinesChecked, guidelinesReachedEnd, setGuidelinesReachedEnd, guidelinesViewportHeight, setGuidelinesViewportHeight, adminData, setAdminData, topup, setTopup, clientTab, setClientTab, clientServiceSearch, setClientServiceSearch, servicePickerOpen, setServicePickerOpen, subservicePickerOpen, setSubservicePickerOpen, ratingPrompt, setRatingPrompt, dismissedRatings, setDismissedRatings, ratingDismissalsLoaded, setRatingDismissalsLoaded, ratingDismissalsLoadedFor, setRatingDismissalsLoadedFor, clientTrackSN, setClientTrackSN, clientTrackedOrder, setClientTrackedOrder, clientTrackError, setClientTrackError, clientTrackLoading, setClientTrackLoading, clientComplaint, setClientComplaint, clientComplaintTrack, setClientComplaintTrack, expandedClientOrders, setExpandedClientOrders, expandedTechnicianOrders, setExpandedTechnicianOrders, notificationsOpen, setNotificationsOpen, clientScrollRef, chatScrollRef, clientChatScrollRefs, clientChatAtBottomRef, ratingSubmittingRef, offerDraft, setOfferDraft, notifications, setNotifications, orderChats, setOrderChats, orderChatsRef, acceptedChatAutoOpenedRef, chatDrafts, setChatDrafts, priceDrafts, setPriceDrafts, ratingDrafts, setRatingDrafts, ratingSubmitting, setRatingSubmitting, dismissedRatingsRef, ratingHandledRef, ratingStatusSnapshotRef, adminUsers, setAdminUsers, adminExtras, setAdminExtras, adminServiceDraft, setAdminServiceDraft, adminServiceEdit, setAdminServiceEdit, adminRegionDraft, setAdminRegionDraft, adminAnnouncementDraft, setAdminAnnouncementDraft, adminFaqDraft, setAdminFaqDraft, adminReportFilters, setAdminReportFilters, adminWallet, setAdminWallet, adminUsersLoading, setAdminUsersLoading, broadcast, setBroadcast, supportCases, setSupportCases, supportCase, setSupportCase, supportDraft, setSupportDraft, supportSubject, setSupportSubject, supportLoading, setSupportLoading, supportError, setSupportError, accountPasswordForm, setAccountPasswordForm, profileEditForm, setProfileEditForm, profileEditOpenCategory, setProfileEditOpenCategory, recoveryForm, setRecoveryForm, adminSupportCases, setAdminSupportCases, adminSupportSelected, setAdminSupportSelected, adminSupportDraft, setAdminSupportDraft, adminRecoveryCases, setAdminRecoveryCases, adminRecoverySelected, setAdminRecoverySelected, adminRecoveryCode, setAdminRecoveryCode, adminRecoveryDraft, setAdminRecoveryDraft, services, updateForm, ratingAccountId, ratingStorageKey, previousRatingStorageKey, legacyRatingStorageKey, oldestRatingStorageKey, markNotificationRead, markAllNotificationsRead, updateProfessionalLevel, changeAdminRoleForFanni, revokeAdminRoleForUser, moderateTechnician, publishOrder, reviewTopup, setComplaintStatus, handleLogin, registerClient, registerTechnician, createOrder, trackClientOrder, submitClientComplaint, trackClientComplaints, sendOffer, submitOffer, cancelClientOrder, acceptClientOffer, completeTechnicianOrder, getOrderSN, uniqueByOrderSN, orderToken, refreshVisibleData, refreshOrderChat, toggleOrderChat, sendOrderChat, requestOrderPriceChange, decideOrderPrice, setOrderRatingStars, renderRatingStars, submitOrderRating, saveRatingDismissal, renderRatingModal, sendAdminBroadcast, acceptTechnicianGuidelines, submitTopup, loadSupportCases, startSupportCase, openSupportCase, sendSupportMessage, loadAdminSupportCases, loadAdminRecoveryCases, openAdminRecovery, issueAdminRecoveryCode, replyAdminRecovery, replyAdminSupport, beginProfileEdit, toggleProfileEditSpecialty, saveProfileEdits, changeAccountPassword, startPasswordRecovery, refreshPasswordRecovery, sendRecoveryMessage, verifyRecoveryCode, resetRecoveredPassword, adminRefreshExtras, adminAddService, adminBeginServiceEdit, adminSaveServiceEdit, adminMoveCategory, adminMoveService, adminToggleService, adminDeleteService, adminSavePricing, adminAddRegion, adminSaveSettings, adminAddFaqDraft, adminSaveContent, adminGenerateReport, adminOrderAction, adminClientAction, adminSetTechnicianLevel, adminLoadWalletTransactions, adminWalletAction, adminLoadAuditLogs, copyOrderCode, openWhatsAppSupport, performLogout, logout, goLogin, toggleArray };
+  const screenContext = { screen, setScreenState, screenHistoryRef, screenRef, pushTokenRef, setScreen, categories, setCategories, areas, setAreas, adminProfileEdit, setAdminProfileEdit, selected, setSelected, servicesLoading, setServicesLoading, servicesError, setServicesError, reloadKey, setReloadKey, session, setSession, authRestoring, setAuthRestoring, username, setUsername, password, setPassword, loginLoading, setLoginLoading, authMode, setAuthMode, form, setForm, registrationNameRef, registrationPhoneRef, registrationPasswordRef, registrationConfirmPasswordRef, clientAreaInputRef, clientAddressInputRef, clientDescriptionInputRef, clientBudgetInputRef, clientServiceDetailYRef, clientFormYRef, clientData, setClientData, techData, setTechData, walletTransferNumbers, setWalletTransferNumbers, assignedDetails, setAssignedDetails, technicianSearch, setTechnicianSearch, technicianServiceFilter, setTechnicianServiceFilter, guidelinesChecked, setGuidelinesChecked, guidelinesReachedEnd, setGuidelinesReachedEnd, guidelinesViewportHeight, setGuidelinesViewportHeight, adminData, setAdminData, topup, setTopup, clientTab, setClientTab, clientServiceSearch, setClientServiceSearch, servicePickerOpen, setServicePickerOpen, subservicePickerOpen, setSubservicePickerOpen, ratingPrompt, setRatingPrompt, dismissedRatings, setDismissedRatings, ratingDismissalsLoaded, setRatingDismissalsLoaded, ratingDismissalsLoadedFor, setRatingDismissalsLoadedFor, clientTrackSN, setClientTrackSN, clientTrackedOrder, setClientTrackedOrder, clientTrackError, setClientTrackError, clientTrackLoading, setClientTrackLoading, clientComplaint, setClientComplaint, clientComplaintTrack, setClientComplaintTrack, expandedClientOrders, setExpandedClientOrders, expandedTechnicianOrders, setExpandedTechnicianOrders, notificationsOpen, setNotificationsOpen, clientScrollRef, chatScrollRef, clientChatScrollRefs, clientChatAtBottomRef, ratingSubmittingRef, offerDraft, setOfferDraft, notifications, setNotifications, orderChats, setOrderChats, orderChatsRef, acceptedChatAutoOpenedRef, chatDrafts, setChatDrafts, priceDrafts, setPriceDrafts, ratingDrafts, setRatingDrafts, ratingSubmitting, setRatingSubmitting, dismissedRatingsRef, ratingHandledRef, ratingStatusSnapshotRef, adminUsers, setAdminUsers, adminExtras, setAdminExtras, adminServiceDraft, setAdminServiceDraft, adminServiceEdit, setAdminServiceEdit, adminRegionDraft, setAdminRegionDraft, adminAnnouncementDraft, setAdminAnnouncementDraft, adminFaqDraft, setAdminFaqDraft, adminReportFilters, setAdminReportFilters, adminWallet, setAdminWallet, adminUsersLoading, setAdminUsersLoading, broadcast, setBroadcast, supportCases, setSupportCases, supportCase, setSupportCase, supportDraft, setSupportDraft, supportSubject, setSupportSubject, supportLoading, setSupportLoading, supportError, setSupportError, accountPasswordForm, setAccountPasswordForm, profileEditForm, setProfileEditForm, profileEditOpenCategory, setProfileEditOpenCategory, recoveryForm, setRecoveryForm, adminSupportCases, setAdminSupportCases, adminSupportSelected, setAdminSupportSelected, adminSupportDraft, setAdminSupportDraft, adminRecoveryCases, setAdminRecoveryCases, adminRecoverySelected, setAdminRecoverySelected, adminRecoveryCode, setAdminRecoveryCode, adminRecoveryDraft, setAdminRecoveryDraft, services, updateForm, ratingAccountId, ratingStorageKey, previousRatingStorageKey, legacyRatingStorageKey, oldestRatingStorageKey, markNotificationRead, markAllNotificationsRead, updateProfessionalLevel, changeAdminRoleForFanni, revokeAdminRoleForUser, moderateTechnician, publishOrder, reviewTopup, setComplaintStatus, handleLogin, registerClient, registerTechnician, createOrder, trackClientOrder, submitClientComplaint, trackClientComplaints, sendOffer, submitOffer, cancelClientOrder, acceptClientOffer, completeTechnicianOrder, getOrderSN, uniqueByOrderSN, orderToken, refreshVisibleData, refreshOrderChat, toggleOrderChat, sendOrderChat, requestOrderPriceChange, decideOrderPrice, setOrderRatingStars, renderRatingStars, submitOrderRating, saveRatingDismissal, renderRatingModal, sendAdminBroadcast, acceptTechnicianGuidelines, submitTopup, loadSupportCases, startSupportCase, openSupportCase, sendSupportMessage, loadAdminSupportCases, loadAdminRecoveryCases, openAdminRecovery, issueAdminRecoveryCode, replyAdminRecovery, replyAdminSupport, beginProfileEdit, toggleProfileEditSpecialty, saveProfileEdits, changeAccountPassword, startPasswordRecovery, refreshPasswordRecovery, sendRecoveryMessage, verifyRecoveryCode, resetRecoveredPassword, adminRefreshExtras, adminLoadRegions, adminAddRegion, adminEditRegion, adminToggleRegion, adminDeleteRegion, adminRestoreRegion, adminBulkRegionAction, adminBeginProfileEdit, toggleAdminProfileSpecialty, adminSaveProfileEdit, adminAddService, adminBeginServiceEdit, adminSaveServiceEdit, adminMoveCategory, adminMoveService, adminToggleService, adminDeleteService, adminSavePricing, adminSaveSettings, adminAddFaqDraft, adminSaveContent, adminGenerateReport, adminOrderAction, adminClientAction, adminSetTechnicianLevel, adminLoadWalletTransactions, adminWalletAction, adminLoadAuditLogs, copyOrderCode, openWhatsAppSupport, performLogout, logout, goLogin, toggleArray };
 
   if (authRestoring) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.statusText}>جاري استعادة حسابك...</Text></View></SafeAreaView>;
 
@@ -1555,7 +1691,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
 
   if (screen === 'account') return <AccountScreen session={session} clientData={clientData} techData={techData} setScreen={setScreen} beginProfileEdit={beginProfileEdit} setRatingPrompt={setRatingPrompt} getOrderSN={getOrderSN} />;
 
-  if (screen === 'profileEdit') return <ProfileEditScreen session={session} techData={techData} categories={categories} profileEditForm={profileEditForm} setProfileEditForm={setProfileEditForm} profileEditOpenCategory={profileEditOpenCategory} setProfileEditOpenCategory={setProfileEditOpenCategory} toggleProfileEditSpecialty={toggleProfileEditSpecialty} saveProfileEdits={saveProfileEdits} setScreen={setScreen} />;
+  if (screen === 'profileEdit') return <ProfileEditScreen session={session} techData={techData} categories={categories} profileEditForm={profileEditForm} setProfileEditForm={setProfileEditForm} areas={areas} profileEditOpenCategory={profileEditOpenCategory} setProfileEditOpenCategory={setProfileEditOpenCategory} toggleProfileEditSpecialty={toggleProfileEditSpecialty} saveProfileEdits={saveProfileEdits} setScreen={setScreen} />;
 
   if (screen === 'changePassword') return <ChangePasswordScreen accountPasswordForm={accountPasswordForm} setAccountPasswordForm={setAccountPasswordForm} changeAccountPassword={changeAccountPassword} setScreen={setScreen} />;
 
@@ -1599,8 +1735,8 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
           {selected?.label === category.label ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleArray('specialties', service)} style={styles.choiceRow}><Text style={styles.choiceText}>{form.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
         </View>)}
 
-        <Field label="مناطق العمل (اكتب المناطق وافصل بينها بفاصلة) *" value={form.areas} onChangeText={value => updateForm('areas', value)} placeholder="مثال: مدينة نصر، مصر الجديدة، المعادي" multiline />
-        <Text style={styles.detail}>اكتب كل المناطق التي تستطيع العمل فيها. افصل بين كل منطقة والأخرى بفاصلة.</Text>
+        <AreaPicker label="مناطق العمل *" options={areas} multiple value={form.areas} onChange={value => updateForm('areas', value)} maxSelections={30} />
+        <Text style={styles.detail}>اختار المناطق التي تستطيع العمل فيها من القائمة المعتمدة. يمكنك اختيار حتى 30 منطقة.</Text>
 
         <Text style={styles.sectionTitle}>ميثاق صُنّاع – التعامل المهني مع العملاء</Text>
         <Text style={styles.detail}>اقرأ الميثاق كاملًا. لن تتمكن من الموافقة أو إرسال طلب التسجيل قبل الوصول إلى نهاية النص.</Text>
@@ -1652,7 +1788,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
 
   if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) return <SupportScreen session={session} screenHistoryRef={screenHistoryRef} screenRef={screenRef} setScreenState={setScreenState} setSupportCase={setSupportCase} supportSubject={supportSubject} setSupportSubject={setSupportSubject} supportDraft={supportDraft} setSupportDraft={setSupportDraft} startSupportCase={startSupportCase} supportCases={supportCases} openSupportCase={openSupportCase} supportCase={supportCase} dateLabel={dateLabel} sendSupportMessage={sendSupportMessage} supportLoading={supportLoading} />;
 
-  if (screen === 'admin' && session?.role === 'admin') return <AdminDashboard session={session} adminData={adminData} setAdminData={setAdminData} loadAdminSupportCases={loadAdminSupportCases} setScreen={setScreen} logout={logout} publishOrder={publishOrder} moderateTechnician={moderateTechnician} />;
+  if (screen === 'admin' && session?.role === 'admin') return <AdminDashboard adminPendingProfileEdits={adminPendingProfileEdits} reviewAdminProfileEdit={reviewAdminProfileEdit} refreshAdminProfileEdits={refreshAdminProfileEdits} session={session} adminData={adminData} setAdminData={setAdminData} adminExtras={adminExtras} adminRegionDraft={adminRegionDraft} setAdminRegionDraft={setAdminRegionDraft} adminLoadRegions={adminLoadRegions} adminAddRegion={adminAddRegion} adminEditRegion={adminEditRegion} adminToggleRegion={adminToggleRegion} adminDeleteRegion={adminDeleteRegion} adminRestoreRegion={adminRestoreRegion} adminBulkRegionAction={adminBulkRegionAction} adminBulkRenameRegions={adminBulkRenameRegions} categories={categories} areas={areas} adminProfileEdit={adminProfileEdit} setAdminProfileEdit={setAdminProfileEdit} adminBeginProfileEdit={adminBeginProfileEdit} toggleAdminProfileSpecialty={toggleAdminProfileSpecialty} adminSaveProfileEdit={adminSaveProfileEdit} loadAdminSupportCases={loadAdminSupportCases} setScreen={setScreen} logout={logout} publishOrder={publishOrder} moderateTechnician={moderateTechnician} />;
 
   return <SafeAreaView style={styles.safe}>
     <ScrollView contentContainerStyle={styles.homePage} showsVerticalScrollIndicator={false}>

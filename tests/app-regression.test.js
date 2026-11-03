@@ -345,9 +345,11 @@ test('technician account tab exposes Edit My Details and specialty edits are opt
   assert.ok(!app.includes("اختار تخصصًا واحدًا على الأقل."), 'saving profile edits should not require selecting a specialty');
 });
 
-test('technician profile edit loads the shared service categories before rendering specialty choices', () => {
-  assert.match(app, /\['client', 'clientRegister', 'technicianRegister', 'profileEdit'\]\.includes\(screen\)/);
-  assert.ok(app.includes('categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length;'));
+test('technician profile edit loads shared service categories before rendering specialty choices', () => {
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const account = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
+  assert.match(screens, /\['client', 'technician', 'admin', 'clientRegister', 'technicianRegister', 'profileEdit'\]\.includes\(screen\)/);
+  assert.ok(account.includes('categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length;'));
 });
 
 
@@ -389,7 +391,7 @@ test('support and admin dashboards are separate feature modules and wired to scr
   assert.match(screen, /from '\.\/support\/SupportScreen'/);
   assert.match(screen, /from '\.\/admin\/AdminDashboard'/);
   assert.match(screen, /<SupportScreen session=\{session\}/);
-  assert.match(screen, /<AdminDashboard session=\{session\}/);
+  assert.match(screen, /<AdminDashboard adminPendingProfileEdits=[\s\S]*?session=\{session\}/);
   assert.match(support, /export function SupportScreen/);
   assert.match(admin, /export function AdminDashboard/);
   assert.ok(!support.includes("if (screen === 'support'"));
@@ -454,4 +456,71 @@ test('client, technician, admin, and support use separate page palette surfaces'
   assert.match(technician, /styles\.technicianSafe/);
   assert.match(admin, /styles\.adminSafe/);
   assert.match(support, /styles\.supportSafe/);
+});
+
+ 
+test('area search normalizes Arabic alif variants and strips diacritics and invisible marks', () => {
+  const helpers = fs.readFileSync(path.join(root, 'src/utils/area-helpers.js'), 'utf8');
+  assert.match(helpers, /\[أإآٱ\]\/g/);
+  assert.match(helpers, /\\u064B-\\u065F/);
+  assert.match(helpers, /isReservedAreaLabel/);
+});
+
+test('technician registration and profile edits use approved multi-select areas, not free text', () => {
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const account = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
+  assert.ok(screens.includes('<AreaPicker label="مناطق العمل *" options={areas} multiple'));
+  assert.match(screens, /areas: selectedAreas/);
+  assert.ok(account.includes('<AreaPicker label="مناطق العمل *" options={areas} multiple'));
+  assert.doesNotMatch(screens, /مناطق العمل \\(اكتب المناطق وافصل بينها بفاصلة\\)/);
+  assert.doesNotMatch(account, /مناطق العمل \\(افصل بين المناطق بفاصلة\\)/);
+});
+
+test('client order area is selected from approved options and service counts react to selected area', () => {
+  const client = fs.readFileSync(path.join(root, 'src/screens/client/ClientDashboard.js'), 'utf8');
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  assert.ok(client.includes('<AreaPicker label="المنطقة أو الحي *" options={areas}'));
+  assert.match(client, /technicianCountByArea\?\.\[form\.area\]/);
+  assert.match(client, /serviceTechnicianCountsByArea\?\.\[service\]\?\.\[form\.area\]/);
+  assert.match(screens, /!areas\.includes\(form\.area\)/);
+});
+
+ 
+test('admin APK includes the web region management and account profile editing actions', () => {
+  const admin = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  for (const action of ['adminAddRegion', 'adminEditRegion', 'adminToggleRegion', 'adminDeleteRegion', 'adminRestoreRegion', 'adminBulkRegionAction']) assert.ok(screens.includes(action), 'missing region action: ' + action);
+  assert.ok(admin.includes("{ key: 'regions', label: 'المناطق' }"));
+  assert.ok(screens.includes("'/admin/fannis/' + encodeURIComponent(id) + '/profile'"));
+  assert.ok(screens.includes("'/admin/client-accounts/' + encodeURIComponent(id) + '/profile'"));
+  assert.ok(admin.includes('adminSaveProfileEdit'));
+});
+
+
+test('single customer area selection closes the results until the user changes or searches again', () => {
+  const picker = fs.readFileSync(path.join(root, 'src/components/AreaPicker.js'), 'utf8');
+  assert.match(picker, /const \[showResults, setShowResults\] = useState\(multiple \|\| !value\)/);
+  assert.match(picker, /setShowResults\(false\)/);
+  assert.match(picker, /onFocus=\{\(\) => setShowResults\(true\)\}/);
+  assert.match(picker, /onChange\?\.\(''\); setShowResults\(true\)/);
+  assert.match(picker, /\{showResults \? \(/);
+});
+
+
+test('admin app loads and reviews pending technician profile-change requests with before and requested values', () => {
+  assert.ok(app.includes("api('/admin/fanni-profile-edits'"), 'admin should load pending technician profile edits');
+  assert.ok(app.includes("'/admin/fanni-profile-edits/' + encodeURIComponent(id) + '/' + action"), 'admin should submit approve/reject actions');
+  const adminScreen = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  assert.ok(adminScreen.includes("{ key: 'profileEdits', label: 'طلبات تعديل البيانات' }"), 'admin should expose the profile edits tab');
+  assert.ok(adminScreen.includes('البيانات الحالية') && adminScreen.includes('البيانات المطلوبة'), 'admin should compare current and requested values');
+  assert.ok(adminScreen.includes('مطلوب تغييره'), 'changed fields should be highlighted');
+});
+
+test('admin area management supports bulk renaming selected regions', () => {
+  const appScreens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const adminScreen = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  assert.match(appScreens, /async function adminBulkRenameRegions\(rows\)/);
+  assert.match(appScreens, /body: \{ name: item\.name \}/);
+  assert.match(adminScreen, /تعديل أسماء المحدد/);
+  assert.match(adminScreen, /adminBulkRenameRegions\?\.\(rows\)/);
 });
