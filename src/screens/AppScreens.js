@@ -1489,6 +1489,29 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     await adminLoadRegions();
     Alert.alert('إدارة المناطق', 'تم تنفيذ ' + succeeded + ' عملية' + (failed ? '، وفشل ' + failed : '') + '.');
   }
+  async function adminBulkRenameRegions(rows) {
+    const changes = [...new Map((Array.isArray(rows) ? rows : []).map(item => [
+      String(item?.id || ''),
+      { id: String(item?.id || ''), name: String(item?.name || '').trim().replace(/\\s+/g, ' ') }
+    ]).values())].filter(item => item.id);
+    if (!changes.length || changes.some(item => item.name.length < 2 || item.name.length > 100)) {
+      Alert.alert('تعديل أسماء المناطق', 'راجع الأسماء؛ كل اسم يجب أن يكون من حرفين إلى 100 حرف.');
+      return false;
+    }
+    let succeeded = 0, failed = 0;
+    for (const item of changes) {
+      try {
+        await api('/admin/regions/' + encodeURIComponent(item.id), {
+          method: 'PATCH', token: session.token, body: { name: item.name }
+        });
+        succeeded++;
+      } catch (_) { failed++; }
+    }
+    await adminLoadRegions();
+    setReloadKey(value => value + 1);
+    Alert.alert('تعديل أسماء المناطق', 'تم تعديل ' + succeeded + ' منطقة' + (failed ? '، وتعذر تعديل ' + failed : '') + '.');
+    return failed === 0;
+  }
   async function adminSaveSettings() {
     const value = adminExtras.settings;
     if (value.siteName.trim().length < 2 || !Number.isInteger(Number(value.maxFanniSignupAttempts)) || value.maxFanniSignupAttempts < 1 || value.maxFanniSignupAttempts > 100) { Alert.alert('راجع الإعدادات', 'اسم المنصة مطلوب وحد المحاولات من 1 إلى 100.'); return; }
