@@ -1,16 +1,14 @@
 {
   "expo": {
-    "name": "sonaa",
-    "slug": "sonaa",
-    "version": "1.0.12",
+    "name": "sonaa-con",
+    "slug": "sonaa-con",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "platforms": [
-      "android"
-    ],
+    "platforms": ["android"],
     "android": {
-      "package": "com.sonaa.app",
-      "versionCode": 13,
+      "package": "com.sonaa.con",
+      "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -19,9 +17,7 @@
     },
     "extra": {
       "apiUrl": "https://sonaa-backend-v2.vercel.app/api",
-      "eas": {
-        "projectId": "01cd6ee6-73a2-4404-8381-d60446befcc5"
-      }
+      "appVariant": "admin-supervisor"
     },
     "splash": {
       "image": "./assets/splash.png",
@@ -34,7 +30,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "السماح لصُنّاع بتسجيل وصف الطلب الصوتي."
+          "microphonePermission": "السماح لصُنّاع CON بتسجيل ومراجعة المحتوى الصوتي."
         }
       ]
     ]
