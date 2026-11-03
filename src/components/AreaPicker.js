@@ -3,7 +3,7 @@ import { ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet } from 
 import { COLORS } from '../theme/colors';
 import { filterAreaOptions, isReservedAreaLabel } from '../utils/area-helpers';
 
-export default function AreaPicker({ label, options = [], value, onChange, multiple = false, maxSelections = 30, inputRef }) {
+export default function AreaPicker({ label, options = [], value, onChange, multiple = false, maxSelections = 30, inputRef, technicianCounts = {} }) {
   const [query, setQuery] = useState('');
   const [showResults, setShowResults] = useState(multiple || !value);
   const selected = multiple
@@ -42,7 +42,7 @@ export default function AreaPicker({ label, options = [], value, onChange, multi
           <TouchableOpacity onPress={() => { onChange?.(''); setShowResults(true); }}><Text style={styles.changeText}>تغيير</Text></TouchableOpacity>
         </View>
       ) : null}
-      <TextInput
+      {(multiple || !selected.length) ? <TextInput
         ref={inputRef}
         value={query}
         onChangeText={value => { setQuery(value); setShowResults(true); }}
@@ -54,7 +54,7 @@ export default function AreaPicker({ label, options = [], value, onChange, multi
         autoCorrect={false}
         returnKeyType="search"
         accessibilityLabel="البحث عن منطقة"
-      />
+      /> : null}
       {showResults ? (
         <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={styles.results} contentContainerStyle={styles.resultsContent}>
           {filtered.length ? filtered.map(area => {
@@ -65,7 +65,7 @@ export default function AreaPicker({ label, options = [], value, onChange, multi
                 accessibilityRole={multiple ? 'checkbox' : 'button'}
                 accessibilityState={{ checked: active, disabled: limitReached }}
                 style={[styles.option, active && styles.optionActive, limitReached && styles.optionDisabled]}>
-                <Text style={[styles.optionText, active && styles.optionTextActive]}>{area}</Text>
+                <View style={styles.optionMain}><Text style={[styles.optionText, active && styles.optionTextActive]}>{area}</Text>{!multiple ? <Text style={styles.technicianCount}>{Number(technicianCounts?.[area] || 0)} فني</Text> : null}</View>
                 <Text style={[styles.check, active && styles.checkActive]}>{active ? '✓' : multiple ? '＋' : 'اختيار'}</Text>
               </TouchableOpacity>
             );
@@ -84,6 +84,8 @@ const styles = StyleSheet.create({
   results: { maxHeight: 218, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, backgroundColor: COLORS.white },
   resultsContent: { padding: 6 },
   option: { minHeight: 42, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
+  optionMain: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  technicianCount: { color: COLORS.tealDark, fontSize: 10, fontWeight: '900', backgroundColor: COLORS.cyan50, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
   optionActive: { backgroundColor: COLORS.cyan50 },
   optionDisabled: { opacity: 0.35 },
   optionText: { flex: 1, color: COLORS.text, textAlign: 'right', fontSize: 12, fontWeight: '700' },
