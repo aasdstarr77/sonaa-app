@@ -1,29 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { AdminUsersManager } from './AdminUsersManager';
 import { api } from '../services/api';
 import { CON_COLORS as C } from '../theme/con-colors';
 import { canRead, getPermissions, isRoot } from './permissions';
 
 const SECTIONS = [
  {key:'dashboard',label:'الرئيسية',path:'/admin/counts',title:'مؤشرات المنصة',fields:['technicians','verifiedTechnicians','clients']},
- {key:'orders',label:'الطلبات',path:'/admin/orders?limit=100',title:'طلبات العملاء',fields:['sn','status','service','clientName','clientPhone','createdAt']},
+ {key:'orders',label:'الطلبات',path:'/admin/orders?limit=100',title:'طلبات العملاء',fields:['sn','status','service','clientName','clientPhone','createdAt','offersCount','voiceReviewed']},
  {key:'fannis',label:'الفنيون',path:'/admin/fannis?limit=100',title:'الفنيون',fields:['name','phone','status','adminRole','specialties','areas']},
  {key:'clients',label:'العملاء',path:'/admin/clients?limit=100',title:'العملاء',fields:['name','phone','createdAt']},
- {key:'voiceReview',label:'مراجعة الصوت',path:'/admin/orders?limit=100',title:'طلبات بها وصف صوتي',fields:['sn','status','voiceDescription','voiceReviewed']},
  {key:'complaints',label:'الشكاوى',path:'/admin/complaints?limit=100',title:'الشكاوى',fields:['name','phone','status','text','createdAt']},
  {key:'topups',label:'طلبات الشحن',path:'/admin/topup-requests?limit=100',title:'طلبات الشحن',fields:['name','phone','amount','status','createdAt']},
  {key:'regions',label:'المناطق',path:'/admin/regions',title:'المناطق',fields:['name','isActive','isDeleted']},
  {key:'services',label:'الخدمات والمهن',path:'/admin/services',title:'الخدمات والمهن',fields:['name','label','category','isActive']},
- {key:'wallet',label:'المحافظ',path:'/admin/fannis?limit=100',title:'بيانات الفنيين والمحافظ',fields:['name','phone','walletBalance','status']},
  {key:'pricing',label:'التسعير',path:'/admin/pricing',title:'إعدادات التسعير',fields:['check','commission','minOffer','maxOffer']},
  {key:'settings',label:'الإعدادات',path:'/admin/settings',title:'إعدادات المنصة',fields:['siteName','maintenance']},
  {key:'content',label:'المحتوى',path:'/admin/content',title:'إدارة المحتوى',fields:['title','body','active']},
  {key:'support',label:'خدمة العملاء',path:'/support/admin?needsHuman=true',title:'حالات خدمة العملاء',fields:['name','phone','status','lastMessage','updatedAt']},
- {key:'offers',label:'العروض',path:'/admin/orders?limit=100',title:'الطلبات والعروض',fields:['sn','status','service','offersCount']},
  {key:'notifications',label:'الإشعارات',path:'/admin/notifications',title:'الإشعارات',fields:['title','body','createdAt']},
  {key:'passwordRecovery',label:'استعادة الحساب',path:'/password-recovery/admin/requests',title:'طلبات استعادة الحساب',fields:['phone','status','createdAt']},
  {key:'clientsData',label:'بيانات العملاء',path:'/admin/client-accounts',title:'حسابات العملاء',fields:['name','phone','createdAt']},
- {key:'publishOrders',label:'نشر الطلبات',path:'/admin/orders?limit=100',title:'طلبات النشر',fields:['sn','status','service','createdAt']}
 ];
 const ROOT_SECTIONS = [
  {key:'adminUsers',label:'حسابات الإدارة',path:'/admin/admin-users',title:'المديرون والمشرفون',fields:['name','phone','adminRole','status']},
@@ -71,7 +68,7 @@ export function ConsoleScreen({session,profile,onLogout}) {
     <Metric label="الفنيون المعتمدون" value={stats.verifiedTechnicians}/>
     <Metric label="العملاء" value={stats.clients}/>
    </View>:<TextInput value={search} onChangeText={setSearch} placeholder="ابحث داخل النتائج..." placeholderTextColor={C.muted} textAlign="right" style={s.search}/>}
-   {busy?<View style={s.loading}><ActivityIndicator color={C.accent} size="large"/><Text style={s.muted}>جاري تحميل البيانات...</Text></View>:error?<View style={s.errorCard}><Text style={s.errorText}>{error}</Text><Text style={s.muted}>قد تكون هذه العملية غير متاحة لدورك أو أن المسار غير مدعوم من الخادم.</Text></View>:section?.key==='dashboard'?<View style={s.infoCard}><Text style={s.cardTitle}>مركز متابعة صُنّاع</Text><Text style={s.cardText}>استخدم الأقسام بالأعلى لمتابعة العمليات المسموح بها لحسابك. كل طلب يُراجع الخادم صلاحية الوصول إليه قبل إرجاع البيانات أو تنفيذ أي إجراء.</Text><Text style={s.cardFoot}>عدد الأقسام المتاحة: {sections.length}</Text></View>:<FlatList data={visibleData} keyExtractor={(item,i)=>String(item._id||item.id||item.sn||i)} contentContainerStyle={{paddingBottom:28}} ListEmptyComponent={<Text style={s.empty}>لا توجد بيانات للعرض أو لا توجد نتائج مطابقة.</Text>} renderItem={({item,index})=><RecordCard item={item} index={index} fields={section?.fields||[]}/>}/>}
+   {busy?<View style={s.loading}><ActivityIndicator color={C.accent} size="large"/><Text style={s.muted}>جاري تحميل البيانات...</Text></View>:error?<View style={s.errorCard}><Text style={s.errorText}>{error}</Text><Text style={s.muted}>قد تكون هذه العملية غير متاحة لدورك أو أن المسار غير مدعوم من الخادم.</Text></View>:section?.key==='dashboard'?<View style={s.infoCard}><Text style={s.cardTitle}>مركز متابعة صُنّاع</Text><Text style={s.cardText}>استخدم الأقسام بالأعلى لمتابعة العمليات المسموح بها لحسابك. كل طلب يُراجع الخادم صلاحية الوصول إليه قبل إرجاع البيانات أو تنفيذ أي إجراء.</Text><Text style={s.cardFoot}>عدد الأقسام المتاحة: {sections.length}</Text></View>:{section?.key==='adminUsers'?<AdminUsersManager session={session} profile={profile} users={visibleData} onRefresh={load}/>:<FlatList data={visibleData} keyExtractor={(item,i)=>String(item._id||item.id||item.sn||i)} contentContainerStyle={{paddingBottom:28}} ListEmptyComponent={<Text style={s.empty}>لا توجد بيانات للعرض أو لا توجد نتائج مطابقة.</Text>} renderItem={({item,index})=><RecordCard item={item} index={index} fields={section?.fields||[]}/>}/>}}
   </View>
  </View>;
 }
