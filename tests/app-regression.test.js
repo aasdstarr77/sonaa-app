@@ -345,9 +345,11 @@ test('technician account tab exposes Edit My Details and specialty edits are opt
   assert.ok(!app.includes("اختار تخصصًا واحدًا على الأقل."), 'saving profile edits should not require selecting a specialty');
 });
 
-test('technician profile edit loads the shared service categories before rendering specialty choices', () => {
-  assert.match(app, /\['client', 'clientRegister', 'technicianRegister', 'profileEdit'\]\.includes\(screen\)/);
-  assert.ok(app.includes('categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length;'));
+test('technician profile edit loads shared service categories before rendering specialty choices', () => {
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const account = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
+  assert.match(screens, /\['client', 'technician', 'admin', 'clientRegister', 'technicianRegister', 'profileEdit'\]\.includes\(screen\)/);
+  assert.ok(account.includes('categories.map(category => { const chosenCount = (category.services || []).filter(service => profileEditForm.specialties.includes(service)).length;'));
 });
 
 
@@ -389,7 +391,7 @@ test('support and admin dashboards are separate feature modules and wired to scr
   assert.match(screen, /from '\.\/support\/SupportScreen'/);
   assert.match(screen, /from '\.\/admin\/AdminDashboard'/);
   assert.match(screen, /<SupportScreen session=\{session\}/);
-  assert.match(screen, /<AdminDashboard session=\{session\}/);
+  assert.match(screen, /<AdminDashboard adminPendingProfileEdits=[\s\S]*?session=\{session\}/);
   assert.match(support, /export function SupportScreen/);
   assert.match(admin, /export function AdminDashboard/);
   assert.ok(!support.includes("if (screen === 'support'"));
@@ -467,9 +469,9 @@ test('area search normalizes Arabic alif variants and strips diacritics and invi
 test('technician registration and profile edits use approved multi-select areas, not free text', () => {
   const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
   const account = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
-  assert.match(screens, /<AreaPicker label="مناطق العمل \\*" options=\{areas\} multiple/);
+  assert.ok(screens.includes('<AreaPicker label="مناطق العمل *" options={areas} multiple'));
   assert.match(screens, /areas: selectedAreas/);
-  assert.match(account, /<AreaPicker label="مناطق العمل \\*" options=\{areas\} multiple/);
+  assert.ok(account.includes('<AreaPicker label="مناطق العمل *" options={areas} multiple'));
   assert.doesNotMatch(screens, /مناطق العمل \\(اكتب المناطق وافصل بينها بفاصلة\\)/);
   assert.doesNotMatch(account, /مناطق العمل \\(افصل بين المناطق بفاصلة\\)/);
 });
@@ -477,7 +479,7 @@ test('technician registration and profile edits use approved multi-select areas,
 test('client order area is selected from approved options and service counts react to selected area', () => {
   const client = fs.readFileSync(path.join(root, 'src/screens/client/ClientDashboard.js'), 'utf8');
   const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
-  assert.match(client, /<AreaPicker label="المنطقة أو الحي \\*" options=\{areas\}/);
+  assert.ok(client.includes('<AreaPicker label="المنطقة أو الحي *" options={areas}'));
   assert.match(client, /technicianCountByArea\?\.\[form\.area\]/);
   assert.match(client, /serviceTechnicianCountsByArea\?\.\[service\]\?\.\[form\.area\]/);
   assert.match(screens, /!areas\.includes\(form\.area\)/);
