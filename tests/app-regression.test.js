@@ -503,3 +503,13 @@ test('single customer area selection closes the results until the user changes o
   assert.match(picker, /onChange\?\.\(''\); setShowResults\(true\)/);
   assert.match(picker, /\{showResults \? \(/);
 });
+
+
+test('admin app loads and reviews pending technician profile-change requests with before and requested values', () => {
+  assert.ok(app.includes("api('/admin/fanni-profile-edits'"), 'admin should load pending technician profile edits');
+  assert.ok(app.includes("'/admin/fanni-profile-edits/' + encodeURIComponent(id) + '/' + action"), 'admin should submit approve/reject actions');
+  const adminScreen = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  assert.ok(adminScreen.includes("{ key: 'profileEdits', label: 'طلبات تعديل البيانات' }"), 'admin should expose the profile edits tab');
+  assert.ok(adminScreen.includes('البيانات الحالية') && adminScreen.includes('البيانات المطلوبة'), 'admin should compare current and requested values');
+  assert.ok(adminScreen.includes('مطلوب تغييره'), 'changed fields should be highlighted');
+});
