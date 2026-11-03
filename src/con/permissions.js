@@ -8,7 +8,7 @@ const roleDefaults = {
   'مدير': ALL
 };
 export function getPermissions(profile) {
-  if (profile?.adminRoleLabel === 'أدمن رئيسي' || (profile?.role === 'admin' && !profile?.adminRole)) return ALL;
+  if (profile?.adminRoleLabel === 'أدمن رئيسي') return ALL;
   const role = profile?.adminRole || (profile?.role === 'admin' ? 'مشرف' : '');
   const base = roleDefaults[role] || {};
   const stored = profile?.adminPermissions || {};
