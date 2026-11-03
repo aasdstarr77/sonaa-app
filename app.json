@@ -1,38 +1,11 @@
 {
-  "expo": {
-    "name": "sonaa-con",
-    "slug": "sonaa-con",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "platforms": ["android"],
-    "android": {
-      "package": "com.sonaa.con",
-      "versionCode": 1,
-      "googleServicesFile": "./google-services.json",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F4F8FC"
-      }
-    },
-    "extra": {
-      "apiUrl": "https://sonaa-backend-v2.vercel.app/api",
-      "appVariant": "admin-supervisor"
-    },
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F4F8FC"
-    },
-    "owner": "sonaa2030",
-    "plugins": [
-      "expo-notifications",
-      [
-        "expo-av",
-        {
-          "microphonePermission": "السماح لصُنّاع CON بتسجيل ومراجعة المحتوى الصوتي."
-        }
-      ]
-    ]
-  }
+ "expo":{
+  "name":"صُنّاع CON","slug":"sonaa-con","version":"1.0.0","orientation":"portrait",
+  "icon":"./assets/icon.png","platforms":["android"],
+  "android":{"package":"com.sonaa.con","versionCode":1,"adaptiveIcon":{"foregroundImage":"./assets/adaptive-icon.png","backgroundColor":"#EEF3FA"}},
+  "extra":{"apiUrl":"https://sonaa-backend-v2.vercel.app/api","appVariant":"admin-supervisor"},
+  "splash":{"image":"./assets/splash.png","resizeMode":"contain","backgroundColor":"#EEF3FA"},
+  "owner":"sonaa2030",
+  "plugins":["expo-notifications",["expo-av",{"microphonePermission":"السماح لصُنّاع CON بمراجعة التسجيلات الصوتية."}]]
+ }
 }

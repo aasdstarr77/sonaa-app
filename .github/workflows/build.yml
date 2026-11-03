@@ -1,7 +1,7 @@
-name: Build APK Final
+name: Build Sonaa Android APK
 on:
   push:
-    branches: [ main, 'feature/sync-web-updates-20261103' ]
+    branches: [ main, 'feature/sync-web-updates-20261103', 'feature/sonaa-con-admin-app' ]
     paths:
       - 'App.js'
       - 'src/**'
@@ -27,6 +27,9 @@ jobs:
           java-version: '17'
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+      - name: Verify Sonaa CON permission matrix
+        if: github.ref == 'refs/heads/feature/sonaa-con-admin-app'
+        run: node --test tests/con-permissions.test.js
       - name: Generate app icons and splash from official logo
         run: |
           mkdir -p assets
@@ -55,5 +58,5 @@ jobs:
           ./gradlew assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: sonaa-apk-final
+          name: ${{ github.ref == 'refs/heads/feature/sonaa-con-admin-app' && 'sonaa-con-apk' || 'sonaa-apk-final' }}
           path: android/app/build/outputs/apk/release/app-release.apk
