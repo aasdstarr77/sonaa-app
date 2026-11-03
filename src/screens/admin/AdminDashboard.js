@@ -11,7 +11,7 @@ export function AdminDashboard({
   session, adminData, setAdminData, adminExtras, adminRegionDraft, setAdminRegionDraft,
   adminLoadRegions, adminAddRegion, adminEditRegion, adminToggleRegion, adminDeleteRegion,
   adminRestoreRegion, adminBulkRegionAction, categories = [], areas = [],
-  adminProfileEdit, setAdminProfileEdit, adminPendingProfileEdits = [], reviewAdminProfileEdit, adminBeginProfileEdit, toggleAdminProfileSpecialty,
+  adminProfileEdit, setAdminProfileEdit, adminPendingProfileEdits = [], reviewAdminProfileEdit, refreshAdminProfileEdits, adminBeginProfileEdit, toggleAdminProfileSpecialty,
   adminSaveProfileEdit, loadAdminSupportCases, setScreen, logout, publishOrder, moderateTechnician
 }) {
   const tab = adminData.tab;
@@ -49,6 +49,7 @@ export function AdminDashboard({
         setAdminData(v => ({ ...v, tab: item.key }));
         if (item.key === 'support') loadAdminSupportCases();
         if (item.key === 'regions') adminLoadRegions();
+        if (item.key === 'profileEdits') refreshAdminProfileEdits?.();
       }} style={[styles.pillPremium, tab === item.key && styles.pillPremiumActive]}>
         <Text style={[styles.pillPremiumText, tab === item.key && styles.pillPremiumTextActive]}>{item.label}</Text>
       </TouchableOpacity>)}
@@ -59,6 +60,7 @@ export function AdminDashboard({
       data={adminPendingProfileEdits}
       keyExtractor={(item, i) => String(item._id || item.id || i)}
       contentContainerStyle={styles.listPremium}
+      ListHeaderComponent={<View style={styles.dataCard}><Text style={styles.cardTitlePremium}>طلبات تعديل بيانات الفنيين</Text><Text style={styles.detailSmall}>لن تتغير بيانات الفني إلا بعد الموافقة. راجع البيانات الحالية والجديدة قبل اتخاذ القرار.</Text><Button title="تحديث الطلبات" secondary onPress={refreshAdminProfileEdits} /></View>}
       ListEmptyComponent={<Text style={styles.emptyText}>لا توجد طلبات تعديل بيانات معلّقة حاليًا.</Text>}
       renderItem={({ item }) => {
         const pending = item.pendingProfileChange || {};
