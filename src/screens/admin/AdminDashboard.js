@@ -10,7 +10,7 @@ import { normalizeAreaSearch } from '../../utils/area-helpers';
 export function AdminDashboard({
   session, adminData, setAdminData, adminExtras, adminRegionDraft, setAdminRegionDraft,
   adminLoadRegions, adminAddRegion, adminEditRegion, adminToggleRegion, adminDeleteRegion,
-  adminRestoreRegion, adminBulkRegionAction, categories = [], areas = [],
+  adminRestoreRegion, adminBulkRegionAction, adminBulkRenameRegions, categories = [], areas = [],
   adminProfileEdit, setAdminProfileEdit, adminPendingProfileEdits = [], reviewAdminProfileEdit, refreshAdminProfileEdits, adminBeginProfileEdit, toggleAdminProfileSpecialty,
   adminSaveProfileEdit, loadAdminSupportCases, setScreen, logout, publishOrder, moderateTechnician
 }) {
@@ -18,6 +18,7 @@ export function AdminDashboard({
   const [regionSearch, setRegionSearch] = useState('');
   const [selectedRegionIds, setSelectedRegionIds] = useState([]);
   const [editingRegion, setEditingRegion] = useState({ id: '', name: '' });
+  const [bulkEditRows, setBulkEditRows] = useState([]);
   const [openSpecialtyCategory, setOpenSpecialtyCategory] = useState('');
   const regions = Array.isArray(adminExtras?.regions) ? adminExtras.regions : [];
   const normalizedSearch = normalizeAreaSearch(regionSearch);
@@ -98,6 +99,7 @@ export function AdminDashboard({
         <View style={styles.roleActions}>
           <Button title="تحديد الظاهرين" secondary onPress={() => setSelectedRegionIds(filteredRegions.map(item => String(item._id || item.id)))} />
           <Button title="إلغاء التحديد" secondary onPress={() => setSelectedRegionIds([])} />
+          <Button title="تعديل أسماء المحدد" secondary onPress={() => setBulkEditRows(filteredRegions.filter(item => selectedRegionIds.includes(String(item._id || item.id))).map(item => ({ id: String(item._id || item.id), name: String(item.name || '') })))} disabled={!selectedRegionIds.length} />
         </View>
         <View style={styles.roleActions}>
           <Button title="إظهار المحدد" secondary onPress={() => adminBulkRegionAction(selectedRegionIds, 'show')} disabled={!selectedRegionIds.length} />
@@ -149,6 +151,18 @@ export function AdminDashboard({
       </View>}
     />}
 
+    <Modal transparent visible={bulkEditRows.length > 0} animationType="slide" onRequestClose={() => setBulkEditRows([])}>
+      <View style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 16 }}>
+        <View style={{ maxHeight: '90%', backgroundColor: COLORS.white, borderRadius: 18, padding: 16 }}>
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <Text style={styles.cardTitlePremium}>تعديل أسماء المناطق المحددة</Text>
+            {bulkEditRows.map((item, index) => <Field key={item.id} label={'المنطقة ' + (index + 1)} value={item.name} onChangeText={name => setBulkEditRows(current => current.map(row => row.id === item.id ? { ...row, name } : row))} />)}
+            <Button title="حفظ الأسماء" onPress={async () => { const rows = bulkEditRows; const ok = await adminBulkRenameRegions?.(rows); if (ok) { setBulkEditRows([]); setSelectedRegionIds([]); } }} />
+            <Button title="إلغاء" secondary onPress={() => setBulkEditRows([])} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
     <Modal transparent visible={Boolean(adminProfileEdit?.open)} animationType="slide" onRequestClose={() => setAdminProfileEdit(current => ({ ...current, open: false }))}>
       <View style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 16 }}>
         <View style={{ maxHeight: '90%', backgroundColor: COLORS.white, borderRadius: 18, padding: 16 }}>
