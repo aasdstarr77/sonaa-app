@@ -513,3 +513,12 @@ test('admin app loads and reviews pending technician profile-change requests wit
   assert.ok(adminScreen.includes('البيانات الحالية') && adminScreen.includes('البيانات المطلوبة'), 'admin should compare current and requested values');
   assert.ok(adminScreen.includes('مطلوب تغييره'), 'changed fields should be highlighted');
 });
+
+test('admin area management supports bulk renaming selected regions', () => {
+  const appScreens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const adminScreen = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  assert.match(appScreens, /async function adminBulkRenameRegions\(rows\)/);
+  assert.match(appScreens, /body: \{ name: item\.name \}/);
+  assert.match(adminScreen, /تعديل أسماء المحدد/);
+  assert.match(adminScreen, /adminBulkRenameRegions\?\.\(rows\)/);
+});
