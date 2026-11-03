@@ -1519,6 +1519,15 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     const label = action === 'cancel' ? 'إلغاء' : 'أرشفة';
     Alert.alert(label + ' الطلب ' + sn, 'هل تؤكد ' + label + ' الطلب؟ سيتم تسجيل الإجراء في سجل الإدارة.', [{ text: 'رجوع', style: 'cancel' }, { text: 'تأكيد', style: 'destructive', onPress: async () => { try { const result = await api('/admin/orders/' + encodeURIComponent(sn) + '/' + action, { method: 'POST', token: session.token, body: { reason: 'إجراء إداري من تطبيق صُنّاع' } }); Alert.alert('تم الإجراء', result.message || 'تم تحديث الطلب.'); setReloadKey(v => v + 1); } catch (err) { Alert.alert('تعذر ' + label + ' الطلب', err.message || 'راجع حالة الطلب.'); } } }]);
   }
+  async function refreshAdminProfileEdits() {
+    try {
+      const result = await api('/admin/fanni-profile-edits', { token: session.token });
+      setAdminPendingProfileEdits(toList(result, ['requests', 'items', 'fannis']));
+    } catch (err) {
+      Alert.alert('تعذر تحميل طلبات تعديل البيانات', err.message || 'حاول مرة أخرى.');
+    }
+  }
+
   async function reviewAdminProfileEdit(item, action) {
     const id = String(item?._id || item?.id || '');
     if (!id || !['approve', 'reject'].includes(action)) return;
@@ -1756,7 +1765,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
 
   if (screen === 'support' && session && ['client', 'fanni'].includes(session.role)) return <SupportScreen session={session} screenHistoryRef={screenHistoryRef} screenRef={screenRef} setScreenState={setScreenState} setSupportCase={setSupportCase} supportSubject={supportSubject} setSupportSubject={setSupportSubject} supportDraft={supportDraft} setSupportDraft={setSupportDraft} startSupportCase={startSupportCase} supportCases={supportCases} openSupportCase={openSupportCase} supportCase={supportCase} dateLabel={dateLabel} sendSupportMessage={sendSupportMessage} supportLoading={supportLoading} />;
 
-  if (screen === 'admin' && session?.role === 'admin') return <AdminDashboard adminPendingProfileEdits={adminPendingProfileEdits} reviewAdminProfileEdit={reviewAdminProfileEdit} session={session} adminData={adminData} setAdminData={setAdminData} adminExtras={adminExtras} adminRegionDraft={adminRegionDraft} setAdminRegionDraft={setAdminRegionDraft} adminLoadRegions={adminLoadRegions} adminAddRegion={adminAddRegion} adminEditRegion={adminEditRegion} adminToggleRegion={adminToggleRegion} adminDeleteRegion={adminDeleteRegion} adminRestoreRegion={adminRestoreRegion} adminBulkRegionAction={adminBulkRegionAction} categories={categories} areas={areas} adminProfileEdit={adminProfileEdit} setAdminProfileEdit={setAdminProfileEdit} adminBeginProfileEdit={adminBeginProfileEdit} toggleAdminProfileSpecialty={toggleAdminProfileSpecialty} adminSaveProfileEdit={adminSaveProfileEdit} loadAdminSupportCases={loadAdminSupportCases} setScreen={setScreen} logout={logout} publishOrder={publishOrder} moderateTechnician={moderateTechnician} />;
+  if (screen === 'admin' && session?.role === 'admin') return <AdminDashboard adminPendingProfileEdits={adminPendingProfileEdits} reviewAdminProfileEdit={reviewAdminProfileEdit} refreshAdminProfileEdits={refreshAdminProfileEdits} session={session} adminData={adminData} setAdminData={setAdminData} adminExtras={adminExtras} adminRegionDraft={adminRegionDraft} setAdminRegionDraft={setAdminRegionDraft} adminLoadRegions={adminLoadRegions} adminAddRegion={adminAddRegion} adminEditRegion={adminEditRegion} adminToggleRegion={adminToggleRegion} adminDeleteRegion={adminDeleteRegion} adminRestoreRegion={adminRestoreRegion} adminBulkRegionAction={adminBulkRegionAction} categories={categories} areas={areas} adminProfileEdit={adminProfileEdit} setAdminProfileEdit={setAdminProfileEdit} adminBeginProfileEdit={adminBeginProfileEdit} toggleAdminProfileSpecialty={toggleAdminProfileSpecialty} adminSaveProfileEdit={adminSaveProfileEdit} loadAdminSupportCases={loadAdminSupportCases} setScreen={setScreen} logout={logout} publishOrder={publishOrder} moderateTechnician={moderateTechnician} />;
 
   return <SafeAreaView style={styles.safe}>
     <ScrollView contentContainerStyle={styles.homePage} showsVerticalScrollIndicator={false}>
