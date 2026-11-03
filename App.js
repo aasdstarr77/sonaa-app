@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { api } from './src/services/api';
 import { CON_COLORS as C } from './src/theme/con-colors';
 import { LoginScreen } from './src/con/LoginScreen';
-import { ConsoleScreen } from './src/con/ConsoleScreen';
+import { AdminWebPanel } from './src/con/AdminWebPanel';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -51,7 +51,7 @@ export default function App() {
   if (loading) return <SafeAreaView style={styles.loading}><StatusBar barStyle="dark-content" backgroundColor={C.background}/><ActivityIndicator size="large" color={C.accent}/><Text style={styles.loadingText}>جاري تجهيز صُنّاع CON...</Text></SafeAreaView>;
   return <SafeAreaView style={styles.root}>
     <StatusBar barStyle="dark-content" backgroundColor={C.background}/>
-    {session ? <ConsoleScreen session={session} profile={profile} onLogout={logout}/> :
+    {session ? <AdminWebPanel session={session} onLogout={logout}/> :
       <LoginScreen phone={phone} setPhone={setPhone} password={password} setPassword={setPassword} onLogin={login} busy={loginBusy} error={loginError}/>}
   </SafeAreaView>;
 }
