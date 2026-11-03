@@ -493,3 +493,13 @@ test('admin APK includes the web region management and account profile editing a
   assert.ok(screens.includes("'/admin/client-accounts/' + encodeURIComponent(id) + '/profile'"));
   assert.ok(admin.includes('adminSaveProfileEdit'));
 });
+
+
+test('single customer area selection closes the results until the user changes or searches again', () => {
+  const picker = fs.readFileSync(path.join(root, 'src/components/AreaPicker.js'), 'utf8');
+  assert.match(picker, /const \[showResults, setShowResults\] = useState\(multiple \|\| !value\)/);
+  assert.match(picker, /setShowResults\(false\)/);
+  assert.match(picker, /onFocus=\{\(\) => setShowResults\(true\)\}/);
+  assert.match(picker, /onChange\?\.\(''\); setShowResults\(true\)/);
+  assert.match(picker, /\{showResults \? \(/);
+});
