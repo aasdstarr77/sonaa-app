@@ -1492,7 +1492,7 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
   async function adminBulkRenameRegions(rows) {
     const changes = [...new Map((Array.isArray(rows) ? rows : []).map(item => [
       String(item?.id || ''),
-      { id: String(item?.id || ''), name: String(item?.name || '').trim().replace(/\\s+/g, ' ') }
+      { id: String(item?.id || ''), name: String(item?.name || '').trim().replace(/\s+/g, ' ') }
     ]).values())].filter(item => item.id);
     if (!changes.length || changes.some(item => item.name.length < 2 || item.name.length > 100)) {
       Alert.alert('تعديل أسماء المناطق', 'راجع الأسماء؛ كل اسم يجب أن يكون من حرفين إلى 100 حرف.');
