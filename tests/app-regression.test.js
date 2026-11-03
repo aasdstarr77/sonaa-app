@@ -524,3 +524,22 @@ test('admin area management supports bulk renaming selected regions', () => {
   assert.match(adminScreen, /تعديل أسماء المحدد/);
   assert.match(adminScreen, /adminBulkRenameRegions\?\.\(rows\)/);
 });
+
+
+test('client area selection hides the search field, reveals the detailed address, and shows live technician totals', () => {
+  const picker = fs.readFileSync(path.join(root, 'src/components/AreaPicker.js'), 'utf8');
+  const client = fs.readFileSync(path.join(root, 'src/screens/client/ClientDashboard.js'), 'utf8');
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  assert.match(picker, /technicianCounts = \{\}/);
+  assert.match(picker, /Number\(technicianCounts\?\.\[area\] \|\| 0\)\} فني/);
+  assert.match(picker, /\(multiple \|\| !selected\.length\) \? <TextInput/);
+  assert.ok(client.includes('technicianCounts={areaTechnicianCounts}'));
+  assert.ok(client.includes('{form.area ? <Field inputRef={clientAddressInputRef} label="العنوان بالتفصيل *"'));
+  assert.ok(screens.includes('setAreaTechnicianCounts(areaResponse.status'));
+  assert.ok(screens.includes('areaTechnicianCounts, setAreaTechnicianCounts,'));
+});
+
+test('technician dashboard opens on the opportunities tab by default', () => {
+  const state = fs.readFileSync(path.join(root, 'src/hooks/useAppState.js'), 'utf8');
+  assert.match(state, /tab: 'available'/);
+});
