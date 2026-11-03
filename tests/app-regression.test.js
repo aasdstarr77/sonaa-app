@@ -455,3 +455,41 @@ test('client, technician, admin, and support use separate page palette surfaces'
   assert.match(admin, /styles\.adminSafe/);
   assert.match(support, /styles\.supportSafe/);
 });
+
+ 
+test('area search normalizes Arabic alif variants and strips diacritics and invisible marks', () => {
+  const helpers = fs.readFileSync(path.join(root, 'src/utils/area-helpers.js'), 'utf8');
+  assert.match(helpers, /\[أإآٱ\]\/g/);
+  assert.match(helpers, /\\u064B-\\u065F/);
+  assert.match(helpers, /isReservedAreaLabel/);
+});
+
+test('technician registration and profile edits use approved multi-select areas, not free text', () => {
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  const account = fs.readFileSync(path.join(root, 'src/screens/account/AccountScreens.js'), 'utf8');
+  assert.match(screens, /<AreaPicker label="مناطق العمل \\*" options=\{areas\} multiple/);
+  assert.match(screens, /areas: selectedAreas/);
+  assert.match(account, /<AreaPicker label="مناطق العمل \\*" options=\{areas\} multiple/);
+  assert.doesNotMatch(screens, /مناطق العمل \\(اكتب المناطق وافصل بينها بفاصلة\\)/);
+  assert.doesNotMatch(account, /مناطق العمل \\(افصل بين المناطق بفاصلة\\)/);
+});
+
+test('client order area is selected from approved options and service counts react to selected area', () => {
+  const client = fs.readFileSync(path.join(root, 'src/screens/client/ClientDashboard.js'), 'utf8');
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  assert.match(client, /<AreaPicker label="المنطقة أو الحي \\*" options=\{areas\}/);
+  assert.match(client, /technicianCountByArea\?\.\[form\.area\]/);
+  assert.match(client, /serviceTechnicianCountsByArea\?\.\[service\]\?\.\[form\.area\]/);
+  assert.match(screens, /!areas\.includes\(form\.area\)/);
+});
+
+ 
+test('admin APK includes the web region management and account profile editing actions', () => {
+  const admin = fs.readFileSync(path.join(root, 'src/screens/admin/AdminDashboard.js'), 'utf8');
+  const screens = fs.readFileSync(path.join(root, 'src/screens/AppScreens.js'), 'utf8');
+  for (const action of ['adminAddRegion', 'adminEditRegion', 'adminToggleRegion', 'adminDeleteRegion', 'adminRestoreRegion', 'adminBulkRegionAction']) assert.ok(screens.includes(action), 'missing region action: ' + action);
+  assert.ok(admin.includes("{ key: 'regions', label: 'المناطق' }"));
+  assert.ok(screens.includes("'/admin/fannis/' + encodeURIComponent(id) + '/profile'"));
+  assert.ok(screens.includes("'/admin/client-accounts/' + encodeURIComponent(id) + '/profile'"));
+  assert.ok(admin.includes('adminSaveProfileEdit'));
+});

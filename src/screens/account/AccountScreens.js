@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, ScrollView, KeyboardAvoidingView, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { styles } from '../../theme/styles';
 import { Button, Field } from '../../components/FormControls';
+import AreaPicker from '../../components/AreaPicker';
 export function AccountScreen({ session, clientData, techData, setScreen, beginProfileEdit, setRatingPrompt, getOrderSN }) {
 const isClientAccount = session?.role === 'client';
     const history = isClientAccount ? clientData.orders : session?.role === 'fanni' ? techData.offers : [];
@@ -35,7 +36,7 @@ const isClientAccount = session?.role === 'client';
     </ScrollView></SafeAreaView>;
 }
 
-export function ProfileEditScreen({ session, techData, categories, profileEditForm, setProfileEditForm, profileEditOpenCategory, setProfileEditOpenCategory, toggleProfileEditSpecialty, saveProfileEdits, setScreen }) {
+export function ProfileEditScreen({ session, techData, categories, areas, profileEditForm, setProfileEditForm, profileEditOpenCategory, setProfileEditOpenCategory, toggleProfileEditSpecialty, saveProfileEdits, setScreen }) {
 const isClientProfile = session?.role === 'client';
     const currentUser = session?.role === 'fanni' ? (techData.profile || session.user || {}) : (session?.user || {});
     const hasPendingTechEdit = session?.role === 'fanni' && Boolean(currentUser?.pendingProfileChange?.requestedAt);
@@ -54,7 +55,7 @@ const isClientProfile = session?.role === 'client';
           <TouchableOpacity onPress={() => setProfileEditOpenCategory(open ? '' : category.label)} style={styles.categoryToggle}><Text style={styles.groupTitle}>{category.emoji || '🛠️'} {category.label} · {chosenCount} مختار {open ? '▲' : '▼'}</Text></TouchableOpacity>
           {open ? (category.services || []).map(service => <TouchableOpacity key={service} onPress={() => toggleProfileEditSpecialty(service)} style={styles.choiceRow}><Text style={styles.choiceText}>{profileEditForm.specialties.includes(service) ? '☑' : '□'} {service}</Text></TouchableOpacity>) : null}
         </View>; })}
-        <Field label="مناطق العمل (افصل بين المناطق بفاصلة)" value={profileEditForm.areas} onChangeText={value => setProfileEditForm(current => ({ ...current, areas: value, error: '' }))} placeholder="مثال: مدينة نصر، مصر الجديدة" multiline />
+        <AreaPicker label="مناطق العمل *" options={areas} multiple value={profileEditForm.areas} onChange={value => setProfileEditForm(current => ({ ...current, areas: value, error: '' }))} maxSelections={30} />
         <Text style={styles.detail}>تعديل بيانات الفني يُرسل للإدارة للمراجعة، وتظل بياناتك الحالية كما هي حتى الموافقة.</Text>
         {hasPendingTechEdit ? <Text style={styles.warningText}>عندك طلب تعديل بيانات بالفعل قيد مراجعة الإدارة. انتظر القرار قبل إرسال طلب جديد.</Text> : null}
       </>}
