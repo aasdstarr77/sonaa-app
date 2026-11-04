@@ -841,7 +841,9 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
    RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock"),
    RowAction("تغيير كلمة المرور","PATCH","api/admin/clients/$phone/password",JsonObject(),"newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور"),
-   RowAction("حذف الحساب المسجل","DELETE","api/admin/clients/$phone/account"),
+   RowAction("حفظ ملاحظة داخلية","POST","api/admin/clients/$phone/note",JsonObject(),"note","الملاحظة الداخلية"),
+   RowAction("حذف طلبات العميل التجريبية","DELETE","api/admin/clients/$phone"),
+   RowAction("حذف الحساب المسجل","DELETE","api/admin/clients/$phone/account")
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null){
    val actions=mutableListOf(RowAction("نشر الطلب","POST","api/orders/admin/$sn/publish"))
@@ -884,6 +886,6 @@ private fun primary(item: JsonElement): String {
 }
 private fun secondary(item: JsonElement): String {
     if (!item.isJsonObject) return ""
-    return listOf("status", "phone", "clientPhone", "area", "region", "createdAt", "specialties", "message")
+    return listOf("status", "phone", "clientPhone", "area", "region", "createdAt", "specialties", "message", "adminNote", "orderCount", "lastOrder")
         .mapNotNull { k -> item.asJsonObject.get(k)?.takeIf { !it.isJsonNull }?.let { "$k: $it" } }.take(4).joinToString("  •  ")
 }
