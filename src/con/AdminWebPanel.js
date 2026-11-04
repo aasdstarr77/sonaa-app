@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { API_BASE } from '../services/api';
 import { CON_COLORS as C } from '../theme/con-colors';
@@ -25,6 +25,43 @@ true;
 export function AdminWebPanel({ session, onLogout }) {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
+  const webViewRef = useRef(null);
+  const webViewReady = useRef(false);
+  const exitPromptVisible = useRef(false);
+
+  const confirmExit = () => {
+    if (exitPromptVisible.current) return;
+    exitPromptVisible.current = true;
+    Alert.alert(
+      'تأكيد إغلاق التطبيق',
+      'هل تريد إغلاق التطبيق؟',
+      [
+        { text: 'إلغاء', style: 'cancel', onPress: () => { exitPromptVisible.current = false; } },
+        { text: 'إغلاق التطبيق', style: 'destructive', onPress: () => {
+          exitPromptVisible.current = false;
+          BackHandler.exitApp();
+        } }
+      ],
+      { cancelable: true, onDismiss: () => { exitPromptVisible.current = false; } }
+    );
+  };
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (exitPromptVisible.current) return true;
+      if (!webViewRef.current || !webViewReady.current) {
+        confirmExit();
+        return true;
+      }
+      webViewRef.current.injectJavaScript(
+        "(function(){if(typeof window.goBack==='function'){window.goBack();}" +
+        "else if(window.history&&window.history.length>1){window.history.back();}" +
+        "else if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage('sonaa-admin-back-at-root');}})();true;"
+      );
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
 
   return <View style={styles.root}>
     {loading && !loadError ? <View style={styles.loading}>
@@ -36,6 +73,7 @@ export function AdminWebPanel({ session, onLogout }) {
       <Text style={styles.errorText}>{loadError}</Text>
       <Text style={styles.hint}>تحقق من اتصال الإنترنت ثم أعد فتح التطبيق.</Text>
     </View> : <WebView
+      ref={webViewRef}
       key={session.token}
       source={{ uri: API_BASE + '/admin/mobile-panel', headers: { Authorization: 'Bearer ' + session.token } }}
       style={styles.web}
@@ -47,8 +85,8 @@ export function AdminWebPanel({ session, onLogout }) {
       setSupportMultipleWindows={false}
       startInLoadingState
       injectedJavaScript={LOGOUT_BRIDGE}
-      onLoadStart={() => { setLoading(true); setLoadError(''); }}
-      onLoadEnd={() => setLoading(false)}
+      onLoadStart={() => { webViewReady.current = false; setLoading(true); setLoadError(''); }}
+      onLoadEnd={() => { webViewReady.current = true; setLoading(false); }}
       onError={event => { setLoading(false); setLoadError(event.nativeEvent?.description || 'حدث خطأ أثناء تحميل لوحة الإدارة.'); }}
       onHttpError={event => {
         if (event.nativeEvent?.statusCode >= 400) {
@@ -58,6 +96,7 @@ export function AdminWebPanel({ session, onLogout }) {
       }}
       onMessage={event => {
         if (event.nativeEvent?.data === 'sonaa-admin-logout') onLogout?.();
+        else if (event.nativeEvent?.data === 'sonaa-admin-back-at-root') confirmExit();
       }}
       renderLoading={() => <View style={styles.loading}>
         <ActivityIndicator size="large" color={C.accent}/>
