@@ -157,7 +157,7 @@ class MainActivity : ComponentActivity() {
                 Text(state.error, color = MaterialTheme.colorScheme.error)
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
-            state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
+            state.section == AdminSection.DASHBOARD || state.section == AdminSection.STATS -> Dashboard(state.stats)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
