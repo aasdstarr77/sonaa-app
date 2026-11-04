@@ -412,6 +412,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("رفض","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","مرفوضة")})
   )
   AdminSection.REGIONS->listOf(
+   RowAction("تعديل الاسم","PATCH","api/admin/regions/$id",JsonObject(),"name","اسم المنطقة الجديد"),
    RowAction("تفعيل","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",true)}),
    RowAction("استعادة","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isDeleted",false)}),
    RowAction("إيقاف","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",false)}),
