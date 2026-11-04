@@ -165,9 +165,24 @@ class MainActivity : ComponentActivity() {
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="")
 @Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
+    var statusFilter by remember(section) { mutableStateOf("") }
+    var regionFilter by remember(section) { mutableStateOf("") }
+    var dateFilter by remember(section) { mutableStateOf("") }
     var pending by remember { mutableStateOf<RowAction?>(null) }
     var actionInput by remember { mutableStateOf("") }
-    val filtered = remember(items, query) { if (query.isBlank()) items else items.filter { it.toString().contains(query.trim(), true) } }
+    val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
+        items.filter { item ->
+            val raw = item.toString()
+            val obj = item.takeIf { it.isJsonObject }?.asJsonObject
+            val status = listOf("status","actualStatus").mapNotNull { obj?.get(it)?.takeIf { v -> !v.isJsonNull }?.asString }.joinToString(" ")
+            val region = listOf("area","region","regionName","areas","city").mapNotNull { obj?.get(it)?.takeIf { v -> !v.isJsonNull }?.toString() }.joinToString(" ")
+            val date = listOf("createdAt","requestedAt","reviewedAt","visitedAt").mapNotNull { obj?.get(it)?.takeIf { v -> !v.isJsonNull }?.asString }.joinToString(" ")
+            (query.isBlank() || raw.contains(query.trim(), true)) &&
+            (statusFilter.isBlank() || status.contains(statusFilter.trim(), true)) &&
+            (regionFilter.isBlank() || region.contains(regionFilter.trim(), true)) &&
+            (dateFilter.isBlank() || date.contains(dateFilter.trim(), true))
+        }
+    }
     if(pending!=null) AlertDialog(
         onDismissRequest={pending=null},
         title={Text("تأكيد الإجراء")},
@@ -176,7 +191,12 @@ private data class RowAction(val label:String,val method:String,val path:String,
         dismissButton={TextButton(onClick={pending=null}){Text("إلغاء")}}
     )
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
-        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
+        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            OutlinedTextField(statusFilter,{statusFilter=it},modifier=Modifier.width(145.dp),label={Text("فلتر الحالة")},singleLine=true)
+            OutlinedTextField(regionFilter,{regionFilter=it},modifier=Modifier.width(145.dp),label={Text("المنطقة")},singleLine=true)
+            OutlinedTextField(dateFilter,{dateFilter=it},modifier=Modifier.width(145.dp),label={Text("التاريخ YYYY-MM-DD")},singleLine=true)
+        }
         if (filtered.isEmpty()) {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text(if (items.isEmpty()) "لا توجد بيانات متاحة حاليًا" else "لا توجد نتائج مطابقة")
