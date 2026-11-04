@@ -4,6 +4,9 @@ import { WebView } from 'react-native-webview';
 import { API_BASE } from '../services/api';
 import { CON_COLORS as C } from '../theme/con-colors';
 
+const ADMIN_ORIGIN = new URL(API_BASE).origin;
+const ADMIN_PANEL_PATH = new URL(API_BASE + '/admin/mobile-panel').pathname;
+
 const LOGOUT_BRIDGE = `
 (function () {
   if (window.__sonaaNativeLogoutBridge) return true;
@@ -55,7 +58,6 @@ export function AdminWebPanel({ session, onLogout }) {
       }
       webViewRef.current.injectJavaScript(
         "(function(){if(typeof window.goBack==='function'){window.goBack();}" +
-        "else if(window.history&&window.history.length>1){window.history.back();}" +
         "else if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage('sonaa-admin-back-at-root');}})();true;"
       );
       return true;
@@ -77,7 +79,18 @@ export function AdminWebPanel({ session, onLogout }) {
       key={session.token}
       source={{ uri: API_BASE + '/admin/mobile-panel', headers: { Authorization: 'Bearer ' + session.token } }}
       style={styles.web}
-      originWhitelist={['https://*']}
+      originWhitelist={[ADMIN_ORIGIN + '/*']}
+      onShouldStartLoadWithRequest={request => {
+        try {
+          const target = new URL(request.url);
+          // CON stays on the authenticated admin panel only; block homepage, other
+          // same-site pages, external websites, and non-HTTP navigation schemes.
+          return target.protocol === 'https:' && target.origin === ADMIN_ORIGIN && target.pathname === ADMIN_PANEL_PATH;
+        } catch (_) {
+          return false;
+        }
+      }}
+      onOpenWindow={() => { /* Never open links in another window or browser. */ }}
       javaScriptEnabled
       domStorageEnabled
       sharedCookiesEnabled
