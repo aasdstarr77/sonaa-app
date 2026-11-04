@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { API_BASE } from '../services/api';
 import { CON_COLORS as C } from '../theme/con-colors';
@@ -31,6 +31,22 @@ export function AdminWebPanel({ session, onLogout }) {
   const webViewRef = useRef(null);
   const webViewReady = useRef(false);
   const exitPromptVisible = useRef(false);
+
+  // When Android returns CON from the background, refresh the full admin data
+  // set immediately. Push delivery remains server-driven while the app is closed.
+  useEffect(() => {
+    const previousState = { current: AppState.currentState };
+    const subscription = AppState.addEventListener('change', nextState => {
+      const wasBackground = previousState.current === 'background' || previousState.current === 'inactive';
+      previousState.current = nextState;
+      if (nextState === 'active' && wasBackground && webViewReady.current) {
+        webViewRef.current?.injectJavaScript(
+          "if(typeof window.refreshAdminData==='function'){window.refreshAdminData();}true;"
+        );
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const confirmExit = () => {
     if (exitPromptVisible.current) return;

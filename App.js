@@ -16,8 +16,10 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [profile, setProfile] = useState(null);
 
-  // CON is an admin-only client; register its own device token against the admin role.
-  usePushNotifications(session ? { ...session, role: 'admin' } : null);
+  // Keep the push hook's session identity stable; a fresh object on every render
+  // could cancel an in-flight device-token registration before it reaches the server.
+  const pushSession = useMemo(() => session ? { token: session.token, role: 'admin' } : null, [session?.token]);
+  usePushNotifications(pushSession);
 
   useEffect(() => {
     let active = true;
