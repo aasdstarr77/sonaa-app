@@ -466,7 +466,7 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
    OutlinedTextField(attempts,{attempts=it},label={Text("حد محاولات تسجيل الفني")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
    OutlinedTextField(wallet1,{wallet1=it},label={Text("رقم المحفظة الأول")},modifier=Modifier.fillMaxWidth())
    OutlinedTextField(wallet2,{wallet2=it},label={Text("رقم المحفظة الثاني")},modifier=Modifier.fillMaxWidth())
-   Button(onClick={onSave("PUT","api/admin/settings",JsonObject().apply{addProperty("siteName",name.trim());addProperty("maintenance",maintenance);addProperty("maintenanceMessage",message.trim());addProperty("maxFanniSignupAttempts",attempts.toIntOrNull()?:0);addProperty("walletPhone1",wallet1.trim());addProperty("walletPhone2",wallet2.trim())})},modifier=Modifier.fillMaxWidth()){Text("حفظ الإعدادات")}
+   Button(onClick={onSave("PUT","api/admin/settings",JsonObject().apply{addProperty("siteName",name.trim());addProperty("maintenance",maintenance);addProperty("maintenanceMessage",message.trim());addProperty("maxFanniSignupAttempts",attempts.toIntOrNull()?:0);addProperty("walletPhone1",wallet1.trim());addProperty("walletPhone2",wallet2.trim())})},enabled=attempts.toIntOrNull()?.let{it in 1..100}==true&&name.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("حفظ الإعدادات")}
   }
  }else if(section==AdminSection.PRICING){
   val p=root?.get("pricing")?.takeIf{it.isJsonObject}?.asJsonObject
@@ -480,7 +480,7 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
    OutlinedTextField(commission,{commission=it},label={Text("العمولة %")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
    OutlinedTextField(minimum,{minimum=it},label={Text("أقل عرض")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
    OutlinedTextField(maximum,{maximum=it},label={Text("أعلى عرض")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
-   Button(onClick={onSave("PUT","api/admin/pricing",JsonObject().apply{addProperty("check",check.toDoubleOrNull()?:0.0);addProperty("commission",commission.toDoubleOrNull()?:0.0);addProperty("minOffer",minimum.toIntOrNull()?:0);addProperty("maxOffer",maximum.toIntOrNull()?:0)})},modifier=Modifier.fillMaxWidth()){Text("حفظ الأسعار")}
+   Button(onClick={onSave("PUT","api/admin/pricing",JsonObject().apply{addProperty("check",check.toDoubleOrNull()?:0.0);addProperty("commission",commission.toDoubleOrNull()?:0.0);addProperty("minOffer",minimum.toIntOrNull()?:0);addProperty("maxOffer",maximum.toIntOrNull()?:0)})},enabled=check.toDoubleOrNull()?.let{it>=0}==true&&commission.toDoubleOrNull()?.let{it in 0.0..100.0}==true&&minimum.toIntOrNull()?.let{it in 1..1000000}==true&&maximum.toIntOrNull()?.let{it in 1..1000000}==true&&(minimum.toIntOrNull()?:Int.MAX_VALUE)<=(maximum.toIntOrNull()?:Int.MIN_VALUE),modifier=Modifier.fillMaxWidth()){Text("حفظ الأسعار")}
    Text("سجل تغييرات الأسعار",fontWeight=FontWeight.Bold,color=DarkAccent)
    root?.get("history")?.takeIf{it.isJsonArray}?.asJsonArray?.take(20)?.forEach{Text(it.toString(),style=MaterialTheme.typography.bodySmall,color=Color.Gray)}
   }
