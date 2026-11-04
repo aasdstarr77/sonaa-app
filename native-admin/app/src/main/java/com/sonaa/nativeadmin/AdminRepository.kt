@@ -21,6 +21,7 @@ class AdminRepository(context:Context){
   val token=response.asJsonObject.get("token")?.asString?:error("الخادم لم يُرجع رمز الجلسة")
   auth.saveToken(token);return response
  }
+ suspend fun getMe():JsonElement=api.me()
  suspend fun hasSession():Boolean{if(auth.currentToken().isNullOrBlank())return false;return try{api.me();true}catch(_:Exception){auth.clear();false}}
  suspend fun logout()=auth.clear()
  suspend fun get(section:AdminSection):JsonElement=when(section.method){
