@@ -65,6 +65,19 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    _state.value=_state.value.copy(busy=false,items=rows,payload=data)
   }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر البحث في أدوات الدعم")}
  }
+ fun bulkPublish(sns:List<String>)=viewModelScope.launch{
+  if(sns.isEmpty())return@launch
+  _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
+  var published=0
+  var failed=0
+  val errors=mutableListOf<String>()
+  for(sn in sns.distinct()){
+   try{repo.mutate("POST","api/orders/admin/$sn/publish",JsonObject());published++}
+   catch(e:Exception){failed++;if(errors.size<3)errors.add("$sn: "+(e.message?: "تعذر النشر"))}
+  }
+  _state.value=_state.value.copy(busy=false,actionMessage="تم نشر $published طلب، وتعذر نشر $failed"+if(errors.isEmpty())"" else " — "+errors.joinToString(" | "))
+  load(_state.value.section,true)
+ }
  fun loadVoice(sn:String)=viewModelScope.launch{_state.value=_state.value.copy(busy=true,error=null);try{val file=repo.downloadVoice(sn);_state.value=_state.value.copy(busy=false,voicePath=file.absolutePath)}catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل التسجيل الصوتي")}}
  fun retry(){load(_state.value.section)}
  fun logout()=viewModelScope.launch{repo.logout();_state.value=AdminUiState(checking=false)}
