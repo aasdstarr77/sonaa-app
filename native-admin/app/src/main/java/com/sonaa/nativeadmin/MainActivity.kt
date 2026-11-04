@@ -418,6 +418,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyPhone by remember(section){mutableStateOf("")}
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
+    var pendingPublishSns by remember{mutableStateOf<List<String>?>(null)}
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
     var categoryOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.mapNotNull{it.asJsonObject.get("category")?.asString}.distinct().joinToString("، "))}
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
@@ -466,6 +467,13 @@ private data class RowAction(val label:String,val method:String,val path:String,
         },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")&&!(notifyRole=="fanni"&&notifyMode=="group"&&notifyAudience=="active")){Text("إرسال")}},
         dismissButton={TextButton(onClick={notifyOpen=false}){Text("إلغاء")}}
     )
+    pendingPublishSns?.let{sns->AlertDialog(
+        onDismissRequest={pendingPublishSns=null},
+        title={Text("تأكيد نشر الطلبات")},
+        text={Text("سيتم محاولة نشر "+sns.size+" طلب. الطلب الذي لم تتم مراجعة تسجيله الصوتي سيظل غير منشور.")},
+        confirmButton={TextButton(onClick={pendingPublishSns=null;onBulkPublish(sns)}){Text("تأكيد النشر")}},
+        dismissButton={TextButton(onClick={pendingPublishSns=null}){Text("إلغاء")}}
+    )}
     if(categoryOrderOpen) AlertDialog(
         onDismissRequest={categoryOrderOpen=false},
         title={Text("ترتيب أقسام الخدمات")},
@@ -512,7 +520,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
         if(section==AdminSection.SUPPORT) Button(onClick={onSupportSearch(query)},enabled=query.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("بحث في الطلبات والشكاوى وأرقام الهواتف")}
         if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                Button(onClick={onBulkPublish(selectedOrders.toList());selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("نشر المحدد ("+selectedOrders.size+")")}
+                Button(onClick={pendingPublishSns=selectedOrders.toList();selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("نشر المحدد ("+selectedOrders.size+")")}
                 Button(onClick={
                     val body=JsonObject().apply{add("sns",com.google.gson.JsonArray().apply{selectedOrders.forEach{add(it)}})}
                     pending=RowAction("حذف الطلبات المحددة","POST","api/admin/orders/bulk-delete",body);selectedOrders=emptySet()
