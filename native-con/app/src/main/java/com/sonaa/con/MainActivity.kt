@@ -653,6 +653,9 @@ class MainActivity : Activity() {
         body.removeAllViews()
         body.addView(text("محافظ الفنيين",19f,true))
         body.addView(text("اختر فنيًا لعرض كشف حسابه وحركات المحفظة. لا يتم تعديل الرصيد دون سبب موثق.",12f,false,Color.DKGRAY))
+        var totalBalance=0.0;var frozenCount=0
+        for(i in 0 until fannis.length()){val f=fannis.optJSONObject(i)?:continue;totalBalance+=f.optDouble("walletBalance",f.optDouble("balance",0.0));if(f.optBoolean("isFrozen"))frozenCount++}
+        body.addView(text("إجمالي الأرصدة: "+totalBalance+" جنيه • المحافظ المجمدة: "+frozenCount,15f,true))
         val labels=Array(fannis.length()){i->
             val f=fannis.optJSONObject(i)?:JSONObject()
             f.optString("name","فني")+" • "+f.optString("phone","")+" • "+(f.opt("walletBalance")?:f.opt("balance")?:0)+" جنيه"
@@ -794,10 +797,50 @@ class MainActivity : Activity() {
     private fun showObjectSettings(section:String,data:JSONObject) {
         body.removeAllViews()
         val obj=data.optJSONObject(if(section=="pricing")"pricing" else "settings")?:data
-        val fields=if(section=="settings")listOf("siteName","maintenance","maintenanceMessage","maxFanniSignupAttempts","walletPhone1","walletPhone2") else obj.keys().asSequence().toList()
+        val labels=mapOf("siteName" to "اسم المنصة","maintenance" to "وضع الصيانة","maintenanceMessage" to "رسالة الصيانة","maxFanniSignupAttempts" to "حد محاولات تسجيل الفني","walletPhone1" to "رقم المحفظة الأول","walletPhone2" to "رقم المحفظة الثاني","check" to "رسوم الفرصة (محفوظة فقط)","commission" to "عمولة المنصة %","minOffer" to "الحد الأدنى لسعر العرض","maxOffer" to "الحد الأقصى لسعر العرض")
+        val fields=if(section=="settings")listOf("siteName","maintenance","maintenanceMessage","maxFanniSignupAttempts","walletPhone1","walletPhone2") else listOf("check","commission","minOffer","maxOffer")
         val edits=mutableMapOf<String,EditText>()
-        fields.forEach{k->val v=obj.opt(k);body.addView(text(k,12f,true));val e=input(k,if(v is JSONObject||v is JSONArray) v.toString() else v?.toString()?: "");edits[k]=e;body.addView(e)}
-        body.addView(button("حفظ التعديلات"){val out=JSONObject();edits.forEach{(k,e)->val old=obj.opt(k);val value=e.text.toString();out.put(k,when(old){is Boolean->value.equals("true",true);is Int->value.toIntOrNull()?:0;is Double->value.toDoubleOrNull()?:0.0;else->value})};mutate(if(section=="settings")"/admin/settings" else "/admin/pricing",if(section=="settings")"PUT" else "PUT",out)})
+        val checks=mutableMapOf<String,CheckBox>()
+        fields.forEach{k->
+            val value=obj.opt(k)
+            body.addView(text(labels[k]?:k,12f,true))
+            if(value is Boolean){
+                val check=CheckBox(this).apply{text=labels[k]?:k;isChecked=value}
+                checks[k]=check;body.addView(check)
+            }else{
+                val edit=input(labels[k]?:k,value?.toString()?: "")
+                if(k in listOf("maxFanniSignupAttempts","check","commission","minOffer","maxOffer"))edit.inputType=android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                edits[k]=edit;body.addView(edit)
+            }
+        }
+        body.addView(button("حفظ التعديلات"){
+            val out=JSONObject()
+            edits.forEach{(k,e)->
+                val old=obj.opt(k);val value=e.text.toString().trim()
+                out.put(k,when(old){is Int->value.toIntOrNull()?:0;is Long->value.toLongOrNull()?:0L;is Double->value.toDoubleOrNull()?:0.0;else->value})
+            }
+            checks.forEach{(k,v)->out.put(k,v.isChecked)}
+            if(section=="settings"){
+                val attempts=out.optInt("maxFanniSignupAttempts",1)
+                if(out.optString("siteName").length<2||attempts !in 1..100){showMessage("راجع اسم المنصة وحد محاولات التسجيل من 1 إلى 100");return@button}
+            }else{
+                val min=out.optInt("minOffer",1);val max=out.optInt("maxOffer",1000000)
+                if(out.optDouble("commission",-1.0) !in 0.0..100.0||min<1||max<min){showMessage("راجع نسبة العمولة والحد الأدنى والأقصى للعروض");return@button}
+            }
+            mutate(if(section=="settings")"/admin/settings" else "/admin/pricing","PUT",out)
+        })
+        if(section=="pricing"){
+            val history=data.optJSONArray("history")?:JSONArray()
+            body.addView(text("سجل تغييرات الأسعار • "+history.length(),16f,true))
+            for(i in 0 until history.length()){
+                val item=history.optJSONObject(i)?:continue
+                val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(10,7,10,7);setBackgroundColor(white)}
+                card.addView(text(item.optString("by","الإدارة")+" • "+item.optString("createdAt",""),12f,true))
+                card.addView(text("قبل: "+(item.optJSONObject("before")?:JSONObject()).toString(),10f,false,Color.DKGRAY))
+                card.addView(text("بعد: "+(item.optJSONObject("after")?:JSONObject()).toString(),10f,false,Color.DKGRAY))
+                body.addView(card)
+            }
+        }
     }
     private fun mutate(path:String,method:String,bodyData:JSONObject?) {
         if(!canWrite(active)&&active!="dashboard"){showMessage("لا تملك صلاحية التنفيذ في هذا القسم");return}
