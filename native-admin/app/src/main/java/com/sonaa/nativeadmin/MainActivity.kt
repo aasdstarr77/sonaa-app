@@ -186,6 +186,19 @@ class MainActivity : ComponentActivity() {
  }
 }
 
+@Composable private fun ClientProfileEditor(payload:JsonElement,id:String,onCancel:()->Unit,onSave:(String,String,JsonObject)->Unit){
+ val client=payload.takeIf{it.isJsonObject}?.asJsonObject?.get("client")?.takeIf{it.isJsonObject}?.asJsonObject
+ var name by remember(payload){mutableStateOf(client?.get("name")?.asString.orEmpty())}
+ var phone by remember(payload){mutableStateOf(client?.get("phone")?.asString.orEmpty())}
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+  Text("تعديل بيانات العميل",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+  OutlinedTextField(name,{name=it},label={Text("اسم العميل")},modifier=Modifier.fillMaxWidth())
+  OutlinedTextField(phone,{phone=it},label={Text("رقم الهاتف")},modifier=Modifier.fillMaxWidth())
+  Button(onClick={onSave("PATCH","api/admin/client-accounts/$id/profile",JsonObject().apply{addProperty("name",name.trim());addProperty("phone",phone.trim())})},modifier=Modifier.fillMaxWidth()){Text("حفظ بيانات العميل")}
+  OutlinedButton(onClick=onCancel,modifier=Modifier.fillMaxWidth()){Text("رجوع")}
+ }
+}
+
 @Composable private fun WalletTransactionsScreen(items:List<JsonElement>,onBack:()->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("حركات المحفظة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
