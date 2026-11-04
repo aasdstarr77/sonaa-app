@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeClientProfile() }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
             state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery) { method,path,body -> vm.recoveryAction(method,path,body) }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -546,7 +546,7 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onBulkAction:(AdminSection,List<String>,String)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -566,6 +566,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyPhone by remember(section){mutableStateOf("")}
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
+    var selectedBulk by remember(section){mutableStateOf(setOf<String>())}
     var pendingPublishSns by remember{mutableStateOf<List<String>?>(null)}
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
     var categoryOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.mapNotNull{it.asJsonObject.get("category")?.asString}.distinct().joinToString("، "))}
@@ -694,6 +695,30 @@ private data class RowAction(val label:String,val method:String,val path:String,
         if(section==AdminSection.SERVICES) OutlinedButton(onClick={serviceOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب الخدمات داخل القسم")}
         if(section==AdminSection.NOTIFICATIONS) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
         if(section==AdminSection.SUPPORT) Button(onClick={onSupportSearch(query)},enabled=query.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("بحث في الطلبات والشكاوى وأرقام الهواتف")}
+        if(selectedBulk.isNotEmpty()){
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                Text("المحدد: "+selectedBulk.size,modifier=Modifier.align(Alignment.CenterVertically),fontWeight=FontWeight.Bold)
+                fun runBulk(action:String){val ids=selectedBulk.toList();selectedBulk=emptySet();onBulkAction(section,ids,action)}
+                when(section){
+                    AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->{
+                        Button(onClick={runBulk("approve")}){Text("اعتماد")}
+                        Button(onClick={runBulk("reject")}){Text("رفض")}
+                        Button(onClick={runBulk("disable")}){Text("إيقاف")}
+                        Button(onClick={runBulk("enable")}){Text("تفعيل")}
+                        Button(onClick={runBulk("freeze")}){Text("تجميد المحافظ")}
+                        Button(onClick={runBulk("unfreeze")}){Text("فك التجميد")}
+                    }
+                    AdminSection.WALLETS->{Button(onClick={runBulk("freeze")}){Text("تجميد المحافظ")};Button(onClick={runBulk("unfreeze")}){Text("فك التجميد")}}
+                    AdminSection.TOPUPS->{Button(onClick={runBulk("approve")}){Text("قبول الشحن")};Button(onClick={runBulk("reject")}){Text("رفض الشحن")}}
+                    AdminSection.CLIENTS->Button(onClick={runBulk("delete")}){Text("حذف الحسابات المحددة")}
+                    AdminSection.COMPLAINTS->{Button(onClick={runBulk("قيد المراجعة")}){Text("مراجعة")};Button(onClick={runBulk("تم الحل")}){Text("حل الشكاوى")};Button(onClick={runBulk("مرفوضة")}){Text("رفض")}}
+                    AdminSection.OFFERS->Button(onClick={runBulk("reject")}){Text("رفض العروض")}
+                    AdminSection.REGIONS->{Button(onClick={runBulk("activate")}){Text("تفعيل")};Button(onClick={runBulk("deactivate")}){Text("إيقاف")};Button(onClick={runBulk("restore")}){Text("استعادة")};Button(onClick={runBulk("delete")}){Text("حذف")}}
+                    else->Unit
+                }
+                OutlinedButton(onClick={selectedBulk=emptySet()}){Text("إلغاء")}
+            }
+        }
         if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 Button(onClick={pendingPublishSns=selectedOrders.toList();selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("نشر المحدد ("+selectedOrders.size+")")}
@@ -726,6 +751,15 @@ private data class RowAction(val label:String,val method:String,val path:String,
                                 Text("تحديد الطلب "+orderSn,style=MaterialTheme.typography.labelSmall,color=Color.Gray)
                             }
                         }
+                        val bulkKey=when(section){
+                            AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED,AdminSection.WALLETS,AdminSection.TOPUPS,AdminSection.COMPLAINTS,AdminSection.REGIONS,AdminSection.ROLES->item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString
+                            AdminSection.CLIENTS->item.asJsonObject.get("phone")?.asString
+                            else->null
+                        }
+                        if(bulkKey!=null)Row(verticalAlignment=Alignment.CenterVertically){
+                            Checkbox(checked=selectedBulk.contains(bulkKey),onCheckedChange={checked->selectedBulk=if(checked)selectedBulk+bulkKey else selectedBulk-bulkKey})
+                            Text("تحديد للإجراء الجماعي",style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+                        }
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
@@ -735,6 +769,11 @@ private data class RowAction(val label:String,val method:String,val path:String,
                                 Card(Modifier.fillMaxWidth().padding(top=6.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFF4F8FA))){
                                     Column(Modifier.padding(10.dp)){
                                         Text("العرض "+(index+1),fontWeight=FontWeight.Bold)
+                                        Row(verticalAlignment=Alignment.CenterVertically){
+                                            val offerKey="$orderSn|$index"
+                                            Checkbox(checked=selectedBulk.contains(offerKey),onCheckedChange={checked->selectedBulk=if(checked)selectedBulk+offerKey else selectedBulk-offerKey})
+                                            Text("تحديد العرض",style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+                                        }
                                         Text(offer.toString(),style=MaterialTheme.typography.bodySmall)
                                         OutlinedButton(onClick={pending=RowAction("حذف العرض","DELETE","api/admin/offers/$orderSn/$index")},modifier=Modifier.fillMaxWidth()){Text("حذف العرض")}
                                         OutlinedButton(onClick={pending=RowAction("رفض العرض","POST","api/admin/offers/$orderSn/$index/reject")},modifier=Modifier.fillMaxWidth()){Text("رفض العرض")}
