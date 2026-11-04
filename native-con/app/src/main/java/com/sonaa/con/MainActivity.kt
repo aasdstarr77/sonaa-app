@@ -38,7 +38,7 @@ class MainActivity : Activity() {
         Section("dashboard","الرئيسية","/admin/counts"),
         Section("stats","الإحصائيات","/admin/reports"),
         Section("orders","الطلبات","/admin/orders?limit=500",listOf("orders","data","items")),
-        Section("fannis","الفنيون","/admin/fannis?limit=500",listOf("fannis","data","items")),
+        Section("fannis","الفنيون","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("pending","انتظار الاعتماد","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("disabled","الفنيون الموقوفون","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("offers","عروض الفنيين","/admin/orders?limit=500",listOf("orders","data","items")),\n        Section("wallets","محافظ الفنيين","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("levels","المستويات والشارات","/admin/fannis?limit=500",listOf("fannis","data","items")),
         Section("profileEdits","تعديل البيانات","/admin/fanni-profile-edits",listOf("requests","edits","data","items")),
         Section("clients","العملاء","/admin/clients?limit=500",listOf("clients","data","items")),
         Section("regions","المناطق","/admin/regions",listOf("regions","items","data")),
@@ -59,7 +59,7 @@ class MainActivity : Activity() {
         if(profile.optString("adminRoleLabel")=="أدمن رئيسي") return true
         val key=when(id) {
             "dashboard","stats","pageVisits"->"dashboard"
-            "fannis","profileEdits"->"fannis"
+            "fannis","profileEdits","pending","disabled","levels"->"fannis"
             "orders"->"orders"; "clients"->"clients"; "regions"->"regions"; "services"->"services"
             "topups"->"topups"; "complaints"->"complaints"; "support","recovery"->"support"
             "notifications"->"notifications"; "content"->"content"; "pricing"->"pricing"; "settings"->"settings"
@@ -72,7 +72,7 @@ class MainActivity : Activity() {
     private fun canWrite(id:String):Boolean {
         if(profile.optString("adminRoleLabel")=="أدمن رئيسي") return true
         val key=when(id) {
-            "dashboard","stats","pageVisits"->"dashboard"; "fannis","profileEdits"->"fannis"; "orders"->"orders"
+            "dashboard","stats","pageVisits"->"dashboard"; "fannis","profileEdits","pending","disabled","levels"->"fannis"; "orders"->"orders"
             "clients"->"clients"; "regions"->"regions"; "services"->"services"; "topups"->"topups"
             "complaints"->"complaints"; "support","recovery"->"support"; "notifications"->"notifications"
             "content"->"content"; "pricing"->"pricing"; "settings"->"settings"; else->return false
@@ -236,10 +236,10 @@ class MainActivity : Activity() {
             "orders"->buildList{val sn=item.optString("sn");if(item.optString("status")=="قيد المراجعة")add("نشر" to "publish");add("إلغاء" to "cancel");add("أرشفة" to "archive");add("تصحيح" to "correct");if(sn.isNotBlank())add("العروض" to "offers")}
             "topups"->listOf("قبول الشحن" to "approveTopup","رفض الشحن" to "rejectTopup")
             "complaints"->listOf("تحديث الشكوى" to "complaint")
-            "clients"->listOf(if(item.optString("status")=="معلق")"إلغاء الحظر" else "حظر العميل" to "block","ملاحظة" to "note")
-            "regions"->listOf("إظهار/إخفاء" to "toggle","حذف" to "delete")
-            "services"->listOf("إظهار/إخفاء" to "toggle","حذف" to "delete")
-            "support"->listOf("تمت المراجعة" to "review")
+            "clients"->listOf((if(item.optString("status")=="معلق")"إلغاء الحظر" else "حظر العميل") to (if(item.optString("status")=="معلق")"unblock" else "block"),"ملاحظة" to "note","حذف الحساب" to "deleteClient")
+            "regions"->listOf("إظهار/إخفاء" to "toggle","حذف" to "deleteRegion")
+            "services"->listOf("إخفاء" to "hideService","إظهار" to "showService","حذف" to "deleteService")
+            "support"->listOf("تمت المراجعة" to "review")\n            "wallets"->listOf("إضافة رصيد" to "addBalance","تسوية الرصيد" to "setBalance","تجميد المحفظة" to "freeze")\n            "offers"->listOf("مراجعة العروض" to "offers")
             "roles"->listOf("تغيير المنصب" to "role","تخصيص الصلاحيات" to "permissions","سحب الصلاحية" to "revoke")
             else->emptyList()
         }
@@ -248,10 +248,10 @@ class MainActivity : Activity() {
         val id=item.optString("_id",item.optString("id"))
         val sn=item.optString("sn")
         when(action){
-            "approve"->mutate("/admin/fannis/$id/approve","POST",JSONObject())
+            "approve"->mutate("/admin/fannis/$id/approve","POST",JSONObject())\n            "approveEdit"->mutate("/admin/fanni-profile-edits/$id/approve","POST",JSONObject())\n            "rejectEdit"->ask("سبب رفض التعديل","reason"){mutate("/admin/fanni-profile-edits/$id/reject","POST",JSONObject().put("reason",it))}
             "disable"->ask("سبب تعطيل الفني","reason"){mutate("/admin/fannis/$id/disable","POST",JSONObject().put("reason",it))}
             "enable"->mutate("/admin/fannis/$id/enable","POST",JSONObject())
-            "delete"->confirm("تأكيد الحذف؟"){mutate("/admin/fannis/$id","DELETE",null)}
+            "delete"->confirm("تأكيد حذف الفني؟"){mutate("/admin/fannis/$id","DELETE",null)}\n            "deleteRegion"->confirm("حذف المنطقة من الاختيارات؟"){mutate("/admin/regions/$id","DELETE",null)}\n            "deleteService"->confirm("حذف الخدمة؟"){mutate("/admin/services/$id","DELETE",null)}\n            "hideService","showService"->mutate("/admin/services/${enc(item.optString("name"))}/${if(action=="hideService")"hide" else "show"}","POST",JSONObject())\n            "unblock"->mutate("/admin/clients/${enc(item.optString("phone"))}/unblock","POST",JSONObject())\n            "deleteClient"->confirm("حذف حساب العميل؟"){mutate("/admin/clients/${enc(item.optString("phone"))}/account","DELETE",null)}
             "password"->form("تغيير كلمة السر",listOf("كلمة السر الجديدة","تأكيد كلمة السر")){v->mutate("/admin/fannis/$id/password","PATCH",JSONObject().put("newPassword",v[0]).put("confirmPassword",v[1]))}
             "profile"->form("تعديل بيانات الفني",listOf("رقم الهاتف","التخصصات مفصولة بفاصلة","المناطق مفصولة بفاصلة")){v->mutate("/admin/fannis/$id/profile","PATCH",JSONObject().put("phone",v[0]).put("specialties",JSONArray(v[1].split(",").map{it.trim()}.filter{it.isNotBlank()})).put("areas",JSONArray(v[2].split(",").map{it.trim()}.filter{it.isNotBlank()})))}
             "addBalance","setBalance"->form("قيمة المحفظة",listOf("المبلغ","السبب")){v->mutate("/admin/fannis/$id/${if(action=="addBalance")"add-balance" else "set-balance"}","POST",JSONObject().put("amount",v[0].toDoubleOrNull()?:0).put("reason",v[1]))}
@@ -262,7 +262,7 @@ class MainActivity : Activity() {
             "offers"->request("/admin/orders/$sn/offers","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}
             "approveTopup","rejectTopup"->mutate("/admin/topup-requests/$id/${if(action=="approveTopup")"approve" else "reject"}","POST",JSONObject())
             "complaint"->form("تحديث الشكوى",listOf("الحالة (جديدة / قيد المراجعة / تم الحل / مرفوضة)","ملاحظة الإدارة","الرد على العميل")){v->mutate("/admin/complaints/$id","PATCH",JSONObject().put("status",v[0]).put("adminNote",v[1]).put("adminResponse",v[2]))}
-            "block"->ask("سبب الحظر أو اكتب نشط لإلغاء الحظر","reason"){v->val phone=item.optString("phone");val unblock=v=="نشط";mutate("/admin/clients/${enc(phone)}/${if(unblock)"unblock" else "block"}","POST",if(unblock)JSONObject() else JSONObject().put("reason",v))}
+            "block"->ask("سبب حظر العميل","reason"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/block","POST",JSONObject().put("reason",v))}
             "note"->ask("الملاحظة الداخلية","note"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/note","POST",JSONObject().put("note",v))}
             "toggle"->mutate("/admin/${if(active=="regions")"regions" else "services"}/$id","PATCH",JSONObject().put(if(active=="regions")"isActive" else "isActive",!item.optBoolean("isActive",true)))
             "review"->mutate("/admin/support/$sn/review","POST",JSONObject())
