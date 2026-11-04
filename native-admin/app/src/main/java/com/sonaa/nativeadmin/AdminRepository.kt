@@ -21,36 +21,54 @@ class AdminRepository(context:Context){
  }
  suspend fun hasSession():Boolean{if(auth.currentToken().isNullOrBlank())return false;return try{api.me();true}catch(_:Exception){auth.clear();false}}
  suspend fun logout()=auth.clear()
+ suspend fun get(section:AdminSection):JsonElement=when(section.method){
+  "POST"->api.post(section.path,section.defaultBody())
+  else->api.get(section.path)
+ }
  suspend fun get(path:String)=api.get(path)
  suspend fun mutate(method:String,path:String,body:JsonObject=JsonObject()):JsonElement=when(method.uppercase()){
   "POST"->api.post(path,body);"PATCH"->api.patch(path,body);"PUT"->api.put(path,body);"DELETE"->api.delete(path);else->error("طريقة غير مدعومة")
  }
  suspend fun registerFcm(token:String){api.registerFcmToken(JsonObject().apply{addProperty("token",token);addProperty("platform","fcm-android")})}
 }
-enum class AdminSection(val title:String,val path:String,val keys:List<String>){
- DASHBOARD("الرئيسية","api/admin/stats",listOf("counts","stats","data")),
- STATS("الإحصائيات","api/admin/stats",listOf("stats","data","counts")),
+enum class AdminSection(
+ val title:String,
+ val path:String,
+ val keys:List<String>,
+ val method:String="GET"
+){
+ DASHBOARD("الرئيسية","api/admin/counts",listOf("counts","data")),
+ STATS("الإحصائيات","api/admin/stats",listOf("counts","stats","data")),
  ORDERS("طلبات العملاء","api/admin/orders",listOf("orders","data","items")),
  TECHNICIANS("كل الفنيين","api/admin/fannis",listOf("fannis","technicians","data","items")),
- PENDING("انتظار اعتماد الفنيين","api/admin/fannis?status=pending",listOf("fannis","technicians","data","items")),
+ PENDING("انتظار اعتماد الفنيين","api/admin/fannis",listOf("fannis","technicians","data","items")),
  PROFILE_EDITS("طلبات تعديل البيانات","api/admin/fanni-profile-edits",listOf("requests","edits","data","items")),
- DISABLED("الفنيون الموقوفون","api/admin/fannis?status=disabled",listOf("fannis","technicians","data","items")),
+ DISABLED("الفنيون الموقوفون","api/admin/fannis",listOf("fannis","technicians","data","items")),
  LEVELS("المستويات والشارات","api/admin/fannis",listOf("fannis","data","items")),
- OFFERS("عروض الفنيين","api/admin/offers",listOf("offers","data","items")),
+ OFFERS("عروض الفنيين","api/admin/orders",listOf("orders","data","items")),
  WALLETS("محافظ الفنيين","api/admin/fannis",listOf("fannis","data","items")),
- TOPUPS("طلبات شحن المحافظ","api/admin/topup-requests",listOf("requests","topups","data","items")),
+ TOPUPS("طلبات شحن المحافظ","api/admin/topup-requests",listOf("requests","data","items")),
  SERVICES("المهن والخدمات","api/admin/services",listOf("services","data","items")),
- REGIONS("مناطق الخدمة","api/admin/regions",listOf("regions","data","items")),
+ REGIONS("مناطق الخدمة","api/admin/regions",listOf("regions","items","data")),
  COMPLAINTS("الشكاوى","api/admin/complaints",listOf("complaints","data","items")),
- SUPPORT("الدعم والمخالفات","api/admin/support/violations",listOf("cases","violations","data","items")),
+ SUPPORT("الدعم والمخالفات","api/admin/support/violations",listOf("violations","cases","data","items")),
  NOTIFICATIONS("الإشعارات","api/admin/notifications/direct",listOf("notifications","campaigns","data","items")),
- CONTENT("الإعلانات والأسئلة الشائعة","api/admin/content",listOf("faqs","content","data","items")),
- PRICING("الأسعار والعمولات","api/admin/pricing",listOf("pricing","data","settings")),
- REPORTS("التقارير","api/admin/reports",listOf("reports","data","items")),
- PAGE_VISITS("سجل زيارات الموقع","api/admin/page-visits",listOf("visits","data","items")),
- SECURITY("سجل التدقيق والأمان","api/admin/audit-logs",listOf("logs","auditLogs","data","items")),
+ CONTENT("الإعلانات والأسئلة الشائعة","api/admin/content",listOf("faqs","content","data")),
+ PRICING("الأسعار والعمولات","api/admin/pricing",listOf("pricing","data","history")),
+ REPORTS("التقارير","api/admin/reports",listOf("summary","topServices","data"),"POST"),
+ PAGE_VISITS("سجل زيارات الموقع","api/admin/page-visits",listOf("recent","summary","data")),
+ SECURITY("سجل التدقيق والأمان","api/admin/audit-logs",listOf("logs","items","data")),
  SETTINGS("إعدادات المنصة","api/admin/settings",listOf("settings","data")),
  ROLES("صلاحيات المشرفين","api/admin/admin-users",listOf("users","admins","data","items")),
- CLIENTS("كل العملاء","api/admin/clients",listOf("clients","data","items"));
- fun extract(p:JsonElement):List<JsonElement>{if(p.isJsonArray)return p.asJsonArray.map{it};if(!p.isJsonObject)return listOf(p);for(k in keys){val v=p.asJsonObject.get(k)?:continue;if(v.isJsonArray)return v.asJsonArray.map{it}};return emptyList()}
+ CLIENTS("كل العملاء","api/admin/clients",listOf("clients","items","data"));
+ fun defaultBody()=JsonObject()
+ fun extract(p:JsonElement):List<JsonElement>{
+  if(p.isJsonArray)return p.asJsonArray.map{it}
+  if(!p.isJsonObject)return emptyList()
+  val obj=p.asJsonObject
+  for(k in keys){val v=obj.get(k)?:continue;if(v.isJsonArray)return v.asJsonArray.map{it}}
+  val data=obj.get("data")
+  if(data?.isJsonObject==true){for(k in keys){val v=data.asJsonObject.get(k)?:continue;if(v.isJsonArray)return v.asJsonArray.map{it}}}
+  return emptyList()
+ }
 }
