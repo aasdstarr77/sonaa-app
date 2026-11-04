@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
-            else -> ListScreen(state.section, state.items, vm::retry)
+            else -> ListScreen(state.section, state.items, vm::retry) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -161,9 +161,18 @@ class MainActivity : ComponentActivity() {
         } }
     }
 }
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit) {
+private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject())
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
+    var pending by remember { mutableStateOf<RowAction?>(null) }
     val filtered = remember(items, query) { if (query.isBlank()) items else items.filter { it.toString().contains(query.trim(), true) } }
+    if(pending!=null) AlertDialog(
+        onDismissRequest={pending=null},
+        title={Text("تأكيد الإجراء")},
+        text={Text("هل تريد تنفيذ: "+pending!!.label+"؟")},
+        confirmButton={TextButton(onClick={val a=pending!!;pending=null;onAction(a.method,a.path,a.body)}){Text("تأكيد")}},
+        dismissButton={TextButton(onClick={pending=null}){Text("إلغاء")}}
+    )
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
         if (filtered.isEmpty()) {
@@ -173,16 +182,70 @@ class MainActivity : ComponentActivity() {
             }
         } else LazyColumn(contentPadding = PaddingValues(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(filtered) { item ->
+                val actions=rowActions(section,item)
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
+                        if(actions.isNotEmpty()){
+                            Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                                actions.forEach { action ->
+                                    OutlinedButton(onClick={pending=action},modifier=Modifier.weight(1f)) { Text(action.label, maxLines=1) }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
+private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
+ if(!item.isJsonObject)return emptyList()
+ val o=item.asJsonObject
+ fun value(vararg keys:String):String?=keys.firstNotNullOfOrNull{k->o.get(k)?.takeIf{!it.isJsonNull}?.asString}
+ val id=value("_id","id")?:return emptyList()
+ val phone=value("phone","clientPhone")
+ val sn=value("sn")
+ return when(section){
+  AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->listOf(
+   RowAction("اعتماد","POST","api/admin/fannis/$id/approve"),
+   RowAction("رفض","POST","api/admin/fannis/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")}),
+   RowAction("إيقاف","POST","api/admin/fannis/$id/disable",JsonObject().apply{addProperty("reason","إيقاف من تطبيق الإدارة")}),
+   RowAction("تفعيل","POST","api/admin/fannis/$id/enable")
+  )
+  AdminSection.PROFILE_EDITS->listOf(
+   RowAction("قبول التعديل","POST","api/admin/fanni-profile-edits/$id/approve"),
+   RowAction("رفض التعديل","POST","api/admin/fanni-profile-edits/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")})
+  )
+  AdminSection.TOPUPS->listOf(
+   RowAction("قبول الشحن","POST","api/admin/topup-requests/$id/approve"),
+   RowAction("رفض الشحن","POST","api/admin/topup-requests/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")})
+  )
+  AdminSection.CLIENTS->if(phone!=null)listOf(
+   RowAction("حظر العميل","POST","api/admin/clients/$phone/block"),
+   RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock")
+  )else emptyList()
+  AdminSection.ORDERS->if(sn!=null)listOf(
+   RowAction("إلغاء الطلب","POST","api/admin/orders/$sn/cancel",JsonObject().apply{addProperty("reason","إلغاء من تطبيق الإدارة")}),
+   RowAction("أرشفة","POST","api/admin/orders/$sn/archive"),
+   RowAction("حذف","DELETE","api/admin/orders/$sn")
+  )else emptyList()
+  AdminSection.COMPLAINTS->listOf(
+   RowAction("قيد المراجعة","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","قيد المراجعة")}),
+   RowAction("حل الشكوى","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","تم الحل")}),
+   RowAction("رفض","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","مرفوضة")})
+  )
+  AdminSection.REGIONS->listOf(
+   RowAction("تفعيل","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",true)}),
+   RowAction("إيقاف","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",false)}),
+   RowAction("حذف","DELETE","api/admin/regions/$id")
+  )
+  AdminSection.NOTIFICATIONS->listOf(RowAction("حذف الحملة","DELETE","api/admin/notifications/direct/$id"))
+  AdminSection.ROLES->listOf(RowAction("إلغاء صلاحية المشرف","DELETE","api/admin/admin-users/$id"))
+  else->emptyList()
+ }
 }
 private fun primary(item: JsonElement): String {
     if (!item.isJsonObject) return item.toString()
