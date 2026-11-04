@@ -187,6 +187,43 @@ class MainActivity : ComponentActivity() {
  }
 }
 
+@Composable private fun FanniControlsDialog(item:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
+ val f=item.asJsonObject
+ var trust by remember(item){mutableStateOf(f.get("trustScore")?.toString().orEmpty())}
+ var verified by remember(item){mutableStateOf(f.get("isVerified")?.asBoolean?:false)}
+ var featured by remember(item){mutableStateOf(f.get("isFeatured")?.asBoolean?:false)}
+ var until by remember(item){mutableStateOf(f.get("featuredUntil")?.asString?.take(10).orEmpty())}
+ AlertDialog(onDismissRequest=onDismiss,title={Text("الثقة والتحقق والظهور")},
+  text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+   OutlinedTextField(trust,{trust=it},label={Text("درجة الثقة 0 - 100")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+   Row(verticalAlignment=Alignment.CenterVertically){Text("فني موثق",modifier=Modifier.weight(1f));Switch(verified,{verified=it})}
+   Row(verticalAlignment=Alignment.CenterVertically){Text("تمييز الفني",modifier=Modifier.weight(1f));Switch(featured,{featured=it})}
+   OutlinedTextField(until,{until=it},label={Text("انتهاء التمييز YYYY-MM-DD")})
+  }},
+  confirmButton={TextButton(onClick={onSave(JsonObject().apply{addProperty("trustScore",trust.toIntOrNull()?:0);addProperty("isVerified",verified);addProperty("isFeatured",featured);if(until.isNotBlank())addProperty("featuredUntil",until)else add("featuredUntil",com.google.gson.JsonNull.INSTANCE)})}){Text("حفظ")}},
+  dismissButton={TextButton(onClick=onDismiss){Text("إلغاء")}}
+ )
+}
+@Composable private fun FanniLimitsDialog(item:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
+ val limits=item.asJsonObject.get("limits")?.takeIf{it.isJsonObject}?.asJsonObject
+ var maxOrders by remember(item){mutableStateOf(limits?.get("maxOrders")?.toString().orEmpty())}
+ var maxOffers by remember(item){mutableStateOf(limits?.get("maxOffers")?.toString().orEmpty())}
+ var dailyLimit by remember(item){mutableStateOf(limits?.get("dailyLimit")?.toString().orEmpty())}
+ var limited by remember(item){mutableStateOf(limits?.get("isLimited")?.asBoolean?:false)}
+ var reason by remember(item){mutableStateOf(limits?.get("reason")?.asString.orEmpty())}
+ AlertDialog(onDismissRequest=onDismiss,title={Text("حدود استقبال الفني")},
+  text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+   OutlinedTextField(maxOrders,{maxOrders=it},label={Text("أقصى عدد طلبات 0 - 1000")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+   OutlinedTextField(maxOffers,{maxOffers=it},label={Text("أقصى عدد عروض 0 - 1000")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+   OutlinedTextField(dailyLimit,{dailyLimit=it},label={Text("الحد اليومي 0 - 100")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+   Row(verticalAlignment=Alignment.CenterVertically){Text("تقييد الفني",modifier=Modifier.weight(1f));Switch(limited,{limited=it})}
+   OutlinedTextField(reason,{reason=it},label={Text("سبب التقييد")},minLines=2)
+  }},
+  confirmButton={TextButton(onClick={onSave(JsonObject().apply{addProperty("maxOrders",maxOrders.toIntOrNull()?:0);addProperty("maxOffers",maxOffers.toIntOrNull()?:0);addProperty("dailyLimit",dailyLimit.toIntOrNull()?:0);addProperty("isLimited",limited);addProperty("reason",reason.trim())})}){Text("حفظ")}},
+  dismissButton={TextButton(onClick=onDismiss){Text("إلغاء")}}
+ )
+}
+
 @Composable private fun OrderCorrectionDialog(order:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
  val o=order.asJsonObject
  var clientName by remember(order){mutableStateOf(o.get("clientName")?.asString.orEmpty())}
