@@ -22,7 +22,7 @@ class SonaaMessagingService : FirebaseMessagingService() {
             "fanni_register" -> "technicians"
             "client_register" -> "clients"
             "password_reset" -> "recovery"
-            "support" -> "complaints"
+            "support" -> "support"
             "wallet_charge" -> "topups"
             else -> "dashboard"
         }
