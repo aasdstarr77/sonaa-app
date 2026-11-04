@@ -1,5 +1,6 @@
 package com.sonaa.nativeadmin
 import android.Manifest
+import android.net.Uri
 import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.os.Build
@@ -161,16 +162,17 @@ class MainActivity : ComponentActivity() {
         } }
     }
 }
-private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject())
+private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="")
 @Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var pending by remember { mutableStateOf<RowAction?>(null) }
+    var actionInput by remember { mutableStateOf("") }
     val filtered = remember(items, query) { if (query.isBlank()) items else items.filter { it.toString().contains(query.trim(), true) } }
     if(pending!=null) AlertDialog(
         onDismissRequest={pending=null},
         title={Text("تأكيد الإجراء")},
-        text={Text("هل تريد تنفيذ: "+pending!!.label+"؟")},
-        confirmButton={TextButton(onClick={val a=pending!!;pending=null;onAction(a.method,a.path,a.body)}){Text("تأكيد")}},
+        text={Column { Text("هل تريد تنفيذ: "+pending!!.label+"؟"); if(pending!!.inputKey!=null) OutlinedTextField(actionInput,{actionInput=it},label={Text(pending!!.inputHint)},singleLine=true,modifier=Modifier.fillMaxWidth()) }},
+        confirmButton={TextButton(onClick={val a=pending!!;val body=a.body.deepCopy();a.inputKey?.let{k->if(k=="amount")body.addProperty(k,actionInput.toDoubleOrNull()?:0.0) else body.addProperty(k,actionInput.trim())};pending=null;actionInput="";onAction(a.method,a.path,body)}){Text("تأكيد")}},
         dismissButton={TextButton(onClick={pending=null}){Text("إلغاء")}}
     )
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
@@ -191,7 +193,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         if(actions.isNotEmpty()){
                             Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                                 actions.forEach { action ->
-                                    OutlinedButton(onClick={pending=action},modifier=Modifier.weight(1f)) { Text(action.label, maxLines=1) }
+                                    OutlinedButton(onClick={pending=action;actionInput=""},modifier=Modifier.weight(1f)) { Text(action.label, maxLines=1) }
                                 }
                             }
                         }
@@ -224,6 +226,21 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("قبول الشحن","POST","api/admin/topup-requests/$id/approve"),
    RowAction("رفض الشحن","POST","api/admin/topup-requests/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")})
   )
+  AdminSection.WALLETS->listOf(
+   RowAction("تعيين الرصيد","POST","api/admin/fannis/$id/set-balance",JsonObject(),"amount","الرصيد الجديد بالجنيه"),
+   RowAction("إضافة رصيد","POST","api/admin/fannis/$id/add-balance",JsonObject(),"amount","المبلغ المراد إضافته"),
+   RowAction("تجميد المحفظة","POST","api/admin/wallet/freeze/$id",JsonObject().apply{addProperty("action","freeze");addProperty("reason","من تطبيق الإدارة")}),
+   RowAction("فك تجميد المحفظة","POST","api/admin/wallet/freeze/$id",JsonObject().apply{addProperty("action","unfreeze");addProperty("reason","من تطبيق الإدارة")})
+  )
+  AdminSection.SERVICES->{
+   val name=value("name")?:return emptyList()
+   val encoded=Uri.encode(name)
+   listOf(
+    RowAction("إخفاء الخدمة","POST","api/admin/services/$encoded/hide"),
+    RowAction("إظهار الخدمة","POST","api/admin/services/$encoded/show"),
+    RowAction("حذف الخدمة","DELETE","api/admin/services/$id")
+   )
+  }
   AdminSection.CLIENTS->if(phone!=null)listOf(
    RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
    RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock")
