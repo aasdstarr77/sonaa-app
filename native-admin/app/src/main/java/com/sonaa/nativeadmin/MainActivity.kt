@@ -159,8 +159,9 @@ class MainActivity : ComponentActivity() {
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
+            state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -180,6 +181,17 @@ class MainActivity : ComponentActivity() {
   Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
    Text("تسجيل صوتي للطلب",modifier=Modifier.weight(1f),fontWeight=FontWeight.Bold,color=DarkAccent)
    Button(onClick={if(prepared){if(playing){player.pause();playing=false}else{player.start();playing=true}}},enabled=prepared){Text(if(!prepared)"تحميل..." else if(playing)"إيقاف مؤقت" else "تشغيل")}
+  }
+ }
+}
+
+@Composable private fun WalletTransactionsScreen(items:List<JsonElement>,onBack:()->Unit){
+ Column(Modifier.fillMaxSize().padding(16.dp)){
+  Text("حركات المحفظة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+  OutlinedButton(onClick=onBack,modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)){Text("رجوع للمحافظ")}
+  if(items.isEmpty())Text("لا توجد حركات مالية مسجلة")
+  else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
+   items(items){entry->Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){Column(Modifier.padding(12.dp)){Text(entry.toString(),style=MaterialTheme.typography.bodySmall)}}}
   }
  }
 }
@@ -310,7 +322,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -408,6 +420,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
+                        if(section==AdminSection.WALLETS){
+                            val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
+                            if(fanniId.isNotBlank())OutlinedButton(onClick={onOpenWallet(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("عرض حركات المحفظة")}
+                        }
                         if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
                             if(fanniId.isNotBlank())OutlinedButton(onClick={onEditProfile(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات الفني")}
