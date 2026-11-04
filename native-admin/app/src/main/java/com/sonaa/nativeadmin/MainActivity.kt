@@ -265,7 +265,7 @@ class MainActivity : ComponentActivity() {
         } }
     }
 }
-private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="")
+private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
 @Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
@@ -273,6 +273,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var dateFilter by remember(section) { mutableStateOf("") }
     var pending by remember { mutableStateOf<RowAction?>(null) }
     var actionInput by remember { mutableStateOf("") }
+    var actionInput2 by remember { mutableStateOf("") }
     var createOpen by remember(section){mutableStateOf(false)}
     var createName by remember(section){mutableStateOf("")}
     var createCategory by remember(section){mutableStateOf("خدمات أخرى")}
@@ -313,8 +314,8 @@ private data class RowAction(val label:String,val method:String,val path:String,
     if(pending!=null) AlertDialog(
         onDismissRequest={pending=null},
         title={Text("تأكيد الإجراء")},
-        text={Column { Text("هل تريد تنفيذ: "+pending!!.label+"؟"); if(pending!!.inputKey!=null) OutlinedTextField(actionInput,{actionInput=it},label={Text(pending!!.inputHint)},singleLine=true,modifier=Modifier.fillMaxWidth()) }},
-        confirmButton={TextButton(onClick={val a=pending!!;val body=a.body.deepCopy();a.inputKey?.let{k->if(k=="amount")body.addProperty(k,actionInput.toDoubleOrNull()?:0.0) else body.addProperty(k,actionInput.trim())};pending=null;actionInput="";onAction(a.method,a.path,body)}){Text("تأكيد")}},
+        text={Column { Text("هل تريد تنفيذ: "+pending!!.label+"؟"); if(pending!!.inputKey!=null) OutlinedTextField(actionInput,{actionInput=it},label={Text(pending!!.inputHint)},singleLine=true,modifier=Modifier.fillMaxWidth()); if(pending!!.secondInputKey!=null) OutlinedTextField(actionInput2,{actionInput2=it},label={Text(pending!!.secondInputHint)},singleLine=true,modifier=Modifier.fillMaxWidth()) }},
+        confirmButton={TextButton(onClick={val a=pending!!;val body=a.body.deepCopy();a.inputKey?.let{k->if(k=="amount")body.addProperty(k,actionInput.toDoubleOrNull()?:0.0) else body.addProperty(k,actionInput.trim())};a.secondInputKey?.let{k->body.addProperty(k,actionInput2.trim())};pending=null;actionInput="";actionInput2="";onAction(a.method,a.path,body)}){Text("تأكيد")}},
         dismissButton={TextButton(onClick={pending=null}){Text("إلغاء")}}
     )
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
@@ -345,7 +346,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         if(actions.isNotEmpty()){
                             Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                                 actions.forEach { action ->
-                                    OutlinedButton(onClick={pending=action;actionInput=""},modifier=Modifier.weight(1f)) { Text(action.label, maxLines=1) }
+                                    OutlinedButton(onClick={pending=action;actionInput="";actionInput2=""},modifier=Modifier.weight(1f)) { Text(action.label, maxLines=1) }
                                 }
                             }
                         }
@@ -371,7 +372,8 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("حذف الفني","DELETE","api/admin/fannis/$id"),
    RowAction("تعديل المستوى","PATCH","api/admin/fannis/$id/level",JsonObject(),"level","المستوى الجديد"),
    RowAction("شارة موثوق","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge","trusted")}),
-   RowAction("حفظ ملاحظة","PATCH","api/admin/fannis/$id/note",JsonObject(),"note","الملاحظة الداخلية")
+   RowAction("حفظ ملاحظة","PATCH","api/admin/fannis/$id/note",JsonObject(),"note","الملاحظة الداخلية"),
+   RowAction("تغيير كلمة المرور","PATCH","api/admin/fannis/$id/password",JsonObject(),"newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور")
   )
   AdminSection.PROFILE_EDITS->listOf(
    RowAction("قبول التعديل","POST","api/admin/fanni-profile-edits/$id/approve"),
@@ -400,6 +402,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
    RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock"),
    RowAction("حفظ ملاحظة","POST","api/admin/clients/$phone/note",JsonObject(),"note","الملاحظة الداخلية"),
+   RowAction("تغيير كلمة المرور","PATCH","api/admin/clients/$phone/password",JsonObject(),"newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور"),
    RowAction("حذف الحساب المسجل","DELETE","api/admin/clients/$phone/account")
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null){
