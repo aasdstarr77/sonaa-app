@@ -775,19 +775,19 @@ private data class RowAction(val label:String,val method:String,val path:String,
                 fun runBulk(action:String){pendingBulk=action to selectedBulk.toList()}
                 when(section){
                     AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->{
-                        Button(onClick={runBulk("approve")}){Text("اعتماد")}
-                        Button(onClick={runBulk("reject")}){Text("رفض")}
-                        Button(onClick={runBulk("disable")}){Text("إيقاف")}
-                        Button(onClick={runBulk("enable")}){Text("تفعيل")}
-                        Button(onClick={runBulk("freeze")}){Text("تجميد المحافظ")}
-                        Button(onClick={runBulk("unfreeze")}){Text("فك التجميد")}
+                        if(onCanWriteApi("api/admin/fannis/x/approve"))Button(onClick={runBulk("approve")}){Text("اعتماد")}
+                        if(onCanWriteApi("api/admin/fannis/x/reject"))Button(onClick={runBulk("reject")}){Text("رفض")}
+                        if(onCanWriteApi("api/admin/fannis/x/disable"))Button(onClick={runBulk("disable")}){Text("إيقاف")}
+                        if(onCanWriteApi("api/admin/fannis/x/enable"))Button(onClick={runBulk("enable")}){Text("تفعيل")}
+                        if(onCanWriteApi("api/admin/wallet/freeze/x"))Button(onClick={runBulk("freeze")}){Text("تجميد المحافظ")}
+                        if(onCanWriteApi("api/admin/wallet/freeze/x"))Button(onClick={runBulk("unfreeze")}){Text("فك التجميد")}
                     }
-                    AdminSection.WALLETS->{Button(onClick={runBulk("freeze")}){Text("تجميد المحافظ")};Button(onClick={runBulk("unfreeze")}){Text("فك التجميد")}}
-                    AdminSection.TOPUPS->{Button(onClick={runBulk("approve")}){Text("قبول الشحن")};Button(onClick={runBulk("reject")}){Text("رفض الشحن")}}
-                    AdminSection.CLIENTS->Button(onClick={runBulk("delete")}){Text("حذف الحسابات المحددة")}
-                    AdminSection.COMPLAINTS->{Button(onClick={runBulk("قيد المراجعة")}){Text("مراجعة")};Button(onClick={runBulk("تم الحل")}){Text("حل الشكاوى")};Button(onClick={runBulk("مرفوضة")}){Text("رفض")}}
-                    AdminSection.OFFERS->Button(onClick={runBulk("reject")}){Text("رفض العروض")}
-                    AdminSection.REGIONS->{Button(onClick={runBulk("activate")}){Text("تفعيل")};Button(onClick={runBulk("deactivate")}){Text("إيقاف")};Button(onClick={runBulk("restore")}){Text("استعادة")};Button(onClick={runBulk("delete")}){Text("حذف")}}
+                    AdminSection.WALLETS->{if(onCanWriteApi("api/admin/wallet/freeze/x")){Button(onClick={runBulk("freeze")}){Text("تجميد المحافظ")};Button(onClick={runBulk("unfreeze")}){Text("فك التجميد")}}}
+                    AdminSection.TOPUPS->{if(onCanWriteApi("api/admin/topup-requests/x/approve"))Button(onClick={runBulk("approve")}){Text("قبول الشحن")};if(onCanWriteApi("api/admin/topup-requests/x/reject"))Button(onClick={runBulk("reject")}){Text("رفض الشحن")}}
+                    AdminSection.CLIENTS->{if(onCanWriteApi("api/admin/clients/x/account"))Button(onClick={runBulk("delete")}){Text("حذف الحسابات المحددة")}}
+                    AdminSection.COMPLAINTS->{if(onCanWriteApi("api/admin/complaints/x")){Button(onClick={runBulk("قيد المراجعة")}){Text("مراجعة")};Button(onClick={runBulk("تم الحل")}){Text("حل الشكاوى")};Button(onClick={runBulk("مرفوضة")}){Text("رفض")}}}
+                    AdminSection.OFFERS->{if(onCanWriteApi("api/admin/offers/SN000000/0/reject"))Button(onClick={runBulk("reject")}){Text("رفض العروض")}}
+                    AdminSection.REGIONS->{if(onCanWriteApi("api/admin/regions/x")){Button(onClick={runBulk("activate")}){Text("تفعيل")};Button(onClick={runBulk("deactivate")}){Text("إيقاف")};Button(onClick={runBulk("restore")}){Text("استعادة")};Button(onClick={runBulk("delete")}){Text("حذف")}}}
                     else->Unit
                 }
                 OutlinedButton(onClick={selectedBulk=emptySet()}){Text("إلغاء")}
@@ -818,7 +818,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                 val actions=rowActions(section,item).filter{onCanWriteApi(it.path)}
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.padding(14.dp)) {
-                        if(section==AdminSection.ORDERS){
+                        if(section==AdminSection.ORDERS&&(onCanWriteApi("api/orders/admin/SN000000/publish")||onCanWriteApi("api/admin/orders/bulk-delete"))){
                             val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
                             if(orderSn.isNotBlank())Row(verticalAlignment=Alignment.CenterVertically){
                                 Checkbox(checked=selectedOrders.contains(orderSn),onCheckedChange={checked->selectedOrders=if(checked)selectedOrders+orderSn else selectedOrders-orderSn})
