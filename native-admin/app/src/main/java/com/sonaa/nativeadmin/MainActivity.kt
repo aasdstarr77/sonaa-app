@@ -213,7 +213,8 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("اعتماد","POST","api/admin/fannis/$id/approve"),
    RowAction("رفض","POST","api/admin/fannis/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")}),
    RowAction("إيقاف","POST","api/admin/fannis/$id/disable",JsonObject().apply{addProperty("reason","إيقاف من تطبيق الإدارة")}),
-   RowAction("تفعيل","POST","api/admin/fannis/$id/enable"),\n   RowAction("حذف الفني","DELETE","api/admin/fannis/$id")
+   RowAction("تفعيل","POST","api/admin/fannis/$id/enable"),
+   RowAction("حذف الفني","DELETE","api/admin/fannis/$id")
   )
   AdminSection.PROFILE_EDITS->listOf(
    RowAction("قبول التعديل","POST","api/admin/fanni-profile-edits/$id/approve"),
@@ -238,7 +239,8 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("رفض","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","مرفوضة")})
   )
   AdminSection.REGIONS->listOf(
-   RowAction("تفعيل","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",true)}),\n   RowAction("استعادة","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isDeleted",false)}),
+   RowAction("تفعيل","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",true)}),
+   RowAction("استعادة","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isDeleted",false)}),
    RowAction("إيقاف","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",false)}),
    RowAction("حذف","DELETE","api/admin/regions/$id")
   )
