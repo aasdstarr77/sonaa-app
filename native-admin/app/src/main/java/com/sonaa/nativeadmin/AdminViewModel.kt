@@ -1,5 +1,6 @@
 package com.sonaa.nativeadmin
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.JsonElement
@@ -53,6 +54,17 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  fun closeClientProfile(){_state.value=_state.value.copy(editingClient=null,editingClientId=null)}
  fun openWalletTransactions(id:String)=viewModelScope.launch{_state.value=_state.value.copy(busy=true,error=null,walletFanniId=id);try{val data=repo.get("api/admin/wallet/transactions/$id");val rows=if(data.isJsonObject)data.asJsonObject.get("transactions")?.takeIf{it.isJsonArray}?.asJsonArray?.map{it}?:emptyList() else emptyList();_state.value=_state.value.copy(busy=false,walletTransactions=rows)}catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل حركات المحفظة")}}
  fun closeWalletTransactions(){_state.value=_state.value.copy(walletFanniId=null,walletTransactions=emptyList())}
+ fun searchSupport(query:String)=viewModelScope.launch{
+  if(query.trim().length<2){_state.value=_state.value.copy(error="اكتب رقم طلب أو هاتفًا من حرفين على الأقل");return@launch}
+  _state.value=_state.value.copy(busy=true,error=null,section=AdminSection.SUPPORT)
+  try{
+   val data=repo.get("api/admin/support/search?q="+Uri.encode(query.trim()))
+   val obj=data.asJsonObject
+   val rows=mutableListOf<JsonElement>()
+   listOf("orders","complaints").forEach{key->obj.get(key)?.takeIf{it.isJsonArray}?.asJsonArray?.forEach{entry->rows.add(entry)}}
+   _state.value=_state.value.copy(busy=false,items=rows,payload=data)
+  }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر البحث في أدوات الدعم")}
+ }
  fun loadVoice(sn:String)=viewModelScope.launch{_state.value=_state.value.copy(busy=true,error=null);try{val file=repo.downloadVoice(sn);_state.value=_state.value.copy(busy=false,voicePath=file.absolutePath)}catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل التسجيل الصوتي")}}
  fun retry(){load(_state.value.section)}
  fun logout()=viewModelScope.launch{repo.logout();_state.value=AdminUiState(checking=false)}
