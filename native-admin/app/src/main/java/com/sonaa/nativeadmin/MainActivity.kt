@@ -186,6 +186,30 @@ class MainActivity : ComponentActivity() {
  }
 }
 
+@Composable private fun OrderCorrectionDialog(order:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
+ val o=order.asJsonObject
+ var clientName by remember(order){mutableStateOf(o.get("clientName")?.asString.orEmpty())}
+ var clientPhone by remember(order){mutableStateOf(o.get("clientPhone")?.asString.orEmpty())}
+ var service by remember(order){mutableStateOf(o.get("service")?.asString.orEmpty())}
+ var area by remember(order){mutableStateOf(o.get("area")?.asString.orEmpty())}
+ var address by remember(order){mutableStateOf(o.get("address")?.asString.orEmpty())}
+ var description by remember(order){mutableStateOf(o.get("description")?.asString.orEmpty())}
+ var budget by remember(order){mutableStateOf(o.get("budget")?.asString.orEmpty())}
+ AlertDialog(onDismissRequest=onDismiss,title={Text("تصحيح بيانات الطلب")},
+  text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)){
+   OutlinedTextField(clientName,{clientName=it},label={Text("اسم العميل")})
+   OutlinedTextField(clientPhone,{clientPhone=it},label={Text("رقم الهاتف")})
+   OutlinedTextField(service,{service=it},label={Text("الخدمة")})
+   OutlinedTextField(area,{area=it},label={Text("المنطقة")})
+   OutlinedTextField(address,{address=it},label={Text("العنوان")})
+   OutlinedTextField(description,{description=it},label={Text("الوصف")},minLines=2)
+   OutlinedTextField(budget,{budget=it},label={Text("الميزانية")})
+  }},
+  confirmButton={TextButton(onClick={onSave(JsonObject().apply{addProperty("clientName",clientName.trim());addProperty("clientPhone",clientPhone.trim());addProperty("service",service.trim());addProperty("area",area.trim());addProperty("address",address.trim());addProperty("description",description.trim());addProperty("budget",budget.trim())})}){Text("حفظ التصحيح")}},
+  dismissButton={TextButton(onClick=onDismiss){Text("إلغاء")}}
+ )
+}
+
 @Composable private fun ClientProfileEditor(payload:JsonElement,id:String,onCancel:()->Unit,onSave:(String,String,JsonObject)->Unit){
  val client=payload.takeIf{it.isJsonObject}?.asJsonObject?.get("client")?.takeIf{it.isJsonObject}?.asJsonObject
  var name by remember(payload){mutableStateOf(client?.get("name")?.asString.orEmpty())}
