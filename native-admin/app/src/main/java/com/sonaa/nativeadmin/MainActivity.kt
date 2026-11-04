@@ -756,6 +756,27 @@ private data class RowAction(val label:String,val method:String,val path:String,
                             Text("المستوى الحالي: $level",fontWeight=FontWeight.SemiBold,color=DarkAccent,modifier=Modifier.padding(top=8.dp))
                             Text("الشارات: "+if(badges.isEmpty())"لا توجد شارات" else badges.joinToString("، "),style=MaterialTheme.typography.bodySmall)
                         }
+                        if(section==AdminSection.PROFILE_EDITS && item.isJsonObject){
+                            val pending=item.asJsonObject.get("pendingProfileChange")?.takeIf{it.isJsonObject}?.asJsonObject
+                            val before=pending?.get("before")?.takeIf{it.isJsonObject}?.asJsonObject
+                            if(pending!=null){
+                                Card(Modifier.fillMaxWidth().padding(top=8.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFF4F8FA))){
+                                    Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+                                        Text("مقارنة طلب تعديل البيانات",fontWeight=FontWeight.Bold,color=DarkAccent)
+                                        Text("البيانات الحالية",fontWeight=FontWeight.SemiBold)
+                                        Text("الهاتف: "+(before?.get("phone")?.asString?:item.asJsonObject.get("phone")?.asString.orEmpty()))
+                                        Text("التخصصات: "+(before?.get("specialties")?.toString()?: "—"))
+                                        Text("مناطق العمل: "+(before?.get("areas")?.toString()?: "—"))
+                                        Divider()
+                                        Text("البيانات المطلوبة",fontWeight=FontWeight.SemiBold,color=Accent)
+                                        Text("الهاتف: "+(pending.get("phone")?.asString?:before?.get("phone")?.asString.orEmpty()))
+                                        Text("التخصصات: "+(pending.get("specialties")?.toString()?:before?.get("specialties")?.toString().orEmpty()))
+                                        Text("مناطق العمل: "+(pending.get("areas")?.toString()?:before?.get("areas")?.toString().orEmpty()))
+                                        Text("الحقول المطلوبة: "+(pending.get("changedFields")?.toString()?: "—"),style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+                                    }
+                                }
+                            }
+                        }
                         if(section==AdminSection.CLIENTS){
                             val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
                             if(clientId.isNotBlank())OutlinedButton(onClick={onEditClient(clientId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات العميل")}
