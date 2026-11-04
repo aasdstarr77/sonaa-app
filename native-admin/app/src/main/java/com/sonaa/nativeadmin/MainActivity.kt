@@ -355,6 +355,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyMode by remember(section){mutableStateOf("single")}
     var notifyPhone by remember(section){mutableStateOf("")}
     var notifyAudience by remember(section){mutableStateOf("all")}
+    var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
             val raw = item.toString()
@@ -416,6 +417,15 @@ private data class RowAction(val label:String,val method:String,val path:String,
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
         if(section==AdminSection.SERVICES||section==AdminSection.REGIONS) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
         if(section==AdminSection.NOTIFICATIONS) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
+        if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                Button(onClick={
+                    val body=JsonObject().apply{add("sns",com.google.gson.JsonArray().apply{selectedOrders.forEach{add(it)}})}
+                    onAction("POST","api/admin/orders/bulk-delete",body);selectedOrders=emptySet()
+                },modifier=Modifier.weight(1f)){Text("حذف المحدد ("+selectedOrders.size+")")}
+                OutlinedButton(onClick={selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("إلغاء التحديد")}
+            }
+        }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
             OutlinedTextField(statusFilter,{statusFilter=it},modifier=Modifier.width(145.dp),label={Text("فلتر الحالة")},singleLine=true)
             OutlinedTextField(regionFilter,{regionFilter=it},modifier=Modifier.width(145.dp),label={Text("المنطقة")},singleLine=true)
@@ -431,6 +441,13 @@ private data class RowAction(val label:String,val method:String,val path:String,
                 val actions=rowActions(section,item)
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.padding(14.dp)) {
+                        if(section==AdminSection.ORDERS){
+                            val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
+                            if(orderSn.isNotBlank())Row(verticalAlignment=Alignment.CenterVertically){
+                                Checkbox(checked=selectedOrders.contains(orderSn),onCheckedChange={checked->selectedOrders=if(checked)selectedOrders+orderSn else selectedOrders-orderSn})
+                                Text("تحديد الطلب "+orderSn,style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+                            }
+                        }
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
