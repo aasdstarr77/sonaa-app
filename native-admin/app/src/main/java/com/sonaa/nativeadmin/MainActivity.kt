@@ -381,6 +381,8 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyPhone by remember(section){mutableStateOf("")}
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
+    var categoryOrderOpen by remember(section){mutableStateOf(false)}
+    var categoryOrderText by remember(section){mutableStateOf("")}
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
@@ -417,6 +419,17 @@ private data class RowAction(val label:String,val method:String,val path:String,
         },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")&&!(notifyRole=="fanni"&&notifyMode=="group"&&notifyAudience=="active")){Text("إرسال")}},
         dismissButton={TextButton(onClick={notifyOpen=false}){Text("إلغاء")}}
     )
+    if(categoryOrderOpen) AlertDialog(
+        onDismissRequest={categoryOrderOpen=false},
+        title={Text("ترتيب أقسام الخدمات")},
+        text={OutlinedTextField(categoryOrderText,{categoryOrderText=it},label={Text("أسماء الأقسام بالترتيب، افصل بينها بفاصلة")},modifier=Modifier.fillMaxWidth(),minLines=3)},
+        confirmButton={TextButton(onClick={
+            val categories=categoryOrderText.split(',', '،').map{it.trim()}.filter{it.isNotEmpty()}
+            val body=JsonObject().apply{add("categories",com.google.gson.JsonArray().apply{categories.forEach{add(it)}})}
+            categoryOrderOpen=false;onAction("PATCH","api/admin/services/categories/order",body)
+        },enabled=categoryOrderText.trim().length>=2){Text("حفظ الترتيب")}},
+        dismissButton={TextButton(onClick={categoryOrderOpen=false}){Text("إلغاء")}}
+    )
     if(createOpen) AlertDialog(
         onDismissRequest={createOpen=false},
         title={Text(if(section==AdminSection.SERVICES)"إضافة خدمة" else "إضافة منطقة")},
@@ -447,6 +460,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
         if(section==AdminSection.SERVICES||section==AdminSection.REGIONS) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
+        if(section==AdminSection.SERVICES) Button(onClick={categoryOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب أقسام الخدمات")}
         if(section==AdminSection.NOTIFICATIONS) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
         if(section==AdminSection.SUPPORT) Button(onClick={onSupportSearch(query)},enabled=query.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("بحث في الطلبات والشكاوى وأرقام الهواتف")}
         if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
