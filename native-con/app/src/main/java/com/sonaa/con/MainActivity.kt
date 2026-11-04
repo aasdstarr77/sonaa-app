@@ -294,16 +294,35 @@ class MainActivity : Activity() {
             "toggle"->if(active=="regions")mutate("/admin/regions/$id","PATCH",JSONObject().put("isActive",!item.optBoolean("isActive",true))) else mutate("/admin/services/${enc(item.optString("name"))}/${if(item.optBoolean("isActive",true))"hide" else "show"}","POST",JSONObject())
             "review"->mutate("/admin/support/$sn/review","POST",JSONObject())
             "role"->ask("المنصب: مدير أو مشرف أول أو مشرف أو قراءة فقط","role"){mutate("/admin/admin-users/$id/role","PATCH",JSONObject().put("role",it))}
-            "permissions"->showMessage("تخصيص الصلاحيات التفصيلي متاح بعد اختيار حساب المشرف من قسم الصلاحيات.")
+            "permissions"->editPermissions(id)
             "revoke"->confirm("سحب الصلاحية الإدارية؟"){mutate("/admin/admin-users/$id","DELETE",null)}
         }
     }
-    private fun createForActive() {
+
+    private fun editPermissions(id:String) {
+        val keys=listOf("dashboard","fannis","orders","publishOrders","voiceReview","passwordRecovery","complaints","services","clients","topups","wallet","pricing","settings","content","support","regions","offers","notifications","clientsData")
+        val checks=mutableMapOf<String,Pair<CheckBox,CheckBox>>()
+        val layout=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
+        keys.forEach{k->
+            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+            row.addView(text(k,12f,true),LinearLayout.LayoutParams(0,-2,1f))
+            val read=CheckBox(this).apply{text="قراءة"}
+            val write=CheckBox(this).apply{text="تنفيذ"}
+            row.addView(read);row.addView(write);layout.addView(row);checks[k]=read to write
+        }
+        AlertDialog.Builder(this).setTitle("تخصيص الصلاحيات").setView(ScrollView(this).apply{addView(layout)})
+            .setNegativeButton("إلغاء",null).setPositiveButton("حفظ"){_,_->
+                val perms=JSONObject()
+                checks.forEach{(k,p)->perms.put(k,JSONObject().put("read",p.first.isChecked||p.second.isChecked).put("write",p.second.isChecked))}
+                mutate("/admin/admin-users/$id/permissions","PATCH",JSONObject().put("permissions",perms))
+            }.show()
+    }
+\n    private fun createForActive() {
         if(!canWrite(active)){showMessage("لا تملك صلاحية الإضافة في هذا القسم");return}
         when(active){
             "regions"->ask("اسم المنطقة","name"){mutate("/admin/regions","POST",JSONObject().put("name",it))}
             "services"->form("إضافة خدمة",listOf("اسم الخدمة","القسم","رمز تعبيري")){v->mutate("/admin/services","POST",JSONObject().put("name",v[0]).put("category",v[1]).put("emoji",v[2]))}
-            "notifications"->form("إرسال إشعار",listOf("دور المستلم (client / fanni)","معرّف المستلم","العنوان","نص الإشعار")){v->mutate("/admin/notifications/direct","POST",JSONObject().put("recipientRole",v[0]).put("recipientId",v[1]).put("title",v[2]).put("message",v[3]))}
+            "notifications"->form("إرسال إشعار",listOf("دور المستلم (client / fanni)","معرّف المستلم","العنوان","نص الإشعار")){v->mutate("/admin/notifications/direct","POST",JSONObject().put("recipientRole",v[0]).put("phone",v[1]).put("title",v[2]).put("message",v[3]))}
             "roles"->form("إضافة مشرف أو مدير من الفنيين المعتمدين",listOf("معرّف الفني المعتمد","المنصب: مدير / مشرف أول / مشرف / قراءة فقط")){v->mutate("/admin/admin-users","POST",JSONObject().put("fanniId",v[0]).put("role",v[1]))}
             else->showMessage("الإضافة غير متاحة لهذا القسم من هذا العرض.")
         }
