@@ -567,6 +567,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
     var selectedBulk by remember(section){mutableStateOf(setOf<String>())}
+    var pendingBulk by remember{mutableStateOf<Pair<String,List<String>>?>(null)}
     var pendingPublishSns by remember{mutableStateOf<List<String>?>(null)}
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
     var categoryOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.mapNotNull{it.asJsonObject.get("category")?.asString}.distinct().joinToString("، "))}
@@ -625,6 +626,15 @@ private data class RowAction(val label:String,val method:String,val path:String,
         },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")&&!(notifyRole=="fanni"&&notifyMode=="group"&&notifyAudience=="active")){Text("إرسال")}},
         dismissButton={TextButton(onClick={notifyOpen=false}){Text("إلغاء")}}
     )
+    pendingBulk?.let{pendingAction->
+        AlertDialog(
+            onDismissRequest={pendingBulk=null},
+            title={Text("تأكيد الإجراء الجماعي")},
+            text={Text("سيتم تنفيذ «"+pendingAction.first+"» على "+pendingAction.second.size+" عناصر. العناصر غير المؤهلة سيبلغ عنها التطبيق بعد التنفيذ.")},
+            confirmButton={TextButton(onClick={val action=pendingAction.first;val ids=pendingAction.second;pendingBulk=null;selectedBulk=emptySet();onBulkAction(section,ids,action)}){Text("تأكيد التنفيذ")}},
+            dismissButton={TextButton(onClick={pendingBulk=null}){Text("إلغاء")}}
+        )
+    }
     pendingPublishSns?.let{sns->AlertDialog(
         onDismissRequest={pendingPublishSns=null},
         title={Text("تأكيد نشر الطلبات")},
@@ -698,7 +708,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
         if(selectedBulk.isNotEmpty()){
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 Text("المحدد: "+selectedBulk.size,modifier=Modifier.align(Alignment.CenterVertically),fontWeight=FontWeight.Bold)
-                fun runBulk(action:String){val ids=selectedBulk.toList();selectedBulk=emptySet();onBulkAction(section,ids,action)}
+                fun runBulk(action:String){pendingBulk=action to selectedBulk.toList()}
                 when(section){
                     AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->{
                         Button(onClick={runBulk("approve")}){Text("اعتماد")}
@@ -752,7 +762,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                             }
                         }
                         val bulkKey=when(section){
-                            AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED,AdminSection.WALLETS,AdminSection.TOPUPS,AdminSection.COMPLAINTS,AdminSection.REGIONS,AdminSection.ROLES->item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString
+                            AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED,AdminSection.WALLETS,AdminSection.TOPUPS,AdminSection.COMPLAINTS,AdminSection.REGIONS->item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString
                             AdminSection.CLIENTS->item.asJsonObject.get("phone")?.asString
                             else->null
                         }
