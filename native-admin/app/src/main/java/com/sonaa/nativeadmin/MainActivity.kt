@@ -483,7 +483,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
                         if(section==AdminSection.CLIENTS){
-                            val clientId=item.asJsonObject.get("_id")?.asString.orEmpty()
+                            val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
                             if(clientId.isNotBlank())OutlinedButton(onClick={onEditClient(clientId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات العميل")}
                         }
                         if(section==AdminSection.WALLETS){
@@ -518,7 +518,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
  if(!item.isJsonObject)return emptyList()
  val o=item.asJsonObject
  fun value(vararg keys:String):String?=keys.firstNotNullOfOrNull{k->o.get(k)?.takeIf{!it.isJsonNull}?.asString}
- val id=value("_id","id")?:return emptyList()
+ val id=value("_id","id").orEmpty()
  val phone=value("phone","clientPhone")
  val sn=value("sn","target")
  return when(section){
@@ -572,10 +572,10 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    actions
   }else emptyList()
   AdminSection.SUPPORT->if(sn!=null)listOf(RowAction("وضع علامة مراجعة","POST","api/admin/support/$sn/review"))else emptyList()
-  AdminSection.RECOVERY->listOf(
+  AdminSection.RECOVERY->if(id.isNotBlank())listOf(
    RowAction("إرسال رد","POST","api/password-recovery/admin/requests/$id/reply",JsonObject(),"text","اكتب الرد للمستخدم"),
    RowAction("رفض الطلب","POST","api/password-recovery/admin/requests/$id/reject",JsonObject(),"reason","سبب الرفض")
-  )
+  )else emptyList()
   AdminSection.COMPLAINTS->listOf(
    RowAction("حفظ رد وملاحظة","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","قيد المراجعة")},"adminNote","ملاحظة داخلية","adminResponse","رد رسمي للعميل"),
    RowAction("قيد المراجعة","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","قيد المراجعة")}),
