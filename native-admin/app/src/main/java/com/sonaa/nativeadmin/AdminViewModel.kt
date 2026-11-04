@@ -27,7 +27,7 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  }
  fun mutate(method:String,path:String,body:JsonObject=JsonObject())=viewModelScope.launch{
   _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
-  try{val result=repo.mutate(method,path,body);_state.value=_state.value.copy(busy=false,actionMessage=result.toString());load(_state.value.section)}
+  try{val result=repo.mutate(method,path,body);_state.value=_state.value.copy(busy=false,actionMessage=result.toString());load(_state.value.section,true)}
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تنفيذ العملية")}
  }
  fun retry(){load(_state.value.section)}
