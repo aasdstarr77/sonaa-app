@@ -419,7 +419,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
-    var categoryOrderText by remember(section){mutableStateOf("")}
+    var categoryOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.mapNotNull{it.asJsonObject.get("category")?.asString}.distinct().joinToString("، "))}
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
     var advancedFanni by remember{mutableStateOf<JsonElement?>(null)}
     var limitFanni by remember{mutableStateOf<JsonElement?>(null)}
