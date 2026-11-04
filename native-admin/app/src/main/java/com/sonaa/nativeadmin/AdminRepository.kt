@@ -1,5 +1,6 @@
 package com.sonaa.nativeadmin
 import android.content.Context
+import java.io.File
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import kotlinx.coroutines.runBlocking
@@ -7,6 +8,7 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 class AdminRepository(context:Context){
+ private val appContext=context.applicationContext
  private val auth=AuthStore(context.applicationContext)
  private val client=OkHttpClient.Builder().addInterceptor{chain->
   val token=runBlocking{auth.currentToken()}
@@ -26,6 +28,14 @@ class AdminRepository(context:Context){
   else->api.get(section.path)
  }
  suspend fun get(path:String)=api.get(path)
+ suspend fun downloadVoice(sn:String):File{
+  val response=api.getVoice("api/orders/${sn}/voice")
+  if(!response.isSuccessful)error("تعذر تحميل التسجيل الصوتي (HTTP ${response.code()})")
+  val bytes=response.body()?.bytes()?:error("ملف التسجيل فارغ")
+  val file=File(appContext.cacheDir,"order-${sn}-voice.audio")
+  file.writeBytes(bytes)
+  return file
+ }
  suspend fun mutate(method:String,path:String,body:JsonObject=JsonObject()):JsonElement=when(method.uppercase()){
   "POST"->api.post(path,body);"PATCH"->api.patch(path,body);"PUT"->api.put(path,body);"DELETE"->api.delete(path);else->error("طريقة غير مدعومة")
  }
