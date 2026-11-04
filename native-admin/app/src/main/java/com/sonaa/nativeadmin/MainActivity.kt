@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
             state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeClientProfile() }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -398,7 +398,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -512,11 +512,12 @@ private data class RowAction(val label:String,val method:String,val path:String,
         if(section==AdminSection.SUPPORT) Button(onClick={onSupportSearch(query)},enabled=query.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("بحث في الطلبات والشكاوى وأرقام الهواتف")}
         if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                Button(onClick={onBulkPublish(selectedOrders.toList());selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("نشر المحدد ("+selectedOrders.size+")")}
                 Button(onClick={
                     val body=JsonObject().apply{add("sns",com.google.gson.JsonArray().apply{selectedOrders.forEach{add(it)}})}
                     pending=RowAction("حذف الطلبات المحددة","POST","api/admin/orders/bulk-delete",body);selectedOrders=emptySet()
-                },modifier=Modifier.weight(1f)){Text("حذف المحدد ("+selectedOrders.size+")")}
-                OutlinedButton(onClick={selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("إلغاء التحديد")}
+                },modifier=Modifier.weight(1f)){Text("حذف المحدد")}
+                OutlinedButton(onClick={selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("إلغاء")}
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
