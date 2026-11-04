@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
             "technicians" -> AdminSection.TECHNICIANS
             "clients" -> AdminSection.CLIENTS
             "complaints" -> AdminSection.COMPLAINTS
+            "support" -> AdminSection.SUPPORT
             "recovery" -> AdminSection.RECOVERY
             "topups" -> AdminSection.TOPUPS
             "wallets" -> AdminSection.WALLETS
