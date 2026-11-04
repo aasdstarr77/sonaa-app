@@ -46,6 +46,19 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل محادثة الاستعادة")}
  }
  fun closeRecovery(){_state.value=_state.value.copy(recoveryDetail=null,recoveryDetailId=null)}
+ fun recoveryAction(method:String,path:String,body:JsonObject=JsonObject())=viewModelScope.launch{
+  val id=_state.value.recoveryDetailId?:return@launch
+  _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
+  try{
+   val result=repo.mutate(method,path,body)
+   val detail=repo.get("api/password-recovery/admin/requests/$id")
+   val obj=result.takeIf{it.isJsonObject}?.asJsonObject
+   val message=obj?.get("message")?.asString?: "تم تنفيذ الإجراء"
+   val code=obj?.get("code")?.takeIf{!it.isJsonNull}?.asString
+   _state.value=_state.value.copy(busy=false,recoveryDetail=detail,actionMessage=message+(code?.let{" — رمز الاستعادة: $it"}?:""))
+  }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تنفيذ إجراء الاستعادة")}
+ }
+
  fun openClientProfile(id:String)=viewModelScope.launch{
   _state.value=_state.value.copy(busy=true,error=null,editingClient=null,editingClientId=null)
   try{val data=repo.get("api/admin/client-accounts/$id/profile");_state.value=_state.value.copy(busy=false,editingClient=data,editingClientId=id)}
