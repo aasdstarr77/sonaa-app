@@ -158,6 +158,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+@Composable private fun VoicePlayer(path:String,onClose:()->Unit){
+ var prepared by remember(path){mutableStateOf(false)}
+ var playing by remember(path){mutableStateOf(false)}
+ val player=remember(path){
+  MediaPlayer().apply{
+   setDataSource(path)
+   setOnPreparedListener{prepared=true}
+   setOnCompletionListener{playing=false}
+   prepareAsync()
+  }
+ }
+ DisposableEffect(player){onDispose{runCatching{player.release()}}}
+ Card(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=6.dp),colors=CardDefaults.cardColors(containerColor=Color.White)){
+  Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
+   Text("تسجيل صوتي للطلب",modifier=Modifier.weight(1f),fontWeight=FontWeight.Bold,color=DarkAccent)
+   Button(onClick={if(prepared){if(playing){player.pause();playing=false}else{player.start();playing=true}}},enabled=prepared){Text(if(!prepared)"تحميل..." else if(playing)"إيقاف مؤقت" else "تشغيل")}
+  }
+ }
+}
+
 @Composable private fun ConfigEditor(section:AdminSection,payload:JsonElement?,onSave:(String,String,JsonObject)->Unit){
  val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
  if(section==AdminSection.SETTINGS){
