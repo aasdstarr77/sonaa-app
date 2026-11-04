@@ -855,7 +855,9 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    listOf(
     RowAction("إخفاء الخدمة","POST","api/admin/services/$encoded/hide"),
     RowAction("إظهار الخدمة","POST","api/admin/services/$encoded/show"),
-    RowAction("حذف الخدمة","DELETE","api/admin/services/$id")
+    RowAction("تعديل الاسم","PATCH","api/admin/services/$encoded?category="+Uri.encode(value("category").orEmpty()),JsonObject().apply{addProperty("category",value("category").orEmpty())},"name","اسم الخدمة الجديد"),
+    RowAction("تغيير الأيقونة","PATCH","api/admin/services/$encoded?category="+Uri.encode(value("category").orEmpty()),JsonObject().apply{addProperty("category",value("category").orEmpty())},"emoji","رمز الخدمة"),
+    RowAction("حذف الخدمة","DELETE","api/admin/services/$id?category="+Uri.encode(value("category").orEmpty()))
    )
   }
   AdminSection.CLIENTS->if(phone!=null)listOf(
