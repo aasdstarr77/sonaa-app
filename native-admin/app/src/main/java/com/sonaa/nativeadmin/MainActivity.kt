@@ -1,5 +1,6 @@
 package com.sonaa.nativeadmin
 import android.Manifest
+import android.media.MediaPlayer
 import android.net.Uri
 import android.app.NotificationManager
 import android.content.pm.PackageManager
@@ -132,6 +133,7 @@ class MainActivity : ComponentActivity() {
             }
             TextButton(onClick = vm::logout) { Text("خروج", color = Color(0xFFB3261E)) }
         }
+        state.voicePath?.let { path -> VoicePlayer(path) { } }
         state.actionMessage?.let { message ->
             Card(Modifier.fillMaxWidth().padding(horizontal=12.dp, vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFFEAF6F8))) {
                 Text(message, modifier=Modifier.padding(10.dp), color=DarkAccent, maxLines=5)
@@ -152,7 +154,7 @@ class MainActivity : ComponentActivity() {
             }
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
-            else -> ListScreen(state.section, state.items, vm::retry) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -241,7 +243,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -288,6 +290,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
+                        if(section==AdminSection.ORDERS && item.isJsonObject && item.asJsonObject.get("hasVoiceRecording")?.asBoolean==true){
+                            val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
+                            OutlinedButton(onClick={onVoice(orderSn)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("استماع للتسجيل الصوتي")}
+                        }
                         if(actions.isNotEmpty()){
                             Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
                                 actions.forEach { action ->
