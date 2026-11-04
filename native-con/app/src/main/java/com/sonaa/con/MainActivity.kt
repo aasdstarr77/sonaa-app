@@ -28,6 +28,7 @@ class MainActivity : Activity() {
     private var active = "dashboard"
     private var allRows = JSONArray()
     private var contentData = JSONObject()
+    private val selectedRows = linkedMapOf<String,JSONObject>()
     private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
     private lateinit var status: TextView
@@ -147,7 +148,7 @@ class MainActivity : Activity() {
         header.addView(brand);header.addView(button("خروج"){logout()});root.addView(header)
         val nav=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false}
         val tabs=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
-        sections.filter{canRead(it.id)}.forEach{section->tabs.addView(button(section.label){active=section.id;loadSection()})}
+        sections.filter{canRead(it.id)}.forEach{section->tabs.addView(button(section.label){active=section.id;selectedRows.clear();loadSection()})}
         nav.addView(tabs);root.addView(nav)
         root.addView(View(this).apply{setBackgroundColor(teal);layoutParams=LinearLayout.LayoutParams(-1,2)})
         status=text("اختر قسمًا من القائمة",13f,true,teal);root.addView(status)
@@ -160,6 +161,7 @@ class MainActivity : Activity() {
         root.addView(searchBox)
         val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
         controls.addView(button("تحديث"){loadSection()})
+        controls.addView(button("إجراءات المحدد"){showBulkActions()})
         controls.addView(button("بحث الدعم"){if(active!="support"){showMessage("افتح قسم الدعم أولًا");return@button};val q=searchBox.text.toString().trim();if(q.length<2)showMessage("اكتب كود الطلب أو رقم هاتف للبحث")else request("/admin/support/search?q=${enc(q)}","GET",token,null){d,e->if(e!=null)showMessage(e)else{allRows=extractArray(d?:JSONObject(),listOf("results","orders","complaints","items","data"));renderRows()}}})
         controls.addView(button("إضافة عنصر"){createForActive()})
         root.addView(controls)
@@ -234,6 +236,10 @@ class MainActivity : Activity() {
             val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,8,12,10);setBackgroundColor(white)}
             val name=item.optString("name",item.optString("title",item.optString("sn",item.optString("action","سجل ${i+1}"))))
             card.addView(text(name,16f,true))
+            val rowKey=item.optString("_id",item.optString("id",item.optString("sn",i.toString())))
+            val selector=CheckBox(this).apply{text="تحديد";isChecked=selectedRows.containsKey("$active:$rowKey")}
+            selector.setOnCheckedChangeListener{_,checked->val key="$active:$rowKey";if(checked)selectedRows[key]=item else selectedRows.remove(key)}
+            card.addView(selector)
             val skip=setOf("_id","id","__v","passwordHash","voiceRecordingData","token")
             val keys=item.keys()
             var count=0
@@ -331,6 +337,58 @@ class MainActivity : Activity() {
         }
     }
 
+
+
+    private fun showBulkActions() {
+        val rows=selectedRows.filterKeys{it.startsWith("$active:")}.values.toList()
+        if(rows.isEmpty()){showMessage("حدد عناصر أولًا");return}
+        val actions=when(active){
+            "fannis","pending","disabled"->arrayOf("اعتماد المحدد","رفض المحدد","تعطيل المحدد","إعادة تفعيل المحدد","تجميد المحافظ","إلغاء تجميد المحافظ")
+            "topups"->arrayOf("قبول الشحنات المحددة","رفض الشحنات المحددة")
+            "complaints"->arrayOf("وضع قيد المراجعة","حل الشكاوى المحددة","رفض الشكاوى المحددة")
+            "orders"->arrayOf("نشر الطلبات المحددة","حذف الطلبات المحددة")
+            "clients"->arrayOf("حذف حسابات العملاء المحددة")
+            "regions"->arrayOf("إظهار المناطق المحددة","إخفاء المناطق المحددة","استعادة المناطق المحددة","حذف المناطق المحددة")
+            "services"->arrayOf("إظهار الخدمات المحددة","إخفاء الخدمات المحددة","حذف الخدمات المحددة")
+            else->arrayOf("لا توجد إجراءات جماعية لهذا القسم")
+        }
+        AlertDialog.Builder(this).setTitle("إجراءات جماعية • \${rows.size} عنصر").setItems(actions){_,which->
+            val action=actions[which]
+            if(action.startsWith("لا توجد"))return@setItems
+            confirm("تأكيد تنفيذ $action على \${rows.size} عنصر؟"){runBulkAction(action,rows,0,0)}
+        }.setNegativeButton("إلغاء",null).show()
+    }
+    private fun runBulkAction(action:String,rows:List<JSONObject>,index:Int,failed:Int) {
+        if(index>=rows.size){selectedRows.clear();showMessage("انتهى التنفيذ. تعذر تنفيذ $failed من \${rows.size}");loadSection();return}
+        val row=rows[index]
+        val id=row.optString("_id",row.optString("id"))
+        val sn=row.optString("sn")
+        val phone=row.optString("phone")
+        val path:String
+        val method:String
+        val payload:JSONObject?
+        when(active){
+            "fannis","pending","disabled"->{
+                path=when(action){
+                    "اعتماد المحدد"->"/admin/fannis/$id/approve"
+                    "رفض المحدد"->"/admin/fannis/$id/reject"
+                    "تعطيل المحدد"->"/admin/fannis/$id/disable"
+                    "إعادة تفعيل المحدد"->"/admin/fannis/$id/enable"
+                    else->"/admin/wallet/freeze/$id"
+                }
+                method="POST"
+                payload=if(action=="تجميد المحافظ"||action=="إلغاء تجميد المحافظ")JSONObject().put("action",if(action=="تجميد المحافظ")"freeze" else "unfreeze").put("reason","إجراء جماعي من تطبيق الإدارة") else JSONObject()
+            }
+            "topups"->{path="/admin/topup-requests/$id/\${if(action=="قبول الشحنات المحددة")"approve" else "reject"}";method="POST";payload=JSONObject()}
+            "complaints"->{path="/admin/complaints/$id";method="PATCH";payload=JSONObject().put("status",when(action){"وضع قيد المراجعة"->"قيد المراجعة";"حل الشكاوى المحددة"->"تم الحل";else->"مرفوضة"})}
+            "orders"->{path=if(action=="نشر الطلبات المحددة")"/orders/admin/$sn/publish" else "/admin/orders/$sn";method=if(action=="نشر الطلبات المحددة")"POST" else "DELETE";payload=JSONObject()}
+            "clients"->{path="/admin/clients/\${enc(phone)}/account";method="DELETE";payload=null}
+            "regions"->{path="/admin/regions/$id";method=if(action=="حذف المناطق المحددة")"DELETE" else "PATCH";payload=when(action){"إظهار المناطق المحددة"->JSONObject().put("isActive",true);"إخفاء المناطق المحددة"->JSONObject().put("isActive",false);"استعادة المناطق المحددة"->JSONObject().put("isDeleted",false).put("isActive",true);else->null}}
+            "services"->{path=if(action=="حذف الخدمات المحددة")"/admin/services/$id" else "/admin/services/\${enc(row.optString("name"))}/\${if(action=="إظهار الخدمات المحددة")"show" else "hide"}";method=if(action=="حذف الخدمات المحددة")"DELETE" else "POST";payload=JSONObject()}
+            else->{showMessage("الإجراء غير مدعوم");return}
+        }
+        request(path,method,token,payload){_,err->runBulkAction(action,rows,index+1,failed+(if(err==null)0 else 1))}
+    }
 
     private fun showOffers(sn:String,data:JSONObject) {
         val offers=data.optJSONArray("offers")?:JSONArray()
