@@ -135,6 +135,7 @@ class MainActivity : ComponentActivity() {
                 Text("إدارة صُنّاع CON", fontWeight = FontWeight.Bold, color = DarkAccent)
                 Text(state.section.title, style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             }
+            TextButton(onClick = vm::retry) { Text("تحديث", color = Accent) }
             TextButton(onClick = vm::logout) { Text("خروج", color = Color(0xFFB3261E)) }
         }
         state.voicePath?.let { path -> VoicePlayer(path) { } }
