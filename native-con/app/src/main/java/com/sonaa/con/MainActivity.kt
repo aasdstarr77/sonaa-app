@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private val sections = listOf(
         Section("dashboard","الرئيسية","/admin/counts"),
         Section("stats","الإحصائيات","/admin/reports"),
+        Section("reports","التقارير","/admin/reports"),
         Section("orders","الطلبات","/admin/orders?limit=500",listOf("orders","data","items")),
         Section("fannis","الفنيون","/admin/fannis?limit=500",listOf("fannis","data","items")),
         Section("pending","انتظار الاعتماد","/admin/fannis?limit=500",listOf("fannis","data","items")),
@@ -70,7 +71,7 @@ class MainActivity : Activity() {
     private fun canRead(id:String):Boolean {
         if(profile.optString("adminRoleLabel")=="أدمن رئيسي") return true
         val key=when(id) {
-            "dashboard","stats","pageVisits"->"dashboard"
+            "dashboard","stats","reports","pageVisits"->"dashboard"
             "fannis","profileEdits","pending","disabled","levels"->"fannis"
             "orders"->"orders"; "clients"->"clients"; "regions"->"regions"; "services"->"services"
             "topups"->"topups"; "complaints"->"complaints"; "support","recovery"->"support"
@@ -179,7 +180,7 @@ class MainActivity : Activity() {
     private fun loadSection() {
         val section=sections.firstOrNull{it.id==active} ?: sections[0]
         status.text="جاري تحميل ${section.label}..."
-        if(section.id=="stats") {
+        if(section.id=="stats"||section.id=="reports") {
             request("/admin/reports","POST",token,JSONObject()){d,e->if(e!=null)status.text=e else showReport(d?:JSONObject())}
             return
         }
