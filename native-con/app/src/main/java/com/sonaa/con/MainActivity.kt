@@ -196,7 +196,7 @@ class MainActivity : Activity() {
             return
         }
         if(section.id=="services") {
-            request(section.path,"GET",token,null){d,e->if(e!=null)status.text=e else showServicesNative(extractArray(d?:JSONObject(),listOf("services","data","items")))}
+            request(section.path,"GET",token,null){d,e->if(e!=null)status.text=e else showServicesNative(extractArray(d?:JSONObject(),listOf("categories","data","items")))}
             return
         }
         if(section.id=="pricing"||section.id=="settings") {
@@ -588,16 +588,20 @@ class MainActivity : Activity() {
     }
     private fun showPageVisits(data:JSONObject) {
         body.removeAllViews()
-        val summary=data.optJSONObject("summary")?:JSONObject()
+        val summary=data.optJSONArray("summary")?:JSONArray()
         body.addView(text("ملخص زيارات الموقع",18f,true))
-        summary.keys().forEach{k->body.addView(text(k+" : "+summary.opt(k),13f,true))}
+        for(i in 0 until summary.length()){
+            val item=summary.optJSONObject(i)?:continue
+            body.addView(text(item.optString("pageName",item.optString("pageKey","صفحة"))+" • "+item.optInt("visits",0)+" زيارة • آخر زيارة: "+item.optString("lastVisit","—"),13f,true))
+        }
+        body.addView(text("إجمالي الزيارات: "+data.optInt("total",0),14f,true))
         val recent=extractArray(data,listOf("recent","visits","items","data"))
         body.addView(text("آخر الزيارات • "+recent.length(),16f,true))
         for(i in 0 until recent.length()){
             val item=recent.optJSONObject(i)?:continue
             val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(10,7,10,7);setBackgroundColor(white)}
-            card.addView(text(item.optString("path",item.optString("page","زيارة")),13f,true))
-            card.addView(text("الوقت: "+item.optString("createdAt",item.optString("timestamp","—"))+" • الجهاز: "+item.optString("device",item.optString("userAgent","—")),11f,false,Color.DKGRAY))
+            card.addView(text(item.optString("pageName",item.optString("path","زيارة")),13f,true))
+            card.addView(text("المسار: "+item.optString("path","—")+" • المُحيل: "+item.optString("referrer","—")+" • الوقت: "+item.optString("visitedAt","—"),11f,false,Color.DKGRAY))
             body.addView(card,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=6})
         }
     }
