@@ -620,6 +620,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("تعديل المستوى","PATCH","api/admin/fannis/$id/level",JsonObject(),"level","المستوى الجديد"),
    RowAction("تعيين منصب إداري","POST","api/admin/admin-users",JsonObject().apply{addProperty("fanniId",id)},"role","المنصب الإداري"),
    RowAction("شارة موثوق","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge","trusted")}),
+   RowAction("إزالة شارة موثوق","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge","trusted");addProperty("action","remove")}),
    RowAction("حفظ ملاحظة","PATCH","api/admin/fannis/$id/note",JsonObject(),"note","الملاحظة الداخلية"),
    RowAction("تغيير كلمة المرور","PATCH","api/admin/fannis/$id/password",JsonObject(),"newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور")
   )
