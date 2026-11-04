@@ -556,6 +556,9 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var pendingPublishSns by remember{mutableStateOf<List<String>?>(null)}
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
     var categoryOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.mapNotNull{it.asJsonObject.get("category")?.asString}.distinct().joinToString("، "))}
+    var serviceOrderOpen by remember(section){mutableStateOf(false)}
+    var serviceOrderCategory by remember(section,items){mutableStateOf(items.firstOrNull{it.isJsonObject}?.asJsonObject?.get("category")?.asString.orEmpty())}
+    var serviceOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.filter{it.asJsonObject.get("category")?.asString==serviceOrderCategory}.sortedBy{it.asJsonObject.get("sortOrder")?.asInt?:0}.mapNotNull{it.asJsonObject.get("name")?.asString}.joinToString("، "))}
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
     var advancedFanni by remember{mutableStateOf<JsonElement?>(null)}
     var limitFanni by remember{mutableStateOf<JsonElement?>(null)}
@@ -615,6 +618,24 @@ private data class RowAction(val label:String,val method:String,val path:String,
         confirmButton={TextButton(onClick={pendingPublishSns=null;onBulkPublish(sns)}){Text("تأكيد النشر")}},
         dismissButton={TextButton(onClick={pendingPublishSns=null}){Text("إلغاء")}}
     )}
+    if(serviceOrderOpen) AlertDialog(
+        onDismissRequest={serviceOrderOpen=false},
+        title={Text("ترتيب الخدمات داخل القسم")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            OutlinedTextField(serviceOrderCategory,{serviceOrderCategory=it},label={Text("اسم القسم")},modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(serviceOrderText,{serviceOrderText=it},label={Text("أسماء الخدمات بالترتيب، افصل بينها بفاصلة")},modifier=Modifier.fillMaxWidth(),minLines=4)
+            Text("سيتم حفظ الترتيب حسب ترتيب الأسماء من اليمين إلى اليسار.",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+        }},
+        confirmButton={TextButton(onClick={
+            val names=serviceOrderText.split(',', '،').map{it.trim()}.filter{it.isNotEmpty()}.distinct()
+            val body=JsonObject().apply{
+                addProperty("category",serviceOrderCategory.trim())
+                add("items",com.google.gson.JsonArray().apply{names.forEachIndexed{index,name->add(JsonObject().apply{addProperty("name",name);addProperty("sortOrder",(index+1)*10)})}})
+            }
+            serviceOrderOpen=false;onAction("PATCH","api/admin/services/order",body)
+        },enabled=serviceOrderCategory.trim().length>=2&&serviceOrderText.trim().length>=2){Text("حفظ الترتيب")}},
+        dismissButton={TextButton(onClick={serviceOrderOpen=false}){Text("إلغاء")}}
+    )
     if(categoryOrderOpen) AlertDialog(
         onDismissRequest={categoryOrderOpen=false},
         title={Text("ترتيب أقسام الخدمات")},
@@ -657,6 +678,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
         if(section==AdminSection.SERVICES||section==AdminSection.REGIONS) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
         if(section==AdminSection.SERVICES) Button(onClick={categoryOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب أقسام الخدمات")}
+        if(section==AdminSection.SERVICES) OutlinedButton(onClick={serviceOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب الخدمات داخل القسم")}
         if(section==AdminSection.NOTIFICATIONS) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
         if(section==AdminSection.SUPPORT) Button(onClick={onSupportSearch(query)},enabled=query.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("بحث في الطلبات والشكاوى وأرقام الهواتف")}
         if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
