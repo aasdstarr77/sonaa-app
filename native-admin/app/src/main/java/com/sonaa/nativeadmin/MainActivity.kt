@@ -158,7 +158,8 @@ class MainActivity : ComponentActivity() {
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice) { method, path, body -> vm.mutate(method, path, body) }
+            else if(state.editingProfile!=null) ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method,path,body -> vm.mutate(method,path,body);vm.closeProfile() }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -286,7 +287,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -384,6 +385,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
+                        if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
+                            val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
+                            if(fanniId.isNotBlank())OutlinedButton(onClick={onEditProfile(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات الفني")}
+                        }
                         if(section==AdminSection.ORDERS && item.isJsonObject && item.asJsonObject.get("hasVoiceRecording")?.asBoolean==true){
                             val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
                             OutlinedButton(onClick={onVoice(orderSn)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("استماع للتسجيل الصوتي")}
