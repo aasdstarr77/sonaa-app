@@ -384,6 +384,8 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
     var categoryOrderText by remember(section){mutableStateOf("")}
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
+    var advancedFanni by remember{mutableStateOf<JsonElement?>(null)}
+    var limitFanni by remember{mutableStateOf<JsonElement?>(null)}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
             val raw = item.toString()
@@ -397,6 +399,14 @@ private data class RowAction(val label:String,val method:String,val path:String,
             (dateFilter.isBlank() || date.contains(dateFilter.trim(), true))
         }
     }
+    advancedFanni?.let{fanni->FanniControlsDialog(fanni,{advancedFanni=null}){body->
+        val id=fanni.asJsonObject.get("_id")?.asString.orEmpty();advancedFanni=null
+        onAction("PATCH","api/admin/fannis/$id/profile-controls",body)
+    }}
+    limitFanni?.let{fanni->FanniLimitsDialog(fanni,{limitFanni=null}){body->
+        val id=fanni.asJsonObject.get("_id")?.asString.orEmpty();limitFanni=null
+        onAction("PATCH","api/admin/fannis/$id/limit",body)
+    }}
     correctionOrder?.let{order->OrderCorrectionDialog(order,{correctionOrder=null}){body->
         val sn=order.asJsonObject.get("sn")?.asString.orEmpty()
         correctionOrder=null
@@ -517,6 +527,11 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         if(section==AdminSection.WALLETS){
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
                             if(fanniId.isNotBlank())OutlinedButton(onClick={onOpenWallet(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("عرض حركات المحفظة")}
+                        }
+                        if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
+                            val fanni=item.asJsonObject
+                            OutlinedButton(onClick={advancedFanni=item},modifier=Modifier.fillMaxWidth().padding(top=6.dp)){Text("إعدادات الثقة والظهور")}
+                            OutlinedButton(onClick={limitFanni=item},modifier=Modifier.fillMaxWidth()){Text("حدود استقبال الطلبات والعروض")}
                         }
                         if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
