@@ -180,7 +180,20 @@ class MainActivity : Activity() {
     private fun loadSection() {
         val section=sections.firstOrNull{it.id==active} ?: sections[0]
         status.text="جاري تحميل ${section.label}..."
-        if(section.id=="stats"||section.id=="reports") {
+        if(section.id=="stats") {
+            request("/admin/counts","GET",token,null){counts,err->
+                if(err!=null){status.text=err;return@request}
+                request("/admin/orders?limit=500","GET",token,null){orders,orderErr->
+                    if(orderErr!=null){status.text=orderErr;return@request}
+                    request("/admin/topup-requests","GET",token,null){topups,topupErr->
+                        if(topupErr!=null){status.text=topupErr;return@request}
+                        showAdminStats(counts?:JSONObject(),extractArray(orders?:JSONObject(),listOf("orders","data","items")),extractArray(topups?:JSONObject(),listOf("requests","data","items")))
+                    }
+                }
+            }
+            return
+        }
+        if(section.id=="reports") {
             request("/admin/reports","POST",token,JSONObject()){d,e->if(e!=null)status.text=e else showReport(d?:JSONObject())}
             return
         }
@@ -235,6 +248,36 @@ class MainActivity : Activity() {
         for(i in 0 until top.length()){val item=top.optJSONObject(i)?:continue;body.addView(text("${item.optString("service")} — ${item.optString("count")}",13f))}
         status.text=data.optString("message","تقرير المنصة")
     }
+
+    private fun showAdminStats(countsData:JSONObject,orders:JSONArray,topups:JSONArray) {
+        body.removeAllViews()
+        val counts=countsData.optJSONObject("counts")?:countsData
+        body.addView(text("إحصائيات المنصة",20f,true))
+        listOf("technicians" to "إجمالي الفنيين","verifiedTechnicians" to "الفنيون المعتمدون","clients" to "العملاء المسجلون").forEach{(key,label)->
+            body.addView(text(label+" : "+counts.optInt(key,0),18f,true))
+        }
+        body.addView(text("إجمالي الطلبات المحمّلة: "+orders.length(),18f,true))
+        val statuses=linkedMapOf<String,Int>()
+        for(i in 0 until orders.length()){
+            val item=orders.optJSONObject(i)?:continue
+            val statusValue=item.optString("status","غير محدد")
+            statuses[statusValue]=(statuses[statusValue]?:0)+1
+        }
+        body.addView(text("حالة الطلبات",16f,true))
+        statuses.forEach{(label,count)->body.addView(text(label+" : "+count,14f,true))}
+        var approvedCount=0
+        var approvedAmount=0.0
+        for(i in 0 until topups.length()){
+            val item=topups.optJSONObject(i)?:continue
+            if(item.optString("status")=="مقبول"||item.optString("status")=="approved"){
+                approvedCount++
+                approvedAmount+=item.optDouble("amount",0.0)
+            }
+        }
+        body.addView(text("طلبات شحن المحافظ: "+topups.length(),16f,true))
+        body.addView(text("عمليات الشحن المقبولة: "+approvedCount+" • الإجمالي: "+approvedAmount+" جنيه",14f,true))
+    }
+
     private fun showMetrics(data:JSONObject) {
         body.removeAllViews()
         val c=data.optJSONObject("counts")?:data
@@ -299,7 +342,7 @@ class MainActivity : Activity() {
             "orders"->buildList{val sn=item.optString("sn");if(item.optString("status")=="قيد المراجعة")add("نشر" to "publish");add("إلغاء" to "cancel");add("أرشفة" to "archive");add("تصحيح" to "correct");if(sn.isNotBlank()){add("العروض" to "offers");if(profile.optString("adminRoleLabel")=="أدمن رئيسي")add("تعيين فني" to "assign");add("حذف الطلب" to "deleteOrder")}}
             "topups"->listOf("قبول الشحن" to "approveTopup","رفض الشحن" to "rejectTopup")
             "complaints"->listOf("تحديث الشكوى" to "complaint")
-            "clients"->listOf((if(item.optString("status")=="معلق")"إلغاء الحظر" else "حظر العميل") to (if(item.optString("status")=="معلق")"unblock" else "block"),"ملاحظة" to "note","تغيير كلمة السر" to "clientPassword","تعديل البيانات" to "clientProfile")
+            "clients"->listOf((if(item.optString("status")=="معلق")"إلغاء الحظر" else "حظر العميل") to (if(item.optString("status")=="معلق")"unblock" else "block"),"ملاحظة" to "note","تغيير كلمة السر" to "clientPassword","تعديل البيانات" to "clientProfile","حذف الحساب" to "deleteClient")
             "regions"->listOf("تعديل الاسم" to "editRegion","إظهار/إخفاء" to "toggle","استعادة" to "restoreRegion","حذف" to "deleteRegion")
             "services"->listOf("تعديل الخدمة" to "editService","إخفاء" to "hideService","إظهار" to "showService","حذف" to "deleteService")
             "profileEdits"->listOf("اعتماد التعديل" to "approveEdit","رفض التعديل" to "rejectEdit")
@@ -357,6 +400,7 @@ class MainActivity : Activity() {
             "note"->ask("الملاحظة الداخلية","note"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/note","POST",JSONObject().put("note",v))}
             "clientPassword"->form("تغيير كلمة سر العميل",listOf("كلمة السر الجديدة","تأكيد كلمة السر")){v->mutate("/admin/clients/${enc(item.optString("phone"))}/password","PATCH",JSONObject().put("newPassword",v[0]).put("confirmPassword",v[1]))}
             "clientProfile"->form("تعديل بيانات العميل",listOf("الاسم","رقم الهاتف")){v->mutate("/admin/client-accounts/$id/profile","PATCH",JSONObject().put("name",v[0]).put("phone",v[1]))}
+            "deleteClient"->confirm("حذف حساب العميل نهائيًا؟"){mutate("/admin/clients/${enc(item.optString("phone"))}/account","DELETE",null)}
             "toggle"->if(active=="regions")mutate("/admin/regions/$id","PATCH",JSONObject().put("isActive",!item.optBoolean("isActive",true))) else mutate("/admin/services/${enc(item.optString("name"))}/${if(item.optBoolean("isActive",true))"hide" else "show"}","POST",JSONObject())
             "review"->mutate("/admin/support/$sn/review","POST",JSONObject())
             "role"->ask("المنصب: مدير أو مشرف أول أو مشرف أو قراءة فقط","role"){mutate("/admin/admin-users/$id/role","PATCH",JSONObject().put("role",it))}
@@ -401,7 +445,7 @@ class MainActivity : Activity() {
             "topups"->arrayOf("قبول الشحنات المحددة","رفض الشحنات المحددة")
             "complaints"->arrayOf("وضع قيد المراجعة","حل الشكاوى المحددة","رفض الشكاوى المحددة")
             "orders"->arrayOf("نشر الطلبات المحددة","حذف الطلبات المحددة")
-            "clients"->arrayOf("لا توجد إجراءات جماعية مدعومة لهذا القسم")
+            "clients"->arrayOf("حذف حسابات العملاء المحددة")
             "regions"->arrayOf("تعديل أسماء المناطق المحددة","إظهار المناطق المحددة","إخفاء المناطق المحددة","استعادة المناطق المحددة","حذف المناطق المحددة")
             "services"->arrayOf("إظهار الخدمات المحددة","إخفاء الخدمات المحددة","حذف الخدمات المحددة")
             else->arrayOf("لا توجد إجراءات جماعية لهذا القسم")
@@ -450,7 +494,7 @@ class MainActivity : Activity() {
             "topups"->{path="/admin/topup-requests/$id/${if(action=="قبول الشحنات المحددة")"approve" else "reject"}";method="POST";payload=JSONObject()}
             "complaints"->{path="/admin/complaints/$id";method="PATCH";payload=JSONObject().put("status",when(action){"وضع قيد المراجعة"->"قيد المراجعة";"حل الشكاوى المحددة"->"تم الحل";else->"مرفوضة"})}
             "orders"->{path=if(action=="نشر الطلبات المحددة")"/orders/admin/$sn/publish" else "/admin/orders/$sn";method=if(action=="نشر الطلبات المحددة")"POST" else "DELETE";payload=JSONObject()}
-            "clients"->{showMessage("الحذف الجماعي لحسابات العملاء غير متاح في واجهة الخادم الحالية");return}
+            "clients"->{path="/admin/clients/"+enc(phone)+"/account";method="DELETE";payload=null}
             "regions"->{path="/admin/regions/$id";method=if(action=="حذف المناطق المحددة")"DELETE" else "PATCH";payload=when(action){"إظهار المناطق المحددة"->JSONObject().put("isActive",true);"إخفاء المناطق المحددة"->JSONObject().put("isActive",false);"استعادة المناطق المحددة"->JSONObject().put("isDeleted",false).put("isActive",true);else->null}}
             "services"->{path=if(action=="حذف الخدمات المحددة")"/admin/services/$id" else "/admin/services/${enc(row.optString("name"))}/${if(action=="إظهار الخدمات المحددة")"show" else "hide"}";method=if(action=="حذف الخدمات المحددة")"DELETE" else "POST";payload=JSONObject()}
             else->{showMessage("الإجراء غير مدعوم");return}
