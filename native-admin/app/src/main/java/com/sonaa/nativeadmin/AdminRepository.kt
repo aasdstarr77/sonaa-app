@@ -52,6 +52,7 @@ enum class AdminSection(
  REGIONS("مناطق الخدمة","api/admin/regions",listOf("regions","items","data")),
  COMPLAINTS("الشكاوى","api/admin/complaints",listOf("complaints","data","items")),
  SUPPORT("الدعم والمخالفات","api/admin/support/violations",listOf("violations","cases","data","items")),
+ RECOVERY("طلبات استعادة كلمة المرور","api/password-recovery/admin/requests",listOf("recoveries","items","data")),
  NOTIFICATIONS("الإشعارات","api/admin/notifications/direct",listOf("notifications","campaigns","data","items")),
  CONTENT("الإعلانات والأسئلة الشائعة","api/admin/content",listOf("faqs","content","data")),
  PRICING("الأسعار والعمولات","api/admin/pricing",listOf("pricing","data","history")),
