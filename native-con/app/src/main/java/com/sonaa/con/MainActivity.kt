@@ -183,8 +183,20 @@ class MainActivity : Activity() {
             request("/admin/reports","POST",token,JSONObject()){d,e->if(e!=null)status.text=e else showReport(d?:JSONObject())}
             return
         }
+        if(section.id=="wallets") {
+            request("/admin/fannis?limit=500","GET",token,null){d,e->if(e!=null)status.text=e else showWalletDirectory(extractArray(d?:JSONObject(),listOf("fannis","data","items")))}
+            return
+        }
+        if(section.id=="pageVisits") {
+            request("/admin/page-visits","GET",token,null){d,e->if(e!=null)status.text=e else showPageVisits(d?:JSONObject())}
+            return
+        }
         if(section.id=="content") {
             request(section.path,"GET",token,null){d,e->if(e!=null)status.text=e else{contentData=d?.optJSONObject("content")?:JSONObject();showContent()}}
+            return
+        }
+        if(section.id=="services") {
+            request(section.path,"GET",token,null){d,e->if(e!=null)status.text=e else showServicesNative(extractArray(d?:JSONObject(),listOf("services","data","items")))}
             return
         }
         if(section.id=="pricing"||section.id=="settings") {
@@ -506,6 +518,136 @@ class MainActivity : Activity() {
             else->showMessage("الإضافة غير متاحة لهذا القسم من هذا العرض.")
         }
     }
+
+    private fun showWalletDirectory(fannis:JSONArray) {
+        body.removeAllViews()
+        body.addView(text("محافظ الفنيين",19f,true))
+        body.addView(text("اختر فنيًا لعرض كشف حسابه وحركات المحفظة. لا يتم تعديل الرصيد دون سبب موثق.",12f,false,Color.DKGRAY))
+        val labels=Array(fannis.length()){i->
+            val f=fannis.optJSONObject(i)?:JSONObject()
+            f.optString("name","فني")+" • "+f.optString("phone","")+" • "+(f.opt("walletBalance")?:f.opt("balance")?:0)+" جنيه"
+        }
+        if(labels.isEmpty()){body.addView(text("لا يوجد فنّيون لعرض محافظهم",13f));return}
+        body.addView(button("اختيار فني وعرض كشف الحساب"){AlertDialog.Builder(this).setTitle("اختر الفني").setItems(labels){_,which->
+            val f=fannis.optJSONObject(which)?:return@setItems
+            showWalletLedger(f)
+        }.setNegativeButton("إلغاء",null).show()})
+        for(i in 0 until fannis.length()){
+            val f=fannis.optJSONObject(i)?:continue
+            val id=f.optString("_id",f.optString("id"))
+            val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8);setBackgroundColor(white)}
+            card.addView(text(f.optString("name","فني"),15f,true))
+            card.addView(text("الهاتف: "+f.optString("phone","—")+" • الرصيد: "+(f.opt("walletBalance")?:f.opt("balance")?:0)+" جنيه",12f))
+            card.addView(button("كشف الحساب والحركات"){showWalletLedger(f)})
+            card.addView(button(if(f.optBoolean("isFrozen"))"إلغاء تجميد المحفظة" else "تجميد المحفظة"){
+                ask("سبب الإجراء المالي","reason"){reason->
+                    if(reason.length<2){showMessage("اكتب سببًا واضحًا");return@ask}
+                    mutate("/admin/wallet/freeze/"+id,"POST",JSONObject().put("action",if(f.optBoolean("isFrozen"))"unfreeze" else "freeze").put("reason",reason))
+                }
+            })
+            body.addView(card,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=8})
+        }
+    }
+    private fun showWalletLedger(fanni:JSONObject) {
+        val id=fanni.optString("_id",fanni.optString("id"))
+        status.text="كشف حساب "+fanni.optString("name","الفني")
+        body.removeAllViews()
+        body.addView(text("الرصيد الحالي: "+(fanni.opt("walletBalance")?:fanni.opt("balance")?:0)+" جنيه",18f,true))
+        body.addView(button("إضافة رصيد"){form("إضافة رصيد للمحفظة",listOf("المبلغ","سبب الإضافة")){v->
+            val amount=v[0].toDoubleOrNull()
+            if(amount==null||amount<=0){showMessage("أدخل مبلغًا صحيحًا أكبر من صفر");return@form}
+            mutate("/admin/fannis/"+id+"/add-balance","POST",JSONObject().put("amount",amount).put("reason",v[1]))
+        }})
+        body.addView(button("تسوية الرصيد"){form("تسوية رصيد المحفظة",listOf("الرصيد الجديد","سبب التسوية")){v->
+            val amount=v[0].toDoubleOrNull()
+            if(amount==null||amount<0){showMessage("أدخل رصيدًا صحيحًا غير سالب");return@form}
+            mutate("/admin/fannis/"+id+"/set-balance","POST",JSONObject().put("amount",amount).put("reason",v[1]))
+        }})
+        request("/admin/wallet/transactions/"+id,"GET",token,null){d,e->
+            if(e!=null){showMessage(e);return@request}
+            val transactions=extractArray(d?:JSONObject(),listOf("transactions","data","items"))
+            body.addView(text("سجل الحركات • "+transactions.length()+" حركة",16f,true))
+            for(i in 0 until transactions.length()){
+                val item=transactions.optJSONObject(i)?:continue
+                val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(10,6,10,6);setBackgroundColor(white)}
+                card.addView(text(item.optString("type",item.optString("action","حركة مالية"))+" • "+(item.opt("amount")?:item.opt("value")?:0)+" جنيه",13f,true))
+                card.addView(text("السبب: "+item.optString("reason","—")+" • "+item.optString("createdAt",""),11f,false,Color.DKGRAY))
+                body.addView(card)
+            }
+        }
+    }
+    private fun showPageVisits(data:JSONObject) {
+        body.removeAllViews()
+        val summary=data.optJSONObject("summary")?:JSONObject()
+        body.addView(text("ملخص زيارات الموقع",18f,true))
+        summary.keys().forEach{k->body.addView(text(k+" : "+summary.opt(k),13f,true))}
+        val recent=extractArray(data,listOf("recent","visits","items","data"))
+        body.addView(text("آخر الزيارات • "+recent.length(),16f,true))
+        for(i in 0 until recent.length()){
+            val item=recent.optJSONObject(i)?:continue
+            val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(10,7,10,7);setBackgroundColor(white)}
+            card.addView(text(item.optString("path",item.optString("page","زيارة")),13f,true))
+            card.addView(text("الوقت: "+item.optString("createdAt",item.optString("timestamp","—"))+" • الجهاز: "+item.optString("device",item.optString("userAgent","—")),11f,false,Color.DKGRAY))
+            body.addView(card,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=6})
+        }
+    }
+    private fun showServicesNative(categories:JSONArray) {
+        body.removeAllViews()
+        body.addView(text("إدارة الخدمات والمهن والتخصصات",18f,true))
+        body.addView(text("إضافة الخدمات وتعديلها وإخفاؤها وترتيب الأقسام والخدمات أو حذفها من الاختيارات الجديدة.",12f,false,Color.DKGRAY))
+        body.addView(button("إضافة خدمة جديدة"){form("إضافة خدمة",listOf("اسم الخدمة","القسم (اختياري)","رمز تعبيري")){v->
+            if(v[0].isBlank()){showMessage("اسم الخدمة مطلوب");return@form}
+            mutate("/admin/services","POST",JSONObject().put("name",v[0]).put("category",v[1]).put("emoji",v[2].ifBlank{"🔧"}))
+        }})
+        val categoryNames=Array(categories.length()){i->
+            val cat=categories.optJSONObject(i)?:JSONObject()
+            cat.optString("label",cat.optString("name","قسم"))
+        }
+        for(i in 0 until categories.length()){
+            val cat=categories.optJSONObject(i)?:continue
+            val category=cat.optString("label",cat.optString("name","قسم"))
+            val list=cat.optJSONArray("_detailed")?.takeIf{it.length()>0}?:cat.optJSONArray("services")?:JSONArray()
+            val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,9,12,10);setBackgroundColor(white)}
+            card.addView(text(cat.optString("emoji","🔧")+"  "+category+" • "+list.length()+" خدمة",16f,true))
+            val catActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
+            if(i>0)catActions.addView(button("ترتيب ↑"){val names=categoryNames.toMutableList();val tmp=names[i-1];names[i-1]=names[i];names[i]=tmp;mutate("/admin/services/categories/order","PATCH",JSONObject().put("categories",JSONArray(names)))})
+            if(i<categories.length()-1)catActions.addView(button("ترتيب ↓"){val names=categoryNames.toMutableList();val tmp=names[i+1];names[i+1]=names[i];names[i]=tmp;mutate("/admin/services/categories/order","PATCH",JSONObject().put("categories",JSONArray(names)))})
+            card.addView(catActions)
+            for(j in 0 until list.length()){
+                val raw=list.opt(j)
+                val item=if(raw is JSONObject)raw else JSONObject().put("name",raw.toString())
+                val name=item.optString("name",raw.toString())
+                val key=item.optString("dbId",name)
+                val activeFlag=item.optBoolean("isActive",true)
+                val row=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(8,7,8,7)}
+                row.addView(text(name+(if(activeFlag)" • ظاهرة" else " • مخفية"),13f,true))
+                val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
+                actions.addView(button("تعديل"){ask("اسم الخدمة الجديد",name){newName->
+                    mutate("/admin/services/"+enc(key)+"?category="+enc(category),"PATCH",JSONObject().put("name",newName).put("category",category))
+                }})
+                actions.addView(button(if(activeFlag)"إخفاء" else "إظهار"){mutate("/admin/services/"+enc(key)+"/"+(if(activeFlag)"hide" else "show")+"?category="+enc(category),"POST",JSONObject().put("category",category))})
+                actions.addView(button("حذف"){confirm("حذف الخدمة "+name+" من قسم "+category+"؟"){mutate("/admin/services/"+enc(key)+"?category="+enc(category),"DELETE",null)}})
+                if(j>0)actions.addView(button("↑"){moveNativeService(list,category,j,-1)})
+                if(j<list.length()-1)actions.addView(button("↓"){moveNativeService(list,category,j,1)})
+                row.addView(actions);card.addView(row)
+            }
+            body.addView(card,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=10})
+        }
+    }
+    private fun moveNativeService(list:JSONArray,category:String,index:Int,direction:Int) {
+        val items=mutableListOf<JSONObject>()
+        for(i in 0 until list.length()){
+            val raw=list.opt(i)
+            items.add(if(raw is JSONObject)JSONObject(raw.toString()) else JSONObject().put("name",raw.toString()))
+        }
+        val next=index+direction
+        if(index !in items.indices||next !in items.indices)return
+        val tmp=items[index];items[index]=items[next];items[next]=tmp
+        val payload=JSONArray()
+        items.forEachIndexed{idx,item->payload.put(JSONObject().put("name",item.optString("name")).put("sortOrder",(idx+1)*10).put("emoji",item.optString("emoji","🔧")).put("isActive",item.optBoolean("isActive",true)))}
+        mutate("/admin/services/order","PATCH",JSONObject().put("category",category).put("items",payload))
+    }
+
     private fun showContent() {
         body.removeAllViews()
         val announcement=input("نص الإعلان",contentData.optString("announcement"),true);body.addView(text("إعلان الواجهة",16f,true));body.addView(announcement)
