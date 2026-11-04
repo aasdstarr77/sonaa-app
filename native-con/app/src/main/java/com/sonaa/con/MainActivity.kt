@@ -85,7 +85,7 @@ class MainActivity : Activity() {
     private fun canWrite(id:String):Boolean {
         if(profile.optString("adminRoleLabel")=="أدمن رئيسي") return true
         val key=when(id) {
-            "dashboard","stats","pageVisits"->"dashboard"; "fannis","profileEdits","pending","disabled","levels"->"fannis"; "orders"->"orders"
+            "dashboard","stats","reports","pageVisits"->"dashboard"; "fannis","profileEdits","pending","disabled","levels"->"fannis"; "orders"->"orders"
             "clients"->"clients"; "regions"->"regions"; "services"->"services"; "topups"->"topups"
             "complaints"->"complaints"; "support","recovery"->"support"; "notifications"->"notifications"
             "content"->"content"; "pricing"->"pricing"; "settings"->"settings"; "wallets"->"wallet"; "offers"->"offers"; else->return false
