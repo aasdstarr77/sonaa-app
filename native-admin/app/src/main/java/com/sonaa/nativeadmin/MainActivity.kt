@@ -159,7 +159,7 @@ class MainActivity : ComponentActivity() {
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
-            else if(state.editingProfile!=null) ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
+            state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
