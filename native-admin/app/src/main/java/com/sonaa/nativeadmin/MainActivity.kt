@@ -413,7 +413,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
         confirmButton={TextButton(onClick={
             val body=JsonObject().apply{addProperty("title",notifyTitle.trim());addProperty("message",notifyMessage.trim());addProperty("recipientRole",notifyRole.trim());addProperty("recipientMode",notifyMode.trim());if(notifyMode=="single")addProperty("phone",notifyPhone.trim())else addProperty("audience",notifyAudience.trim())}
             notifyOpen=false;onAction("POST","api/admin/notifications/direct",body)
-        },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")){Text("إرسال")}},
+        },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")&&!(notifyRole=="fanni"&&notifyMode=="group"&&notifyAudience=="active")){Text("إرسال")}},
         dismissButton={TextButton(onClick={notifyOpen=false}){Text("إلغاء")}}
     )
     if(createOpen) AlertDialog(
