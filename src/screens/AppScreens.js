@@ -216,13 +216,21 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     async function loadPublicData() {
       setServicesLoading(true); setServicesError('');
       try {
-        const [serviceResponse, areaResponse] = await Promise.allSettled([api('/services'), api('/areas')]);
+        const [serviceResponse, regionResponse] = await Promise.allSettled([api('/services'), api('/regions')]);
         if (serviceResponse.status !== 'fulfilled') throw serviceResponse.reason;
         const serviceResult = serviceResponse.value;
         if (!Array.isArray(serviceResult.categories) || serviceResult.categories.length === 0) throw new Error('قائمة الخدمات من الخادم غير متاحة حاليًا');
         if (!mounted) return;
-        setAreas(areaResponse.status === 'fulfilled' && Array.isArray(areaResponse.value?.areas) ? areaResponse.value.areas.filter(area => !isReservedAreaLabel(area)) : []);
-        setAreaTechnicianCounts(areaResponse.status === 'fulfilled' && areaResponse.value?.technicianCountByArea && typeof areaResponse.value.technicianCountByArea === 'object' ? areaResponse.value.technicianCountByArea : {});
+        const regionPayload = regionResponse.status === 'fulfilled' ? regionResponse.value : null;
+        const regionItems = Array.isArray(regionPayload) ? regionPayload
+          : Array.isArray(regionPayload?.regions) ? regionPayload.regions
+          : Array.isArray(regionPayload?.areas) ? regionPayload.areas
+          : Array.isArray(regionPayload?.items) ? regionPayload.items : [];
+        const regionNames = regionItems.map(region => typeof region === 'string' ? region : (region?.name || region?.label || '')).filter(Boolean);
+        setAreas(regionNames.filter(area => !isReservedAreaLabel(area)));
+        const regionCounts = regionPayload?.technicianCountByRegion || regionPayload?.technicianCountByArea || {};
+        setAreaTechnicianCounts(regionCounts && typeof regionCounts === 'object' ? regionCounts : {});
+        // Service categories and their emoji/icons are server-owned; no profession catalog is bundled in the APK.
         setCategories(serviceResult.categories);
         setSelected(current => current && serviceResult.categories.some(item => item.label === current.label)
           ? serviceResult.categories.find(item => item.label === current.label) : null);

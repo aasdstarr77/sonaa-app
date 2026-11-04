@@ -1,0 +1,112 @@
+name: Sonaa APK Size Experiment
+
+on:
+  push:
+    branches:
+      - experiment/apk-size-optimization
+    paths:
+      - 'App.js'
+      - 'src/**'
+      - 'app.json'
+      - 'package.json'
+      - 'assets/**'
+      - '.github/workflows/experiment-size.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-split-apks:
+    name: Build ABI-split release APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout experiment branch only
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/apk-size-optimization
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+      - name: Generate app icons and splash from official logo
+        run: |
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          source = Path("assets/LOGO_UPLOAD_HERE/logo.png")
+          if not source.is_file():
+              raise SystemExit("Official logo missing: assets/LOGO_UPLOAD_HERE/logo.png")
+          logo = Image.open(source).convert("RGBA")
+          if logo.width < 128 or logo.height < 128:
+              raise SystemExit("Official logo image is unexpectedly small")
+          logo = logo.resize((1024, 1024), Image.Resampling.LANCZOS)
+          Path("assets").mkdir(exist_ok=True)
+          logo.convert("RGB").save("assets/icon.png", quality=95)
+          logo.save("assets/adaptive-icon.png")
+          logo.save("assets/splash-icon.png")
+          logo.convert("RGB").save("assets/splash.png", quality=95)
+          PY
+      - name: Generate optimized Android project
+        run: npx expo prebuild --platform android --clean
+      - name: Configure separate APKs for supported ABIs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path("android/app/build.gradle")
+          text = gradle.read_text()
+          marker = "android {"
+          block = '''android {
+              splits {
+                  abi {
+                      enable true
+                      reset()
+                      include "arm64-v8a", "armeabi-v7a"
+                      universalApk false
+                  }
+              }
+          '''
+          if "include \"arm64-v8a\", \"armeabi-v7a\"" not in text:
+              if marker not in text:
+                  raise SystemExit("Could not find android block in generated app/build.gradle")
+              text = text.replace(marker, block, 1)
+              gradle.write_text(text)
+          PY
+      - name: Build optimized release APKs
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+      - name: Collect and verify split APKs
+        run: |
+          mkdir -p dist
+          ARM64="android/app/build/outputs/apk/release/app-arm64-v8a-release.apk"
+          ARMV7="android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk"
+          test -s "$ARM64"
+          test -s "$ARMV7"
+          cp "$ARM64" dist/sonaa-experiment-arm64.apk
+          cp "$ARMV7" dist/sonaa-experiment-armeabi-v7a.apk
+          echo "ARM64_SIZE=$(du -h dist/sonaa-experiment-arm64.apk | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+          echo "ARMV7_SIZE=$(du -h dist/sonaa-experiment-armeabi-v7a.apk | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ARM64 experiment APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonaa-experiment-arm64.apk
+          path: dist/sonaa-experiment-arm64.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload ARMv7 experiment APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonaa-experiment-armeabi-v7a.apk
+          path: dist/sonaa-experiment-armeabi-v7a.apk
+          if-no-files-found: error
+          retention-days: 14

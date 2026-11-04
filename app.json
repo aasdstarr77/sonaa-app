@@ -36,7 +36,17 @@
         {
           "microphonePermission": "السماح لصُنّاع بتسجيل وصف الطلب الصوتي."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
       ]
-    ]
+    ],
+    "jsEngine": "hermes"
   }
 }
