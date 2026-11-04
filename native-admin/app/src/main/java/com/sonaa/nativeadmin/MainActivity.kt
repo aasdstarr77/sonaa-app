@@ -576,7 +576,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
        TextButton(onClick={
         val body=JsonObject().apply{addProperty("announcement",announcement.trim());val array=com.google.gson.JsonArray();faqs?.forEachIndexed{idx,entry->val copy=entry.asJsonObject.deepCopy();if(idx==index)copy.addProperty("active",copy.get("active")?.asBoolean==false);array.add(copy)};add("faqs",array)}
         onSave("PUT","api/admin/content",body)
-       }){Text(if(faq.asJsonObject.get("active")?.asBoolean==false)"تفعيل" else "إيقاف")}
+       },enabled=canWrite("api/admin/content")){Text(if(faq.asJsonObject.get("active")?.asBoolean==false)"تفعيل" else "إيقاف")}
        TextButton(onClick={onSave("DELETE","api/admin/content/faqs/$index",JsonObject())},enabled=canWrite("api/admin/content/faqs/$index")){Text("حذف",color=Color(0xFFB3261E))}
       }
      }
