@@ -38,7 +38,7 @@ export default function App() {
     if (!phone.trim() || !password) { setLoginError('اكتب رقم الهاتف وكلمة المرور.'); return; }
     setLoginBusy(true); setLoginError('');
     try {
-      const result = await api('/admin/login', { method: 'POST', body: { phone: phone.trim(), password } });
+      const result = await api('/admin/con-login', { method: 'POST', body: { phone: phone.trim(), password } });
       if (!result?.token || !result?.user) throw new Error('بيانات تسجيل الدخول غير مكتملة.');
       const me = await api('/admin/me', { token: result.token });
       await SecureStore.setItemAsync('sonaa_con_token', result.token);
