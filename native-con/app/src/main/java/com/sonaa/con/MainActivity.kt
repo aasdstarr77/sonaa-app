@@ -159,7 +159,7 @@ class MainActivity : Activity() {
         })
         root.addView(searchBox)
         val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
-        controls.addView(button("تحديث"){loadSection()})
+        controls.addView(button("تحديث"){loadSection()})\n        if(active=="support")controls.addView(button("بحث الدعم"){val q=searchBox.text.toString().trim();if(q.length<2)showMessage("اكتب كود الطلب أو رقم هاتف للبحث")else request("/admin/support/search?q=${enc(q)}","GET",token,null){d,e->if(e!=null)showMessage(e)else{allRows=extractArray(d?:JSONObject(),listOf("results","items","data"));renderRows()}}})
         controls.addView(button("إضافة عنصر"){createForActive()})
         root.addView(controls)
         body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
@@ -170,7 +170,7 @@ class MainActivity : Activity() {
     private fun loadSection() {
         val section=sections.firstOrNull{it.id==active} ?: sections[0]
         status.text="جاري تحميل ${section.label}..."
-        if(section.id=="content") {
+        if(section.id=="stats") {\n            request("/admin/reports","POST",token,JSONObject()){d,e->if(e!=null)status.text=e else showReport(d?:JSONObject())}\n            return\n        }\n        if(section.id=="content") {
             request(section.path,"GET",token,null){d,e->if(e!=null)status.text=e else{contentData=d?.optJSONObject("content")?:JSONObject();showContent()}}
             return
         }
@@ -193,7 +193,7 @@ class MainActivity : Activity() {
         if(nested!=null)for(k in keys){val a=nested.optJSONArray(k);if(a!=null)return a}
         return JSONArray()
     }
-    private fun showMetrics(data:JSONObject) {
+    private fun showReport(data:JSONObject) {\n        body.removeAllViews()\n        val summary=data.optJSONObject("summary")?:JSONObject()\n        val labels=listOf("إجمالي الطلبات" to "totalOrders","طلبات مكتملة" to "completedOrders","طلبات ملغاة" to "cancelledOrders","قيد المراجعة" to "pendingOrders","طلبات منشورة" to "publishedOrders","الفنيون المعتمدون" to "approvedTechnicians","العملاء النشطون" to "activeClients")\n        labels.forEach{(label,key)->body.addView(text("$label: ${summary.optString(key, "—")}",17f,true))}\n        val top=data.optJSONArray("topServices")?:JSONArray()\n        body.addView(text("أكثر الخدمات طلبًا",16f,true))\n        for(i in 0 until top.length()){val item=top.optJSONObject(i)?:continue;body.addView(text("${item.optString("service")} — ${item.optString("count")}",13f))}\n        status.text=data.optString("message","تقرير المنصة")\n    }\n    private fun showMetrics(data:JSONObject) {
         body.removeAllViews()
         val c=data.optJSONObject("counts")?:data
         listOf("إجمالي الفنيين" to c.optString("technicians","—"),"الفنيون المعتمدون" to c.optString("verifiedTechnicians","—"),"العملاء" to c.optString("clients","—")).forEach{body.addView(text(it.first+" : "+it.second,18f,true))}
@@ -235,7 +235,7 @@ class MainActivity : Activity() {
         val id=item.optString("_id",item.optString("id"))
         return when(section){
             "fannis"->buildList{
-                if(!item.optBoolean("isApproved"))add("اعتماد" to "approve")
+                if(!item.optBoolean("isApproved")){add("اعتماد" to "approve");add("رفض" to "reject")}
                 if(item.optBoolean("isDisabled"))add("إعادة تفعيل" to "enable") else add("تعطيل" to "disable")
                 add("تعديل الملف" to "profile");add("تغيير كلمة السر" to "password")
                 add("إضافة رصيد" to "addBalance");add("تسوية الرصيد" to "setBalance")
@@ -264,7 +264,7 @@ class MainActivity : Activity() {
             "approve"->mutate("/admin/fannis/$id/approve","POST",JSONObject())
             "approveEdit"->mutate("/admin/fanni-profile-edits/$id/approve","POST",JSONObject())
             "rejectEdit"->ask("سبب رفض التعديل","reason"){mutate("/admin/fanni-profile-edits/$id/reject","POST",JSONObject().put("reason",it))}
-            "disable"->ask("سبب تعطيل الفني","reason"){mutate("/admin/fannis/$id/disable","POST",JSONObject().put("reason",it))}
+            "reject"->ask("سبب رفض الفني","reason"){mutate("/admin/fannis/$id/reject","POST",JSONObject().put("reason",it))}\n            "disable"->ask("سبب تعطيل الفني","reason"){mutate("/admin/fannis/$id/disable","POST",JSONObject().put("reason",it))}
             "enable"->mutate("/admin/fannis/$id/enable","POST",JSONObject())
             "delete"->confirm("تأكيد حذف الفني؟"){mutate("/admin/fannis/$id","DELETE",null)}
             "deleteRegion"->confirm("حذف المنطقة من الاختيارات؟"){mutate("/admin/regions/$id","DELETE",null)}
