@@ -132,6 +132,11 @@ class MainActivity : ComponentActivity() {
             }
             TextButton(onClick = vm::logout) { Text("خروج", color = Color(0xFFB3261E)) }
         }
+        state.actionMessage?.let { message ->
+            Card(Modifier.fillMaxWidth().padding(horizontal=12.dp, vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFFEAF6F8))) {
+                Text(message, modifier=Modifier.padding(10.dp), color=DarkAccent, maxLines=5)
+            }
+        }
         Row(Modifier.fillMaxWidth().background(Color.White).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             AdminSection.entries.forEach { tab ->
                 TextButton(onClick = { if (tab == AdminSection.DASHBOARD) vm.refresh() else vm.open(tab) }) {
