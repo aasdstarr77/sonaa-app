@@ -160,7 +160,7 @@ class MainActivity : Activity() {
         root.addView(searchBox)
         val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
         controls.addView(button("تحديث"){loadSection()})
-        if(active=="support")controls.addView(button("بحث الدعم"){val q=searchBox.text.toString().trim();if(q.length<2)showMessage("اكتب كود الطلب أو رقم هاتف للبحث")else request("/admin/support/search?q=${enc(q)}","GET",token,null){d,e->if(e!=null)showMessage(e)else{allRows=extractArray(d?:JSONObject(),listOf("results","items","data"));renderRows()}}})
+        controls.addView(button("بحث الدعم"){if(active!="support"){showMessage("افتح قسم الدعم أولًا");return@button};val q=searchBox.text.toString().trim();if(q.length<2)showMessage("اكتب كود الطلب أو رقم هاتف للبحث")else request("/admin/support/search?q=${enc(q)}","GET",token,null){d,e->if(e!=null)showMessage(e)else{allRows=extractArray(d?:JSONObject(),listOf("results","orders","complaints","items","data"));renderRows()}}})
         controls.addView(button("إضافة عنصر"){createForActive()})
         root.addView(controls)
         body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
@@ -200,6 +200,12 @@ class MainActivity : Activity() {
     }
     private fun showReport(data:JSONObject) {
         body.removeAllViews()
+        val start=input("من تاريخ YYYY-MM-DD")
+        val end=input("إلى تاريخ YYYY-MM-DD")
+        val service=input("تصفية باسم الخدمة (اختياري)")
+        val area=input("تصفية بالمنطقة (اختياري)")
+        body.addView(start);body.addView(end);body.addView(service);body.addView(area)
+        body.addView(button("إنشاء التقرير"){request("/admin/reports","POST",token,JSONObject().put("startDate",start.text.toString()).put("endDate",end.text.toString()).put("service",service.text.toString()).put("area",area.text.toString())){d,e->if(e!=null)showMessage(e)else showReport(d?:JSONObject())}})
         val summary=data.optJSONObject("summary")?:JSONObject()
         val labels=listOf("إجمالي الطلبات" to "totalOrders","طلبات مكتملة" to "completedOrders","طلبات ملغاة" to "cancelledOrders","قيد المراجعة" to "pendingOrders","طلبات منشورة" to "publishedOrders","الفنيون المعتمدون" to "approvedTechnicians","العملاء النشطون" to "activeClients")
         labels.forEach{(label,key)->body.addView(text("$label: ${summary.optString(key, "—")}",17f,true))}
@@ -249,7 +255,7 @@ class MainActivity : Activity() {
         if(!canWrite(section))return emptyList()
         val id=item.optString("_id",item.optString("id"))
         return when(section){
-            "fannis"->buildList{
+            "fannis","pending","disabled","levels"->buildList{
                 if(!item.optBoolean("isApproved")){add("اعتماد" to "approve");add("رفض" to "reject")}
                 if(item.optBoolean("isDisabled"))add("إعادة تفعيل" to "enable") else add("تعطيل" to "disable")
                 add("تعديل الملف" to "profile");add("تغيير كلمة السر" to "password")
@@ -320,7 +326,7 @@ class MainActivity : Activity() {
             "toggle"->if(active=="regions")mutate("/admin/regions/$id","PATCH",JSONObject().put("isActive",!item.optBoolean("isActive",true))) else mutate("/admin/services/${enc(item.optString("name"))}/${if(item.optBoolean("isActive",true))"hide" else "show"}","POST",JSONObject())
             "review"->mutate("/admin/support/$sn/review","POST",JSONObject())
             "role"->ask("المنصب: مدير أو مشرف أول أو مشرف أو قراءة فقط","role"){mutate("/admin/admin-users/$id/role","PATCH",JSONObject().put("role",it))}
-            "permissions"->editPermissions(id)
+            "permissions"->editPermissions(id,item)
             "revoke"->confirm("سحب الصلاحية الإدارية؟"){mutate("/admin/admin-users/$id","DELETE",null)}
         }
     }
@@ -342,15 +348,32 @@ class MainActivity : Activity() {
         }.setNegativeButton("إغلاق",null).show()
     }
 
-    private fun editPermissions(id:String) {
+    private fun editPermissions(id:String,user:JSONObject) {
         val keys=listOf("dashboard","fannis","orders","publishOrders","voiceReview","passwordRecovery","complaints","services","clients","topups","wallet","pricing","settings","content","support","regions","offers","notifications","clientsData")
         val checks=mutableMapOf<String,Pair<CheckBox,CheckBox>>()
+        val role=user.optString("adminRole",if(user.optString("role")=="admin")"مشرف" else "")
+        val stored=user.optJSONObject("adminPermissions")?:JSONObject()
+        val writeDefaults=when(role){
+            "مدير"->keys.toSet()
+            "مشرف أول"->setOf("fannis","orders","complaints","services","clients","topups","wallet","support","regions","offers","notifications","clientsData")
+            "مشرف"->setOf("orders","complaints","support","offers")
+            else->emptySet()
+        }
+        val readDefaults=when(role){
+            "مدير","مشرف أول","قراءة فقط"->keys.toSet()
+            else->setOf("dashboard","fannis","orders","voiceReview","passwordRecovery","complaints","services","clients","topups","wallet","pricing","content","support","regions","offers","notifications","clientsData")
+        }
         val layout=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
         keys.forEach{k->
             val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             row.addView(text(k,12f,true),LinearLayout.LayoutParams(0,-2,1f))
-            val read=CheckBox(this).apply{text="قراءة"}
-            val write=CheckBox(this).apply{text="تنفيذ"}
+            val override=stored.optJSONObject(k)
+            val defaultRead=readDefaults.contains(k)||writeDefaults.contains(k)
+            val defaultWrite=writeDefaults.contains(k)
+            val readValue=override?.optBoolean("read") ?: defaultRead
+            val writeValue=override?.optBoolean("write") ?: defaultWrite
+            val read=CheckBox(this).apply{text="قراءة";isChecked=readValue}
+            val write=CheckBox(this).apply{text="تنفيذ";isChecked=writeValue}
             row.addView(read);row.addView(write);layout.addView(row);checks[k]=read to write
         }
         AlertDialog.Builder(this).setTitle("تخصيص الصلاحيات").setView(ScrollView(this).apply{addView(layout)})
