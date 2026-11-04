@@ -9,6 +9,7 @@ import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.widget.*
+import android.media.MediaPlayer
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -29,6 +30,8 @@ class MainActivity : Activity() {
     private var allRows = JSONArray()
     private var contentData = JSONObject()
     private val selectedRows = linkedMapOf<String,JSONObject>()
+    private var voicePlayer:MediaPlayer?=null
+    private val playedVoice=mutableSetOf<String>()
     private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
     private lateinit var status: TextView
@@ -253,6 +256,14 @@ class MainActivity : Activity() {
             val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
             actionLabels(active,item).forEach{pair->actions.addView(button(pair.first){performAction(pair.second,item)})}
             if(actions.childCount>0)card.addView(actions)
+            if(active=="orders" && item.optBoolean("hasVoiceRecording")) {
+                val sn=item.optString("sn")
+                card.addView(text(if(item.optString("voiceReviewedAt").isNotBlank())"تمت مراجعة التسجيل الصوتي" else "تسجيل صوتي — يجب الاستماع كاملًا قبل النشر",12f,true,teal))
+                card.addView(button("▶ استماع للتسجيل الصوتي"){playOrderVoice(sn)})
+                if(playedVoice.contains(sn) && item.optString("voiceReviewedAt").isBlank()) {
+                    card.addView(button("تأكيد الاستماع ومراجعة التسجيل"){markVoiceReviewed(sn)})
+                }
+            }
             card.addView(View(this).apply{setBackgroundColor(Color.LTGRAY);layoutParams=LinearLayout.LayoutParams(-1,1)})
             body.addView(card,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=10})
         }
@@ -317,7 +328,7 @@ class MainActivity : Activity() {
             "recoveryCode"->ask("ملاحظة أو سبب إصدار الكود","reason"){mutate("/password-recovery/admin/requests/$id/issue-code","POST",JSONObject().put("reason",it))}
             "recoveryReject"->ask("سبب رفض الطلب","reason"){mutate("/password-recovery/admin/requests/$id/reject","POST",JSONObject().put("reason",it))}
             "deleteNotification"->confirm("حذف الإشعار؟"){mutate("/admin/notifications/direct/$id","DELETE",null)}
-            "publish"->confirm("نشر الطلب ${sn} للفنيين؟"){mutate("/orders/admin/$sn/publish","POST",JSONObject())}
+            "publish"->{if(item.optBoolean("hasVoiceRecording")&&item.optString("voiceReviewedAt").isBlank()){showMessage("لازم تسمع التسجيل الصوتي كاملًا وتؤكد مراجعته قبل نشر الطلب");return};confirm("نشر الطلب ${sn} للفنيين؟"){mutate("/orders/admin/$sn/publish","POST",JSONObject())}}
             "cancel","archive"->ask("سبب الإجراء","reason"){mutate("/admin/orders/$sn/$action","POST",JSONObject().put("reason",it))}
             "deleteOrder"->confirm("حذف الطلب نهائيًا؟"){mutate("/admin/orders/$sn","DELETE",null)}
             "correct"->form("تصحيح الطلب",listOf("اسم العميل","رقم الهاتف","الخدمة","المنطقة","العنوان","وصف الطلب","الميزانية")){v->mutate("/admin/orders/$sn/correct","PATCH",JSONObject().put("clientName",v[0]).put("clientPhone",v[1]).put("service",v[2]).put("area",v[3]).put("address",v[4]).put("description",v[5]).put("budget",v[6]))}
@@ -339,7 +350,32 @@ class MainActivity : Activity() {
 
 
 
-    private fun showBulkActions() {
+
+    private fun canReviewVoice():Boolean {
+        if(profile.optString("adminRoleLabel")=="أدمن رئيسي")return true
+        return profile.optJSONObject("adminPermissions")?.optJSONObject("voiceReview")?.optBoolean("write")==true
+    }
+    private fun playOrderVoice(sn:String) {
+        if(!canReviewVoice()){showMessage("لا تملك صلاحية مراجعة التسجيلات الصوتية");return}
+        try {
+            voicePlayer?.release()
+            val player=MediaPlayer()
+            voicePlayer=player
+            player.setOnPreparedListener{it.start();showMessage("بدأ تشغيل التسجيل. يجب الاستماع حتى النهاية.")}
+            player.setOnCompletionListener{playedVoice.add(sn);renderRows();showMessage("انتهى التسجيل. يمكنك الآن تأكيد المراجعة.")}
+            player.setOnErrorListener{_,_,_->showMessage("تعذر تشغيل التسجيل الصوتي");true}
+            player.setDataSource("$api/orders/$sn/voice",mapOf("Authorization" to "Bearer $token"))
+            player.prepareAsync()
+        } catch(e:Exception) { showMessage(e.message ?: "تعذر تحميل التسجيل") }
+    }
+    private fun markVoiceReviewed(sn:String) {
+        if(!canReviewVoice()){showMessage("لا تملك صلاحية مراجعة التسجيلات الصوتية");return}
+        if(!playedVoice.contains(sn)){showMessage("شغّل التسجيل حتى نهايته أولًا");return}
+        request("/orders/admin/$sn/voice-reviewed","POST",token,JSONObject()){d,e->
+            if(e!=null)showMessage(e) else {playedVoice.remove(sn);showMessage(d?.optString("message","تم تأكيد المراجعة")?:"تم تأكيد المراجعة");loadSection()}
+        }
+    }
+\n    private fun showBulkActions() {
         val rows=selectedRows.filterKeys{it.startsWith("$active:")}.values.toList()
         if(rows.isEmpty()){showMessage("حدد عناصر أولًا");return}
         val actions=when(active){
@@ -501,5 +537,5 @@ class MainActivity : Activity() {
             runOnUiThread{done(result,error)}
         }
     }
-    override fun onDestroy(){super.onDestroy();executor.shutdown()}
+    override fun onDestroy(){voicePlayer?.release();voicePlayer=null;super.onDestroy();executor.shutdown()}
 }
