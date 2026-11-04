@@ -7,7 +7,7 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null)
+data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null,val editingProfile:JsonElement?=null,val editingProfileId:String?=null)
 class AdminViewModel(app:Application):AndroidViewModel(app){
  private val repo=AdminRepository(app)
  private val _state=MutableStateFlow(AdminUiState())
