@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     private var profile = JSONObject()
     private var active = "dashboard"
     private var currentFilter = "الكل"
+    private var offerFilter = "all"
     private var allRows = JSONArray()
     private var contentData = JSONObject()
     private val selectedRows = linkedMapOf<String,JSONObject>()
@@ -198,6 +199,10 @@ class MainActivity : Activity() {
         }
         if(section.id=="reports") {
             request("/admin/reports","POST",token,JSONObject()){d,e->if(e!=null)status.text=e else showReport(d?:JSONObject())}
+            return
+        }
+        if(section.id=="offers") {
+            request("/admin/orders?limit=500","GET",token,null){d,e->if(e!=null)status.text=e else showOffersNative(extractArray(d?:JSONObject(),listOf("orders","data","items")))}
             return
         }
         if(section.id=="wallets") {
@@ -467,6 +472,7 @@ class MainActivity : Activity() {
             "complaints"->arrayOf("وضع قيد المراجعة","حل الشكاوى المحددة","رفض الشكاوى المحددة")
             "orders"->arrayOf("نشر الطلبات المحددة","حذف الطلبات المحددة")
             "clients"->arrayOf("حذف حسابات العملاء المحددة")
+            "offers"->arrayOf("رفض العروض المحددة")
             "regions"->arrayOf("تعديل أسماء المناطق المحددة","إظهار المناطق المحددة","إخفاء المناطق المحددة","استعادة المناطق المحددة","حذف المناطق المحددة")
             "services"->arrayOf("إظهار الخدمات المحددة","إخفاء الخدمات المحددة","حذف الخدمات المحددة")
             else->arrayOf("لا توجد إجراءات جماعية لهذا القسم")
@@ -516,11 +522,58 @@ class MainActivity : Activity() {
             "complaints"->{path="/admin/complaints/$id";method="PATCH";payload=JSONObject().put("status",when(action){"وضع قيد المراجعة"->"قيد المراجعة";"حل الشكاوى المحددة"->"تم الحل";else->"مرفوضة"})}
             "orders"->{path=if(action=="نشر الطلبات المحددة")"/orders/admin/$sn/publish" else "/admin/orders/$sn";method=if(action=="نشر الطلبات المحددة")"POST" else "DELETE";payload=JSONObject()}
             "clients"->{path="/admin/clients/"+enc(phone)+"/account";method="DELETE";payload=null}
+            "offers"->{path="/admin/offers/"+enc(row.optString("orderSn"))+"/"+row.optInt("offerIndex")+"/reject";method="POST";payload=JSONObject().put("reason","مراجعة جماعية من تطبيق الإدارة")}
             "regions"->{path="/admin/regions/$id";method=if(action=="حذف المناطق المحددة")"DELETE" else "PATCH";payload=when(action){"إظهار المناطق المحددة"->JSONObject().put("isActive",true);"إخفاء المناطق المحددة"->JSONObject().put("isActive",false);"استعادة المناطق المحددة"->JSONObject().put("isDeleted",false).put("isActive",true);else->null}}
             "services"->{path=if(action=="حذف الخدمات المحددة")"/admin/services/$id" else "/admin/services/${enc(row.optString("name"))}/${if(action=="إظهار الخدمات المحددة")"show" else "hide"}";method=if(action=="حذف الخدمات المحددة")"DELETE" else "POST";payload=JSONObject()}
             else->{showMessage("الإجراء غير مدعوم");return}
         }
         request(path,method,token,payload){_,err->runBulkAction(action,rows,index+1,failed+(if(err==null)0 else 1))}
+    }
+
+
+    private fun showOffersNative(orders:JSONArray) {
+        body.removeAllViews()
+        body.addView(text("عروض الفنيين على الطلبات",18f,true))
+        body.addView(text("تصفية العروض ومراجعتها ورفضها أو إزالتها. التعيين الإداري متاح للأدمن الرئيسي فقط.",12f,false,Color.DKGRAY))
+        body.addView(button("تصفية العروض"){val opts=arrayOf("كل العروض","العروض المقبولة","غير المقبولة")
+            AlertDialog.Builder(this).setTitle("حالة العرض").setItems(opts){_,which->offerFilter=when(which){1->"accepted";2->"pending";else->"all"};showOffersNative(orders)}.show()
+        })
+        var shown=0
+        for(i in 0 until orders.length()){
+            val order=orders.optJSONObject(i)?:continue
+            val sn=order.optString("sn")
+            val offers=order.optJSONArray("offers")?:continue
+            for(j in 0 until offers.length()){
+                val offer=offers.optJSONObject(j)?:continue
+                val offerId=offer.optString("_id",offer.optString("id"))
+                val accepted=order.optString("acceptedOfferId")==offerId && offerId.isNotBlank()
+                if(offerFilter=="accepted"&&!accepted)continue
+                if(offerFilter=="pending"&&accepted)continue
+                shown++
+                val key="$active:$sn|$j"
+                val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,9,12,10);setBackgroundColor(white)}
+                card.addView(text("طلب $sn • "+order.optString("service",""),15f,true))
+                card.addView(text("الفني: "+offer.optString("fanniName","فني")+" • السعر: "+offer.optString("price","—")+" جنيه",13f,true))
+                card.addView(text("الحالة: "+if(accepted)"مقبول" else "غير مقبول",12f,false,if(accepted)teal else Color.DKGRAY))
+                card.addView(text(offer.optString("message",""),11f,false,Color.DKGRAY))
+                val check=CheckBox(this).apply{text="تحديد العرض";isChecked=selectedRows.containsKey(key);isEnabled=!accepted}
+                check.setOnCheckedChangeListener{_,checked->if(checked)selectedRows[key]=JSONObject().put("orderSn",sn).put("offerIndex",j).put("offerId",offerId) else selectedRows.remove(key)}
+                card.addView(check)
+                if(!accepted){
+                    val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
+                    actions.addView(button("رفض العرض"){ask("سبب رفض العرض","reason"){reason->mutate("/admin/offers/"+enc(sn)+"/"+j+"/reject","POST",JSONObject().put("reason",reason))}})
+                    actions.addView(button("إزالة العرض"){confirm("إزالة العرض نهائيًا؟"){mutate("/admin/offers/"+enc(sn)+"/"+j,"DELETE",null)}})
+                    if(profile.optString("adminRoleLabel")=="أدمن رئيسي")actions.addView(button("تعيين الفني"){ask("سبب التعيين الإداري","reason"){reason->
+                        if(reason.length<3){showMessage("سبب التعيين مطلوب من 3 أحرف");return@ask}
+                        mutate("/admin/orders/"+enc(sn)+"/assign","POST",JSONObject().put("offerId",offerId).put("reason",reason))
+                    }})
+                    card.addView(actions)
+                }
+                body.addView(card,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=8})
+            }
+        }
+        status.text="العروض المعروضة: $shown"
+        if(shown==0)body.addView(text("لا توجد عروض مطابقة للتصفية",13f))
     }
 
     private fun showOffers(sn:String,data:JSONObject) {
