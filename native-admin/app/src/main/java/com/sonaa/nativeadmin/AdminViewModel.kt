@@ -88,9 +88,12 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    try{
     when(section){
      AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->{
-      val method=if(action=="delete")"DELETE" else "POST"
-      val body=JsonObject().apply{if(action in listOf("reject","disable"))addProperty("reason",reason)}
-      repo.mutate(method,"api/admin/fannis/$raw"+if(action=="delete")"" else "/$action",body)
+      if(action=="freeze"||action=="unfreeze")repo.mutate("POST","api/admin/wallet/freeze/$raw",JsonObject().apply{addProperty("action",action);addProperty("reason",reason)})
+      else{
+       val method=if(action=="delete")"DELETE" else "POST"
+       val body=JsonObject().apply{if(action in listOf("reject","disable"))addProperty("reason",reason)}
+       repo.mutate(method,"api/admin/fannis/$raw"+if(action=="delete")"" else "/$action",body)
+      }
      }
      AdminSection.WALLETS->repo.mutate("POST","api/admin/wallet/freeze/$raw",JsonObject().apply{addProperty("action",action);addProperty("reason",reason)})
      AdminSection.TOPUPS->repo.mutate("POST","api/admin/topup-requests/$raw/$action",JsonObject().apply{if(action=="reject")addProperty("reason",reason)})
