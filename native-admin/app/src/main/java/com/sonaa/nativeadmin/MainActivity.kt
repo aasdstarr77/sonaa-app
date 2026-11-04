@@ -151,10 +151,50 @@ class MainActivity : ComponentActivity() {
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
+            state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
             else -> ListScreen(state.section, state.items, vm::retry) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
+@Composable private fun ConfigEditor(section:AdminSection,payload:JsonElement?,onSave:(String,String,JsonObject)->Unit){
+ val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
+ if(section==AdminSection.SETTINGS){
+  val p=root?.get("settings")?.takeIf{it.isJsonObject}?.asJsonObject
+  var name by remember(payload){mutableStateOf(p?.get("siteName")?.asString.orEmpty())}
+  var maintenance by remember(payload){mutableStateOf(p?.get("maintenance")?.asBoolean?:false)}
+  var message by remember(payload){mutableStateOf(p?.get("maintenanceMessage")?.asString.orEmpty())}
+  var attempts by remember(payload){mutableStateOf(p?.get("maxFanniSignupAttempts")?.toString().orEmpty())}
+  var wallet1 by remember(payload){mutableStateOf(p?.get("walletPhone1")?.asString.orEmpty())}
+  var wallet2 by remember(payload){mutableStateOf(p?.get("walletPhone2")?.asString.orEmpty())}
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+   Text("إعدادات المنصة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+   OutlinedTextField(name,{name=it},label={Text("اسم المنصة")},modifier=Modifier.fillMaxWidth())
+   Row(verticalAlignment=Alignment.CenterVertically){Text("وضع الصيانة",modifier=Modifier.weight(1f));Switch(maintenance,{maintenance=it})}
+   OutlinedTextField(message,{message=it},label={Text("رسالة الصيانة")},modifier=Modifier.fillMaxWidth(),minLines=2)
+   OutlinedTextField(attempts,{attempts=it},label={Text("حد محاولات تسجيل الفني")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
+   OutlinedTextField(wallet1,{wallet1=it},label={Text("رقم المحفظة الأول")},modifier=Modifier.fillMaxWidth())
+   OutlinedTextField(wallet2,{wallet2=it},label={Text("رقم المحفظة الثاني")},modifier=Modifier.fillMaxWidth())
+   Button(onClick={onSave("PUT","api/admin/settings",JsonObject().apply{addProperty("siteName",name.trim());addProperty("maintenance",maintenance);addProperty("maintenanceMessage",message.trim());addProperty("maxFanniSignupAttempts",attempts.toIntOrNull()?:0);addProperty("walletPhone1",wallet1.trim());addProperty("walletPhone2",wallet2.trim())})},modifier=Modifier.fillMaxWidth()){Text("حفظ الإعدادات")}
+  }
+ }else{
+  val p=root?.get("pricing")?.takeIf{it.isJsonObject}?.asJsonObject
+  var check by remember(payload){mutableStateOf(p?.get("check")?.toString().orEmpty())}
+  var commission by remember(payload){mutableStateOf(p?.get("commission")?.toString().orEmpty())}
+  var minimum by remember(payload){mutableStateOf(p?.get("minOffer")?.toString().orEmpty())}
+  var maximum by remember(payload){mutableStateOf(p?.get("maxOffer")?.toString().orEmpty())}
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+   Text("الأسعار والعمولات",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+   OutlinedTextField(check,{check=it},label={Text("رسوم الفرصة بالجنيه")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
+   OutlinedTextField(commission,{commission=it},label={Text("العمولة %")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
+   OutlinedTextField(minimum,{minimum=it},label={Text("أقل عرض")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
+   OutlinedTextField(maximum,{maximum=it},label={Text("أعلى عرض")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
+   Button(onClick={onSave("PUT","api/admin/pricing",JsonObject().apply{addProperty("check",check.toDoubleOrNull()?:0.0);addProperty("commission",commission.toDoubleOrNull()?:0.0);addProperty("minOffer",minimum.toIntOrNull()?:0);addProperty("maxOffer",maximum.toIntOrNull()?:0)})},modifier=Modifier.fillMaxWidth()){Text("حفظ الأسعار")}
+   Text("سجل تغييرات الأسعار",fontWeight=FontWeight.Bold,color=DarkAccent)
+   root?.get("history")?.takeIf{it.isJsonArray}?.asJsonArray?.take(20)?.forEach{Text(it.toString(),style=MaterialTheme.typography.bodySmall,color=Color.Gray)}
+  }
+ }
+}
+
 @Composable private fun Dashboard(stats: JsonElement?) {
     val root = stats?.takeIf { it.isJsonObject }?.asJsonObject
     val data = root?.get("counts")?.takeIf { it.isJsonObject }?.asJsonObject ?: root
