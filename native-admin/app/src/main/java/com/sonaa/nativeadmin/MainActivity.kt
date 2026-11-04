@@ -407,7 +407,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
  fun value(vararg keys:String):String?=keys.firstNotNullOfOrNull{k->o.get(k)?.takeIf{!it.isJsonNull}?.asString}
  val id=value("_id","id")?:return emptyList()
  val phone=value("phone","clientPhone")
- val sn=value("sn")
+ val sn=value("sn","target")
  return when(section){
   AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->listOf(
    RowAction("اعتماد","POST","api/admin/fannis/$id/approve"),
@@ -458,6 +458,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    actions.add(RowAction("حذف","DELETE","api/admin/orders/$sn"))
    actions
   }else emptyList()
+  AdminSection.SUPPORT->if(sn!=null)listOf(RowAction("وضع علامة مراجعة","POST","api/admin/support/$sn/review"))else emptyList()
   AdminSection.RECOVERY->listOf(
    RowAction("إرسال رد","POST","api/password-recovery/admin/requests/$id/reply",JsonObject(),"text","اكتب الرد للمستخدم"),
    RowAction("رفض الطلب","POST","api/password-recovery/admin/requests/$id/reject",JsonObject(),"reason","سبب الرفض")
