@@ -164,7 +164,7 @@ class MainActivity : ComponentActivity() {
             state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeClientProfile() }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -362,6 +362,49 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
  }
 }
 
+@Composable private fun RecoveryConversationScreen(payload:JsonElement,busy:Boolean,error:String?,message:String?,onClose:()->Unit,onAction:(String,String,JsonObject)->Unit){
+ val recovery=payload.asJsonObject.get("recovery")?.takeIf{it.isJsonObject}?.asJsonObject?:payload.asJsonObject
+ val id=recovery.get("id")?.asString.orEmpty()
+ val messages=recovery.get("messages")?.takeIf{it.isJsonArray}?.asJsonArray
+ var reply by remember(id){mutableStateOf("")}
+ var rejectReason by remember(id){mutableStateOf("تعذر التحقق من ملكية الحساب")}
+ var confirmIssue by remember(id){mutableStateOf(false)}
+ var rejectOpen by remember(id){mutableStateOf(false)}
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
+  Row(verticalAlignment=Alignment.CenterVertically){
+   Text("محادثة استعادة كلمة المرور",modifier=Modifier.weight(1f),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+   TextButton(onClick=onClose){Text("رجوع")}
+  }
+  Text("الاسم: "+(recovery.get("accountName")?.asString?: "—"))
+  Text("الهاتف: "+(recovery.get("phone")?.asString?: "—"))
+  Text("نوع الحساب: "+(recovery.get("ownerRole")?.asString?: "—"))
+  Text("الحالة: "+(recovery.get("status")?.asString?: "—"))
+  Text("الموضوع: "+(recovery.get("subject")?.asString?: "—"))
+  message?.let{Text(it,color=Color(0xFF087F55),fontWeight=FontWeight.Bold)}
+  error?.let{Text(it,color=Color(0xFFB3261E))}
+  Text("الرسائل",fontWeight=FontWeight.Bold,color=DarkAccent)
+  messages?.forEach{entry->
+   val msg=entry.asJsonObject
+   Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=if(msg.get("senderRole")?.asString=="admin")Color(0xFFEAF5F7) else Color.White)){
+    Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+     Text(if(msg.get("senderRole")?.asString=="admin")"الإدارة" else "المستخدم",fontWeight=FontWeight.Bold)
+     Text(msg.get("text")?.asString.orEmpty())
+     Text(msg.get("createdAt")?.toString().orEmpty(),style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+     val messageId=msg.get("id")?.asString.orEmpty()
+     if(messageId.isNotBlank())TextButton(onClick={onAction("DELETE","api/password-recovery/admin/requests/$id/messages/$messageId",JsonObject())}){Text("حذف الرسالة",color=Color(0xFFB3261E))}
+    }
+   }
+  }
+  OutlinedTextField(reply,{reply=it},label={Text("اكتب ردًا للمستخدم")},modifier=Modifier.fillMaxWidth(),minLines=2)
+  Button(onClick={onAction("POST","api/password-recovery/admin/requests/$id/reply",JsonObject().apply{addProperty("text",reply.trim())});reply=""},enabled=reply.trim().isNotEmpty()&&!busy,modifier=Modifier.fillMaxWidth()){Text("إرسال الرد")}
+  OutlinedButton(onClick={confirmIssue=true},enabled=!busy,modifier=Modifier.fillMaxWidth()){Text("إصدار رمز استعادة بعد التحقق")}
+  OutlinedButton(onClick={rejectOpen=true},enabled=!busy,modifier=Modifier.fillMaxWidth()){Text("رفض طلب الاستعادة")}
+  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+ }
+ if(confirmIssue)AlertDialog(onDismissRequest={confirmIssue=false},title={Text("تأكيد إصدار الرمز")},text={Text("تأكدت من هوية صاحب الحساب عبر المحادثة؟ الرمز صالح لمدة 10 دقائق وسيظهر مرة واحدة.")},confirmButton={TextButton(onClick={confirmIssue=false;onAction("POST","api/password-recovery/admin/requests/$id/issue-code",JsonObject())}){Text("إصدار الرمز")}},dismissButton={TextButton(onClick={confirmIssue=false}){Text("إلغاء")}})
+ if(rejectOpen)AlertDialog(onDismissRequest={rejectOpen=false},title={Text("رفض طلب الاستعادة")},text={OutlinedTextField(rejectReason,{rejectReason=it},label={Text("سبب الرفض")},minLines=2)},confirmButton={TextButton(onClick={rejectOpen=false;onAction("POST","api/password-recovery/admin/requests/$id/reject",JsonObject().apply{addProperty("reason",rejectReason.trim())})}){Text("تأكيد الرفض")}},dismissButton={TextButton(onClick={rejectOpen=false}){Text("إلغاء")}})
+}
+
 @Composable private fun PageVisitsScreen(payload:JsonElement?){
  val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
  val summary=root?.get("summary")?.takeIf{it.isJsonArray}?.asJsonArray
@@ -489,7 +532,7 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -666,6 +709,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         if(section==AdminSection.ROLES){
                             val adminId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
                             if(adminId.isNotBlank())OutlinedButton(onClick={editingPermissions=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تخصيص صلاحيات القراءة والتنفيذ")}
+                        }
+                        if(section==AdminSection.RECOVERY){
+                            val recoveryId=item.asJsonObject.get("id")?.asString?:item.asJsonObject.get("_id")?.asString.orEmpty()
+                            if(recoveryId.isNotBlank())OutlinedButton(onClick={onOpenRecovery(recoveryId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("فتح محادثة استعادة كلمة المرور")}
                         }
                         if(section==AdminSection.CLIENTS){
                             val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
