@@ -715,6 +715,12 @@ private data class RowAction(val label:String,val method:String,val path:String,
                             val recoveryId=item.asJsonObject.get("id")?.asString?:item.asJsonObject.get("_id")?.asString.orEmpty()
                             if(recoveryId.isNotBlank())OutlinedButton(onClick={onOpenRecovery(recoveryId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("فتح محادثة استعادة كلمة المرور")}
                         }
+                        if(section==AdminSection.LEVELS && item.isJsonObject){
+                            val level=item.asJsonObject.get("level")?.asString?: "مبتدئ"
+                            val badges=item.asJsonObject.get("badges")?.takeIf{it.isJsonArray}?.asJsonArray?.mapNotNull{it.takeIf{v->v.isJsonPrimitive}?.asString}.orEmpty()
+                            Text("المستوى الحالي: $level",fontWeight=FontWeight.SemiBold,color=DarkAccent,modifier=Modifier.padding(top=8.dp))
+                            Text("الشارات: "+if(badges.isEmpty())"لا توجد شارات" else badges.joinToString("، "),style=MaterialTheme.typography.bodySmall)
+                        }
                         if(section==AdminSection.CLIENTS){
                             val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
                             if(clientId.isNotBlank())OutlinedButton(onClick={onEditClient(clientId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات العميل")}
@@ -830,6 +836,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("حذف","DELETE","api/admin/regions/$id")
   )
   AdminSection.NOTIFICATIONS->listOf(RowAction("حذف الحملة","DELETE","api/admin/notifications/direct/$id"))
+  AdminSection.LEVELS->listOf(RowAction("تغيير المستوى","PATCH","api/admin/fannis/$id/level",JsonObject(),"level","المستوى: مبتدئ، ممارس، محترف، خبير مبتدئ، خبير، خبير أول، استشاري فني، نخبة، أسطوري","reason","سبب التغيير (اختياري)"),RowAction("إضافة شارة","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("action","add")},"badge","الشارة: trusted / top_rated / verified / fast_response / premium / gold"),RowAction("إزالة شارة","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("action","remove")},"badge","اسم الشارة المراد إزالتها"))
   AdminSection.ROLES->listOf(RowAction("تغيير دور المشرف","PATCH","api/admin/admin-users/$id/role",JsonObject(),"role","الدور: مشرف / مشرف أول / مدير / قراءة فقط"),RowAction("إلغاء صلاحية المشرف","DELETE","api/admin/admin-users/$id"))
   else->emptyList()
  }
