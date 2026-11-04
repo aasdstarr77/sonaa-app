@@ -483,6 +483,19 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         Text(primary(item), fontWeight = FontWeight.Bold, color = DarkAccent)
                         val detail = secondary(item)
                         if (detail.isNotBlank()) Text(detail, color = Color.DarkGray, modifier = Modifier.padding(top = 5.dp))
+                        if(section==AdminSection.OFFERS && item.isJsonObject){
+                            val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
+                            item.asJsonObject.get("offers")?.takeIf{it.isJsonArray}?.asJsonArray?.forEachIndexed{index,offer->
+                                Card(Modifier.fillMaxWidth().padding(top=6.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFF4F8FA))){
+                                    Column(Modifier.padding(10.dp)){
+                                        Text("العرض "+(index+1),fontWeight=FontWeight.Bold)
+                                        Text(offer.toString(),style=MaterialTheme.typography.bodySmall)
+                                        OutlinedButton(onClick={pending=RowAction("حذف العرض","DELETE","api/admin/offers/$orderSn/$index")},modifier=Modifier.fillMaxWidth()){Text("حذف العرض")}
+                                        OutlinedButton(onClick={pending=RowAction("رفض العرض","POST","api/admin/offers/$orderSn/$index/reject")},modifier=Modifier.fillMaxWidth()){Text("رفض العرض")}
+                                    }
+                                }
+                            }
+                        }
                         if(section==AdminSection.CLIENTS){
                             val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
                             if(clientId.isNotBlank())OutlinedButton(onClick={onEditClient(clientId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات العميل")}
