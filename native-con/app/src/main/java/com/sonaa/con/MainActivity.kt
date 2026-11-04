@@ -173,7 +173,9 @@ class MainActivity : Activity() {
         controls.addView(button("فلترة الحالة"){showStatusFilters()})
         controls.addView(button("إجراءات المحدد"){showBulkActions()})
         controls.addView(button("بحث الدعم"){if(active!="support"){showMessage("افتح قسم الدعم أولًا");return@button};val q=searchBox.text.toString().trim();if(q.length<2)showMessage("اكتب كود الطلب أو رقم هاتف للبحث")else request("/admin/support/search?q=${enc(q)}","GET",token,null){d,e->if(e!=null)showMessage(e)else{allRows=extractArray(d?:JSONObject(),listOf("results","orders","complaints","items","data"));renderRows()}}})
-        controls.addView(button("إضافة عنصر"){createForActive()})
+        val addButton=button("إضافة عنصر"){createForActive()}
+        addButton.visibility=if(active in setOf("regions","services","notifications","roles"))View.VISIBLE else View.GONE
+        controls.addView(addButton)
         root.addView(controls)
         body=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         root.addView(body)
@@ -183,6 +185,7 @@ class MainActivity : Activity() {
     private fun loadSection() {
         currentFilter="الكل"
         val section=sections.firstOrNull{it.id==active} ?: sections[0]
+        if(::searchBox.isInitialized)searchBox.visibility=if(active in setOf("stats","reports","offers","wallets","services","content","pricing","settings","pageVisits"))View.GONE else View.VISIBLE
         status.text="جاري تحميل ${section.label}..."
         if(section.id=="stats") {
             request("/admin/counts","GET",token,null){counts,err->
