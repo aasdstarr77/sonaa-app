@@ -270,6 +270,10 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("أرشفة","POST","api/admin/orders/$sn/archive"),
    RowAction("حذف","DELETE","api/admin/orders/$sn")
   )else emptyList()
+  AdminSection.RECOVERY->listOf(
+   RowAction("إرسال رد","POST","api/password-recovery/admin/requests/$id/reply",JsonObject(),"text","اكتب الرد للمستخدم"),
+   RowAction("رفض الطلب","POST","api/password-recovery/admin/requests/$id/reject",JsonObject(),"reason","سبب الرفض")
+  )
   AdminSection.COMPLAINTS->listOf(
    RowAction("قيد المراجعة","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","قيد المراجعة")}),
    RowAction("حل الشكوى","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","تم الحل")}),
