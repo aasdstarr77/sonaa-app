@@ -270,6 +270,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var dateFilter by remember(section) { mutableStateOf("") }
     var pending by remember { mutableStateOf<RowAction?>(null) }
     var actionInput by remember { mutableStateOf("") }
+    var createOpen by remember(section){mutableStateOf(false)}
+    var createName by remember(section){mutableStateOf("")}
+    var createCategory by remember(section){mutableStateOf("خدمات أخرى")}
+    var createEmoji by remember(section){mutableStateOf("🔧")}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
             val raw = item.toString()
@@ -283,6 +287,26 @@ private data class RowAction(val label:String,val method:String,val path:String,
             (dateFilter.isBlank() || date.contains(dateFilter.trim(), true))
         }
     }
+    if(createOpen) AlertDialog(
+        onDismissRequest={createOpen=false},
+        title={Text(if(section==AdminSection.SERVICES)"إضافة خدمة" else "إضافة منطقة")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            OutlinedTextField(createName,{createName=it},label={Text(if(section==AdminSection.SERVICES)"اسم الخدمة" else "اسم المنطقة")},singleLine=true)
+            if(section==AdminSection.SERVICES){
+                OutlinedTextField(createCategory,{createCategory=it},label={Text("القسم")},singleLine=true)
+                OutlinedTextField(createEmoji,{createEmoji=it},label={Text("الأيقونة")},singleLine=true)
+            }
+        }},
+        confirmButton={TextButton(onClick={
+            val body=JsonObject().apply{
+                if(section==AdminSection.SERVICES){addProperty("name",createName.trim());addProperty("category",createCategory.trim());addProperty("emoji",createEmoji.trim());addProperty("sortOrder",0)}
+                else addProperty("name",createName.trim())
+            }
+            val path=if(section==AdminSection.SERVICES)"api/admin/services" else "api/admin/regions"
+            createOpen=false;onAction("POST",path,body);createName=""
+        },enabled=createName.trim().length>=2){Text("إضافة")}},
+        dismissButton={TextButton(onClick={createOpen=false}){Text("إلغاء")}}
+    )
     if(pending!=null) AlertDialog(
         onDismissRequest={pending=null},
         title={Text("تأكيد الإجراء")},
@@ -292,6 +316,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     )
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
+        if(section==AdminSection.SERVICES||section==AdminSection.REGIONS) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
             OutlinedTextField(statusFilter,{statusFilter=it},modifier=Modifier.width(145.dp),label={Text("فلتر الحالة")},singleLine=true)
             OutlinedTextField(regionFilter,{regionFilter=it},modifier=Modifier.width(145.dp),label={Text("المنطقة")},singleLine=true)
