@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
-            state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
+            state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
             else -> ListScreen(state.section, state.items, vm::retry) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
