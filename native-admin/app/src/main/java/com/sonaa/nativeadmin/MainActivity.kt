@@ -278,6 +278,13 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var createName by remember(section){mutableStateOf("")}
     var createCategory by remember(section){mutableStateOf("خدمات أخرى")}
     var createEmoji by remember(section){mutableStateOf("🔧")}
+    var notifyOpen by remember(section){mutableStateOf(false)}
+    var notifyTitle by remember(section){mutableStateOf("")}
+    var notifyMessage by remember(section){mutableStateOf("")}
+    var notifyRole by remember(section){mutableStateOf("fanni")}
+    var notifyMode by remember(section){mutableStateOf("single")}
+    var notifyPhone by remember(section){mutableStateOf("")}
+    var notifyAudience by remember(section){mutableStateOf("all")}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
             val raw = item.toString()
@@ -291,6 +298,23 @@ private data class RowAction(val label:String,val method:String,val path:String,
             (dateFilter.isBlank() || date.contains(dateFilter.trim(), true))
         }
     }
+    if(notifyOpen) AlertDialog(
+        onDismissRequest={notifyOpen=false},
+        title={Text("إرسال إشعار مباشر")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            OutlinedTextField(notifyTitle,{notifyTitle=it},label={Text("عنوان الإشعار")},singleLine=true)
+            OutlinedTextField(notifyMessage,{notifyMessage=it},label={Text("نص الإشعار")},minLines=2)
+            OutlinedTextField(notifyRole,{notifyRole=it},label={Text("نوع الحساب: fanni أو client")},singleLine=true)
+            OutlinedTextField(notifyMode,{notifyMode=it},label={Text("النوع: single أو group")},singleLine=true)
+            if(notifyMode=="single")OutlinedTextField(notifyPhone,{notifyPhone=it},label={Text("رقم هاتف المستلم")},singleLine=true)
+            else OutlinedTextField(notifyAudience,{notifyAudience=it},label={Text("الفئة: all / approved / active / disabled")},singleLine=true)
+        }},
+        confirmButton={TextButton(onClick={
+            val body=JsonObject().apply{addProperty("title",notifyTitle.trim());addProperty("message",notifyMessage.trim());addProperty("recipientRole",notifyRole.trim());addProperty("recipientMode",notifyMode.trim());if(notifyMode=="single")addProperty("phone",notifyPhone.trim())else addProperty("audience",notifyAudience.trim())}
+            notifyOpen=false;onAction("POST","api/admin/notifications/direct",body)
+        },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")){Text("إرسال")}},
+        dismissButton={TextButton(onClick={notifyOpen=false}){Text("إلغاء")}}
+    )
     if(createOpen) AlertDialog(
         onDismissRequest={createOpen=false},
         title={Text(if(section==AdminSection.SERVICES)"إضافة خدمة" else "إضافة منطقة")},
@@ -321,6 +345,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
         if(section==AdminSection.SERVICES||section==AdminSection.REGIONS) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
+        if(section==AdminSection.NOTIFICATIONS) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
             OutlinedTextField(statusFilter,{statusFilter=it},modifier=Modifier.width(145.dp),label={Text("فلتر الحالة")},singleLine=true)
             OutlinedTextField(regionFilter,{regionFilter=it},modifier=Modifier.width(145.dp),label={Text("المنطقة")},singleLine=true)
