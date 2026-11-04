@@ -243,7 +243,9 @@ class MainActivity : Activity() {
             "regions"->listOf("إظهار/إخفاء" to "toggle","حذف" to "deleteRegion")
             "services"->listOf("إخفاء" to "hideService","إظهار" to "showService","حذف" to "deleteService")
             "profileEdits"->listOf("اعتماد التعديل" to "approveEdit","رفض التعديل" to "rejectEdit")
-            "support"->listOf("تمت المراجعة" to "review")\n            "wallets"->listOf("إضافة رصيد" to "addBalance","تسوية الرصيد" to "setBalance","تجميد المحفظة" to "freeze","حركات المحفظة" to "transactions")\n            "offers"->listOf("مراجعة العروض" to "offers")
+            "support"->listOf("تمت المراجعة" to "review")
+            "wallets"->listOf("إضافة رصيد" to "addBalance","تسوية الرصيد" to "setBalance","تجميد المحفظة" to "freeze","حركات المحفظة" to "transactions")
+            "offers"->listOf("مراجعة العروض" to "offers")
             "roles"->listOf("تغيير المنصب" to "role","تخصيص الصلاحيات" to "permissions","سحب الصلاحية" to "revoke")
             else->emptyList()
         }
@@ -252,18 +254,33 @@ class MainActivity : Activity() {
         val id=item.optString("_id",item.optString("id"))
         val sn=item.optString("sn")
         when(action){
-            "approve"->mutate("/admin/fannis/$id/approve","POST",JSONObject())\n            "approveEdit"->mutate("/admin/fanni-profile-edits/$id/approve","POST",JSONObject())\n            "rejectEdit"->ask("سبب رفض التعديل","reason"){mutate("/admin/fanni-profile-edits/$id/reject","POST",JSONObject().put("reason",it))}
+            "approve"->mutate("/admin/fannis/$id/approve","POST",JSONObject())
+            "approveEdit"->mutate("/admin/fanni-profile-edits/$id/approve","POST",JSONObject())
+            "rejectEdit"->ask("سبب رفض التعديل","reason"){mutate("/admin/fanni-profile-edits/$id/reject","POST",JSONObject().put("reason",it))}
             "disable"->ask("سبب تعطيل الفني","reason"){mutate("/admin/fannis/$id/disable","POST",JSONObject().put("reason",it))}
             "enable"->mutate("/admin/fannis/$id/enable","POST",JSONObject())
-            "delete"->confirm("تأكيد حذف الفني؟"){mutate("/admin/fannis/$id","DELETE",null)}\n            "deleteRegion"->confirm("حذف المنطقة من الاختيارات؟"){mutate("/admin/regions/$id","DELETE",null)}\n            "deleteService"->confirm("حذف الخدمة؟"){mutate("/admin/services/$id","DELETE",null)}\n            "hideService","showService"->mutate("/admin/services/${enc(item.optString("name"))}/${if(action=="hideService")"hide" else "show"}","POST",JSONObject())\n            "unblock"->mutate("/admin/clients/${enc(item.optString("phone"))}/unblock","POST",JSONObject())\n            "deleteClient"->confirm("حذف حساب العميل؟"){mutate("/admin/clients/${enc(item.optString("phone"))}/account","DELETE",null)}
+            "delete"->confirm("تأكيد حذف الفني؟"){mutate("/admin/fannis/$id","DELETE",null)}
+            "deleteRegion"->confirm("حذف المنطقة من الاختيارات؟"){mutate("/admin/regions/$id","DELETE",null)}
+            "deleteService"->confirm("حذف الخدمة؟"){mutate("/admin/services/$id","DELETE",null)}
+            "hideService","showService"->mutate("/admin/services/${enc(item.optString("name"))}/${if(action=="hideService")"hide" else "show"}","POST",JSONObject())
+            "unblock"->mutate("/admin/clients/${enc(item.optString("phone"))}/unblock","POST",JSONObject())
+            "deleteClient"->confirm("حذف حساب العميل؟"){mutate("/admin/clients/${enc(item.optString("phone"))}/account","DELETE",null)}
             "password"->form("تغيير كلمة السر",listOf("كلمة السر الجديدة","تأكيد كلمة السر")){v->mutate("/admin/fannis/$id/password","PATCH",JSONObject().put("newPassword",v[0]).put("confirmPassword",v[1]))}
             "profile"->form("تعديل بيانات الفني",listOf("رقم الهاتف","التخصصات مفصولة بفاصلة","المناطق مفصولة بفاصلة")){v->mutate("/admin/fannis/$id/profile","PATCH",JSONObject().put("phone",v[0]).put("specialties",JSONArray(v[1].split(",").map{it.trim()}.filter{it.isNotBlank()})).put("areas",JSONArray(v[2].split(",").map{it.trim()}.filter{it.isNotBlank()})))}
             "addBalance","setBalance"->form("قيمة المحفظة",listOf("المبلغ","السبب")){v->mutate("/admin/fannis/$id/${if(action=="addBalance")"add-balance" else "set-balance"}","POST",JSONObject().put("amount",v[0].toDoubleOrNull()?:0).put("reason",v[1]))}
-            "freeze"->ask("سبب التجميد (اكتب unfreeze لإلغاء التجميد)","reason"){v->mutate("/admin/wallet/freeze/$id","POST",JSONObject().put("action",if(v=="unfreeze")"unfreeze" else "freeze").put("reason",v))}\n            "level"->ask("المستوى المهني","level"){mutate("/admin/fannis/$id/level","PATCH",JSONObject().put("level",it))}\n            "badge"->ask("نوع الشارة (trusted لإضافة موثوق / none للإزالة)","badge"){mutate("/admin/fannis/$id/badge","PATCH",JSONObject().put("badge",it))}\n            "fanniNote"->ask("الملاحظة الداخلية","note"){mutate("/admin/fannis/$id/note","PATCH",JSONObject().put("note",it))}\n            "limit"->ask("الحد الأقصى للعروض","limit"){mutate("/admin/fannis/$id/limit","PATCH",JSONObject().put("limit",it.toIntOrNull()?:0))}\n            "controls"->form("ضوابط حساب الفني",listOf("السماح باستقبال الطلبات (true/false)","سبب التعديل")){v->mutate("/admin/fannis/$id/profile-controls","PATCH",JSONObject().put("isAvailable",v[0].toBoolean()).put("reason",v[1]))}\n            "transactions"->request("/admin/wallet/transactions/$id","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}
+            "freeze"->ask("سبب التجميد (اكتب unfreeze لإلغاء التجميد)","reason"){v->mutate("/admin/wallet/freeze/$id","POST",JSONObject().put("action",if(v=="unfreeze")"unfreeze" else "freeze").put("reason",v))}
+            "level"->ask("المستوى المهني","level"){mutate("/admin/fannis/$id/level","PATCH",JSONObject().put("level",it))}
+            "badge"->ask("نوع الشارة (trusted لإضافة موثوق / none للإزالة)","badge"){mutate("/admin/fannis/$id/badge","PATCH",JSONObject().put("badge",it))}
+            "fanniNote"->ask("الملاحظة الداخلية","note"){mutate("/admin/fannis/$id/note","PATCH",JSONObject().put("note",it))}
+            "limit"->ask("الحد الأقصى للعروض","limit"){mutate("/admin/fannis/$id/limit","PATCH",JSONObject().put("limit",it.toIntOrNull()?:0))}
+            "controls"->form("ضوابط حساب الفني",listOf("السماح باستقبال الطلبات (true/false)","سبب التعديل")){v->mutate("/admin/fannis/$id/profile-controls","PATCH",JSONObject().put("isAvailable",v[0].toBoolean()).put("reason",v[1]))}
+            "transactions"->request("/admin/wallet/transactions/$id","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}
             "publish"->confirm("نشر الطلب ${sn} للفنيين؟"){mutate("/orders/admin/$sn/publish","POST",JSONObject())}
             "cancel","archive"->ask("سبب الإجراء","reason"){mutate("/admin/orders/$sn/$action","POST",JSONObject().put("reason",it))}
-            "deleteOrder"->confirm("حذف الطلب نهائيًا؟"){mutate("/admin/orders/$sn","DELETE",null)}\n            "correct"->form("تصحيح الطلب",listOf("اسم العميل","رقم الهاتف","الخدمة","المنطقة","العنوان","وصف الطلب","الميزانية")){v->mutate("/admin/orders/$sn/correct","PATCH",JSONObject().put("clientName",v[0]).put("clientPhone",v[1]).put("service",v[2]).put("area",v[3]).put("address",v[4]).put("description",v[5]).put("budget",v[6]))}
-            "offers"->request("/admin/orders/$sn/offers","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}\n            "assign"->ask("معرّف العرض Offer ID","offerId"){offerId->ask("سبب التعيين الإداري","reason"){reason->mutate("/admin/orders/$sn/assign","POST",JSONObject().put("offerId",offerId).put("reason",reason))}}
+            "deleteOrder"->confirm("حذف الطلب نهائيًا؟"){mutate("/admin/orders/$sn","DELETE",null)}
+            "correct"->form("تصحيح الطلب",listOf("اسم العميل","رقم الهاتف","الخدمة","المنطقة","العنوان","وصف الطلب","الميزانية")){v->mutate("/admin/orders/$sn/correct","PATCH",JSONObject().put("clientName",v[0]).put("clientPhone",v[1]).put("service",v[2]).put("area",v[3]).put("address",v[4]).put("description",v[5]).put("budget",v[6]))}
+            "offers"->request("/admin/orders/$sn/offers","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}
+            "assign"->ask("معرّف العرض Offer ID","offerId"){offerId->ask("سبب التعيين الإداري","reason"){reason->mutate("/admin/orders/$sn/assign","POST",JSONObject().put("offerId",offerId).put("reason",reason))}}
             "approveTopup","rejectTopup"->mutate("/admin/topup-requests/$id/${if(action=="approveTopup")"approve" else "reject"}","POST",JSONObject())
             "complaint"->form("تحديث الشكوى",listOf("الحالة (جديدة / قيد المراجعة / تم الحل / مرفوضة)","ملاحظة الإدارة","الرد على العميل")){v->mutate("/admin/complaints/$id","PATCH",JSONObject().put("status",v[0]).put("adminNote",v[1]).put("adminResponse",v[2]))}
             "block"->ask("سبب حظر العميل","reason"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/block","POST",JSONObject().put("reason",v))}
