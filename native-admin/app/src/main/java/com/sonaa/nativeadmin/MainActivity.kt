@@ -744,7 +744,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         }
                         if(section==AdminSection.ROLES){
                             val adminId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
-                            if(adminId.isNotBlank())OutlinedButton(onClick={editingPermissions=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تخصيص صلاحيات القراءة والتنفيذ")}
+                            if(adminId.isNotBlank()&&item.asJsonObject.get("isRootAdmin")?.asBoolean!=true)OutlinedButton(onClick={editingPermissions=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تخصيص صلاحيات القراءة والتنفيذ")}
                         }
                         if(section==AdminSection.RECOVERY){
                             val recoveryId=item.asJsonObject.get("id")?.asString?:item.asJsonObject.get("_id")?.asString.orEmpty()
@@ -874,7 +874,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
   )
   AdminSection.NOTIFICATIONS->listOf(RowAction("حذف الحملة","DELETE","api/admin/notifications/direct/$id"))
   AdminSection.LEVELS->listOf(RowAction("تغيير المستوى","PATCH","api/admin/fannis/$id/level",JsonObject(),"level","المستوى: مبتدئ، ممارس، محترف، خبير مبتدئ، خبير، خبير أول، استشاري فني، نخبة، أسطوري","reason","سبب التغيير (اختياري)"),RowAction("إضافة شارة","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("action","add")},"badge","الشارة: trusted / top_rated / verified / fast_response / premium / gold"),RowAction("إزالة شارة","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("action","remove")},"badge","اسم الشارة المراد إزالتها"))
-  AdminSection.ROLES->listOf(RowAction("تغيير دور المشرف","PATCH","api/admin/admin-users/$id/role",JsonObject(),"role","الدور: مشرف / مشرف أول / مدير / قراءة فقط"),RowAction("إلغاء صلاحية المشرف","DELETE","api/admin/admin-users/$id"))
+  AdminSection.ROLES->if(o.get("isRootAdmin")?.asBoolean==true)emptyList() else listOf(RowAction("تغيير دور المشرف","PATCH","api/admin/admin-users/$id/role",JsonObject(),"role","الدور: مشرف / مشرف أول / مدير / قراءة فقط"),RowAction("إلغاء صلاحية المشرف","DELETE","api/admin/admin-users/$id"))
   else->emptyList()
  }
 }
