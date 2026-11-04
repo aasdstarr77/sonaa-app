@@ -7,7 +7,7 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null)
+data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null)
 class AdminViewModel(app:Application):AndroidViewModel(app){
  private val repo=AdminRepository(app)
  private val _state=MutableStateFlow(AdminUiState())
@@ -30,6 +30,7 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
   try{val result=repo.mutate(method,path,body);_state.value=_state.value.copy(busy=false,actionMessage=result.toString());load(_state.value.section,true)}
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تنفيذ العملية")}
  }
+ fun loadVoice(sn:String)=viewModelScope.launch{_state.value=_state.value.copy(busy=true,error=null);try{val file=repo.downloadVoice(sn);_state.value=_state.value.copy(busy=false,voicePath=file.absolutePath)}catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل التسجيل الصوتي")}}
  fun retry(){load(_state.value.section)}
  fun logout()=viewModelScope.launch{repo.logout();_state.value=AdminUiState(checking=false)}
  fun registerFcm(token:String)=viewModelScope.launch{runCatching{repo.registerFcm(token)}}
