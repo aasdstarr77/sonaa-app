@@ -78,6 +78,43 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    _state.value=_state.value.copy(busy=false,items=rows,payload=data)
   }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر البحث في أدوات الدعم")}
  }
+ fun bulkAction(section:AdminSection,ids:List<String>,action:String,reason:String="إجراء جماعي موثق من تطبيق الإدارة")=viewModelScope.launch{
+  if(ids.isEmpty())return@launch
+  _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
+  var succeeded=0
+  var failed=0
+  val errors=mutableListOf<String>()
+  for(raw in ids.distinct()){
+   try{
+    when(section){
+     AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->{
+      val method=if(action=="delete")"DELETE" else "POST"
+      val body=JsonObject().apply{if(action in listOf("reject","disable"))addProperty("reason",reason)}
+      repo.mutate(method,"api/admin/fannis/$raw"+if(action=="delete")"" else "/$action",body)
+     }
+     AdminSection.WALLETS->repo.mutate("POST","api/admin/wallet/freeze/$raw",JsonObject().apply{addProperty("action",action);addProperty("reason",reason)})
+     AdminSection.TOPUPS->repo.mutate("POST","api/admin/topup-requests/$raw/$action",JsonObject().apply{if(action=="reject")addProperty("reason",reason)})
+     AdminSection.CLIENTS->repo.mutate("DELETE","api/admin/clients/$raw/account")
+     AdminSection.COMPLAINTS->repo.mutate("PATCH","api/admin/complaints/$raw",JsonObject().apply{addProperty("status",action)})
+     AdminSection.OFFERS->{
+      val parts=raw.split("|")
+      if(parts.size!=2)error("معرّف العرض غير صالح")
+      repo.mutate("POST","api/admin/offers/"+parts[0]+"/"+parts[1]+"/reject",JsonObject().apply{addProperty("reason",reason)})
+     }
+     AdminSection.REGIONS->when(action){
+      "delete"->repo.mutate("DELETE","api/admin/regions/$raw")
+      "restore"->repo.mutate("PATCH","api/admin/regions/$raw",JsonObject().apply{addProperty("isDeleted",false)})
+      "activate"->repo.mutate("PATCH","api/admin/regions/$raw",JsonObject().apply{addProperty("isActive",true)})
+      else->repo.mutate("PATCH","api/admin/regions/$raw",JsonObject().apply{addProperty("isActive",false)})
+     }
+     else->error("الإجراء الجماعي غير متاح لهذا القسم")
+    }
+    succeeded++
+   }catch(e:Exception){failed++;if(errors.size<3)errors.add(raw+": "+(e.message?: "تعذر التنفيذ"))}
+  }
+  _state.value=_state.value.copy(busy=false,actionMessage="نجح $succeeded — تعذر $failed"+if(errors.isEmpty())"" else " — "+errors.joinToString(" | "))
+  load(_state.value.section,true)
+ }
  fun bulkPublish(sns:List<String>)=viewModelScope.launch{
   if(sns.isEmpty())return@launch
   _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
