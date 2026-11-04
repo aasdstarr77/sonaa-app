@@ -188,6 +188,73 @@ class MainActivity : ComponentActivity() {
  }
 }
 
+private val permissionSections=listOf(
+ "dashboard" to "الرئيسية والإحصائيات","fannis" to "الفنيون","orders" to "الطلبات",
+ "publishOrders" to "نشر الطلبات","voiceReview" to "مراجعة التسجيلات الصوتية",
+ "passwordRecovery" to "استعادة كلمة المرور","complaints" to "الشكاوى","services" to "الخدمات",
+ "clients" to "العملاء","topups" to "طلبات شحن المحافظ","wallet" to "المحافظ والأرصدة",
+ "pricing" to "الأسعار والعمولات","settings" to "إعدادات المنصة","content" to "الإعلانات والمحتوى",
+ "support" to "الدعم","regions" to "المناطق","offers" to "العروض",
+ "notifications" to "الإشعارات","clientsData" to "بيانات العملاء"
+)
+private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean>>{
+ val obj=item.asJsonObject
+ val role=obj.get("adminRole")?.takeIf{!it.isJsonNull}?.asString?:if(obj.get("role")?.asString=="admin")"مشرف" else "قراءة فقط"
+ val all=permissionSections.map{it.first}.toSet()
+ val writes=when(role){
+  "مشرف"->setOf("orders","complaints","support","offers")
+  "مشرف أول"->setOf("fannis","orders","complaints","services","clients","topups","wallet","support","regions","offers","notifications","clientsData")
+  "مدير"->all
+  else->emptySet()
+ }
+ val reads=when(role){
+  "قراءة فقط"->all
+  "مدير","مشرف أول"->all
+  else->setOf("dashboard","fannis","orders","voiceReview","passwordRecovery","complaints","services","clients","topups","wallet","pricing","content","support","regions","offers","notifications","clientsData")
+ }
+ val out=permissionSections.associate{(key,_)->key to ((key in reads||key in writes) to (key in writes))}.toMutableMap()
+ val stored=obj.get("adminPermissions")?.takeIf{it.isJsonObject}?.asJsonObject
+ if(stored?.get("__customOverrides")?.asBoolean==true){
+  permissionSections.forEach{(key,_)->stored.get(key)?.takeIf{it.isJsonObject}?.asJsonObject?.let{delta->
+   val base=out[key]?: (false to false)
+   val read=delta.get("read")?.asBoolean?:base.first
+   val write=delta.get("write")?.asBoolean?:base.second
+   out[key]=(read||write) to write
+  }}
+ }
+ return out
+}
+@Composable private fun AdminPermissionsDialog(item:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
+ var permissions by remember(item){mutableStateOf(permissionDefaults(item))}
+ val role=item.asJsonObject.get("adminRole")?.takeIf{!it.isJsonNull}?.asString?: "مشرف"
+ AlertDialog(onDismissRequest=onDismiss,title={Text("صلاحيات المشرف: "+(item.asJsonObject.get("name")?.asString?: "—"))},
+  text={Column(Modifier.heightIn(max=520.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(5.dp)){
+   Text("المنصب الحالي: $role",fontWeight=FontWeight.Bold,color=DarkAccent)
+   Text("التنفيذ يمنح القراءة تلقائيًا. الخادم يطبق الصلاحيات على كل طلب.",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+   permissionSections.forEach{(key,label)->
+    val current=permissions[key]?: (false to false)
+    Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFFF4F8FA))){
+     Column(Modifier.padding(horizontal=10.dp,vertical=5.dp)){
+      Text(label,fontWeight=FontWeight.SemiBold)
+      Row(verticalAlignment=Alignment.CenterVertically){
+       Text("قراءة",modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodySmall)
+       Switch(checked=current.first,onCheckedChange={v->permissions=permissions.toMutableMap().apply{put(key,(v||current.second) to current.second)}})
+       Spacer(Modifier.width(12.dp))
+       Text("تنفيذ",style=MaterialTheme.typography.bodySmall)
+       Switch(checked=current.second,onCheckedChange={v->permissions=permissions.toMutableMap().apply{put(key,(current.first||v) to v)}})
+      }
+     }
+    }
+   }
+  }},
+  confirmButton={TextButton(onClick={
+   val body=JsonObject().apply{add("permissions",JsonObject().apply{permissionSections.forEach{(key,_)->val p=permissions[key]?: (false to false);add(key,JsonObject().apply{addProperty("read",p.first||p.second);addProperty("write",p.second)})}})}
+   onSave(body)
+  }){Text("حفظ الصلاحيات")}},
+  dismissButton={TextButton(onClick=onDismiss){Text("إلغاء")}}
+ )
+}
+
 @Composable private fun FanniControlsDialog(item:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
  val f=item.asJsonObject
  var trust by remember(item){mutableStateOf(f.get("trustScore")?.toString().orEmpty())}
@@ -448,6 +515,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
     var advancedFanni by remember{mutableStateOf<JsonElement?>(null)}
     var limitFanni by remember{mutableStateOf<JsonElement?>(null)}
+    var editingPermissions by remember{mutableStateOf<JsonElement?>(null)}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
             val raw = item.toString()
@@ -461,6 +529,11 @@ private data class RowAction(val label:String,val method:String,val path:String,
             (dateFilter.isBlank() || date.contains(dateFilter.trim(), true))
         }
     }
+    editingPermissions?.let{admin->AdminPermissionsDialog(admin,{editingPermissions=null}){body->
+        val id=admin.asJsonObject.get("_id")?.asString?:admin.asJsonObject.get("id")?.asString.orEmpty()
+        editingPermissions=null
+        onAction("PATCH","api/admin/admin-users/$id/permissions",body)
+    }}
     advancedFanni?.let{fanni->FanniControlsDialog(fanni,{advancedFanni=null}){body->
         val id=fanni.asJsonObject.get("_id")?.asString.orEmpty();advancedFanni=null
         onAction("PATCH","api/admin/fannis/$id/profile-controls",body)
@@ -589,6 +662,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
                                     }
                                 }
                             }
+                        }
+                        if(section==AdminSection.ROLES){
+                            val adminId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
+                            if(adminId.isNotBlank())OutlinedButton(onClick={editingPermissions=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تخصيص صلاحيات القراءة والتنفيذ")}
                         }
                         if(section==AdminSection.CLIENTS){
                             val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
