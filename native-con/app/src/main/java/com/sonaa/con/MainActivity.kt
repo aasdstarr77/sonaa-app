@@ -283,8 +283,11 @@ class MainActivity : Activity() {
             "disable"->ask("سبب تعطيل الفني","reason"){mutate("/admin/fannis/$id/disable","POST",JSONObject().put("reason",it))}
             "enable"->mutate("/admin/fannis/$id/enable","POST",JSONObject())
             "delete"->confirm("تأكيد حذف الفني؟"){mutate("/admin/fannis/$id","DELETE",null)}
-            "deleteRegion"->confirm("حذف المنطقة من الاختيارات؟"){mutate("/admin/regions/$id","DELETE",null)}\n            "editRegion"->ask("اسم المنطقة الجديد","name"){mutate("/admin/regions/$id","PATCH",JSONObject().put("name",it))}\n            "restoreRegion"->mutate("/admin/regions/$id","PATCH",JSONObject().put("isDeleted",false).put("isActive",true))
-            "deleteService"->confirm("حذف الخدمة؟"){mutate("/admin/services/$id","DELETE",null)}\n            "editService"->ask("اسم الخدمة الجديد","name"){mutate("/admin/services/${enc(item.optString("name"))}","PATCH",JSONObject().put("name",it))}
+            "deleteRegion"->confirm("حذف المنطقة من الاختيارات؟"){mutate("/admin/regions/$id","DELETE",null)}
+            "editRegion"->ask("اسم المنطقة الجديد","name"){mutate("/admin/regions/$id","PATCH",JSONObject().put("name",it))}
+            "restoreRegion"->mutate("/admin/regions/$id","PATCH",JSONObject().put("isDeleted",false).put("isActive",true))
+            "deleteService"->confirm("حذف الخدمة؟"){mutate("/admin/services/$id","DELETE",null)}
+            "editService"->ask("اسم الخدمة الجديد","name"){mutate("/admin/services/${enc(item.optString("name"))}","PATCH",JSONObject().put("name",it))}
             "hideService","showService"->mutate("/admin/services/${enc(item.optString("name"))}/${if(action=="hideService")"hide" else "show"}","POST",JSONObject())
             "unblock"->mutate("/admin/clients/${enc(item.optString("phone"))}/unblock","POST",JSONObject())
             "deleteClient"->confirm("حذف حساب العميل؟"){mutate("/admin/clients/${enc(item.optString("phone"))}/account","DELETE",null)}
@@ -311,7 +314,9 @@ class MainActivity : Activity() {
             "approveTopup","rejectTopup"->mutate("/admin/topup-requests/$id/${if(action=="approveTopup")"approve" else "reject"}","POST",JSONObject())
             "complaint"->form("تحديث الشكوى",listOf("الحالة (جديدة / قيد المراجعة / تم الحل / مرفوضة)","ملاحظة الإدارة","الرد على العميل")){v->mutate("/admin/complaints/$id","PATCH",JSONObject().put("status",v[0]).put("adminNote",v[1]).put("adminResponse",v[2]))}
             "block"->ask("سبب حظر العميل","reason"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/block","POST",JSONObject().put("reason",v))}
-            "note"->ask("الملاحظة الداخلية","note"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/note","POST",JSONObject().put("note",v))}\n            "clientPassword"->form("تغيير كلمة سر العميل",listOf("كلمة السر الجديدة","تأكيد كلمة السر")){v->mutate("/admin/clients/${enc(item.optString("phone"))}/password","PATCH",JSONObject().put("newPassword",v[0]).put("confirmPassword",v[1]))}\n            "clientProfile"->form("تعديل بيانات العميل",listOf("الاسم","رقم الهاتف")){v->mutate("/admin/client-accounts/$id/profile","PATCH",JSONObject().put("name",v[0]).put("phone",v[1]))}
+            "note"->ask("الملاحظة الداخلية","note"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/note","POST",JSONObject().put("note",v))}
+            "clientPassword"->form("تغيير كلمة سر العميل",listOf("كلمة السر الجديدة","تأكيد كلمة السر")){v->mutate("/admin/clients/${enc(item.optString("phone"))}/password","PATCH",JSONObject().put("newPassword",v[0]).put("confirmPassword",v[1]))}
+            "clientProfile"->form("تعديل بيانات العميل",listOf("الاسم","رقم الهاتف")){v->mutate("/admin/client-accounts/$id/profile","PATCH",JSONObject().put("name",v[0]).put("phone",v[1]))}
             "toggle"->if(active=="regions")mutate("/admin/regions/$id","PATCH",JSONObject().put("isActive",!item.optBoolean("isActive",true))) else mutate("/admin/services/${enc(item.optString("name"))}/${if(item.optBoolean("isActive",true))"hide" else "show"}","POST",JSONObject())
             "review"->mutate("/admin/support/$sn/review","POST",JSONObject())
             "role"->ask("المنصب: مدير أو مشرف أول أو مشرف أو قراءة فقط","role"){mutate("/admin/admin-users/$id/role","PATCH",JSONObject().put("role",it))}
@@ -336,7 +341,8 @@ class MainActivity : Activity() {
             }.show()
         }.setNegativeButton("إغلاق",null).show()
     }
-\n    private fun editPermissions(id:String) {
+
+    private fun editPermissions(id:String) {
         val keys=listOf("dashboard","fannis","orders","publishOrders","voiceReview","passwordRecovery","complaints","services","clients","topups","wallet","pricing","settings","content","support","regions","offers","notifications","clientsData")
         val checks=mutableMapOf<String,Pair<CheckBox,CheckBox>>()
         val layout=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
@@ -360,7 +366,7 @@ class MainActivity : Activity() {
         when(active){
             "regions"->ask("اسم المنطقة","name"){mutate("/admin/regions","POST",JSONObject().put("name",it))}
             "services"->form("إضافة خدمة",listOf("اسم الخدمة","القسم","رمز تعبيري")){v->mutate("/admin/services","POST",JSONObject().put("name",v[0]).put("category",v[1]).put("emoji",v[2]))}
-            "notifications"->form("إرسال إشعار",listOf("الدور: fanni أو client أو group:approved / group:active / group:all","رقم الهاتف للمستلم الفردي (اتركه فارغًا للجماعي)","العنوان","نص الإشعار")){v->mutate("/admin/notifications/direct","POST",JSONObject().put("recipientRole",v[0]).put("phone",v[1]).put("recipientMode",if(v[0].startsWith("group:"))"group" else "single").put("audience",if(v[0].startsWith("group:"))v[0].substringAfter("group:") else "all").put("title",v[2]).put("message",v[3]))}
+            "notifications"->form("إرسال إشعار",listOf("الدور (fanni أو client)","نوع الإرسال (single أو group)","رقم الهاتف أو الفئة (all / approved / active / disabled)","العنوان","نص الإشعار")){v->mutate("/admin/notifications/direct","POST",JSONObject().put("recipientRole",v[0]).put("recipientMode",v[1]).put("phone",if(v[1]=="single")v[2] else "").put("audience",if(v[1]=="group")v[2] else "all").put("title",v[3]).put("message",v[4]))}
             "roles"->form("إضافة مشرف أو مدير من الفنيين المعتمدين",listOf("معرّف الفني المعتمد","المنصب: مدير / مشرف أول / مشرف / قراءة فقط")){v->mutate("/admin/admin-users","POST",JSONObject().put("fanniId",v[0]).put("role",v[1]))}
             else->showMessage("الإضافة غير متاحة لهذا القسم من هذا العرض.")
         }
