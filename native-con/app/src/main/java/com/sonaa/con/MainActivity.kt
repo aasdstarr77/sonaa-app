@@ -8,6 +8,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
+import android.content.ClipboardManager
+import android.content.ClipData
 import android.widget.*
 import android.media.MediaPlayer
 import android.net.Uri
@@ -386,16 +388,30 @@ class MainActivity : Activity() {
             "complaints"->arrayOf("وضع قيد المراجعة","حل الشكاوى المحددة","رفض الشكاوى المحددة")
             "orders"->arrayOf("نشر الطلبات المحددة","حذف الطلبات المحددة")
             "clients"->arrayOf("حذف حسابات العملاء المحددة")
-            "regions"->arrayOf("إظهار المناطق المحددة","إخفاء المناطق المحددة","استعادة المناطق المحددة","حذف المناطق المحددة")
+            "regions"->arrayOf("تعديل أسماء المناطق المحددة","إظهار المناطق المحددة","إخفاء المناطق المحددة","استعادة المناطق المحددة","حذف المناطق المحددة")
             "services"->arrayOf("إظهار الخدمات المحددة","إخفاء الخدمات المحددة","حذف الخدمات المحددة")
             else->arrayOf("لا توجد إجراءات جماعية لهذا القسم")
         }
         AlertDialog.Builder(this).setTitle("إجراءات جماعية • ${rows.size} عنصر").setItems(actions){_,which->
             val action=actions[which]
             if(action.startsWith("لا توجد"))return@setItems
-            confirm("تأكيد تنفيذ $action على ${rows.size} عنصر؟"){runBulkAction(action,rows,0,0)}
+            confirm("تأكيد تنفيذ $action على ${rows.size} عنصر؟"){if(action=="تعديل أسماء المناطق المحددة")bulkRenameRegions(rows,0)else runBulkAction(action,rows,0,0)}
         }.setNegativeButton("إلغاء",null).show()
     }
+
+    private fun bulkRenameRegions(rows:List<JSONObject>,index:Int) {
+        if(index>=rows.size){selectedRows.clear();showMessage("تم الانتهاء من تعديل أسماء المناطق");loadSection();return}
+        val row=rows[index]
+        val id=row.optString("_id",row.optString("id"))
+        ask("الاسم الجديد للمنطقة: "+row.optString("name"),"اسم المنطقة"){name->
+            if(name.length<2){showMessage("اسم المنطقة يجب أن يكون حرفين على الأقل");return@ask}
+            request("/admin/regions/$id","PATCH",token,JSONObject().put("name",name)){_,err->
+                if(err!=null)showMessage("تعذر تعديل "+row.optString("name")+": "+err)
+                bulkRenameRegions(rows,index+1)
+            }
+        }
+    }
+
     private fun runBulkAction(action:String,rows:List<JSONObject>,index:Int,failed:Int) {
         if(index>=rows.size){selectedRows.clear();showMessage("انتهى التنفيذ. تعذر تنفيذ $failed من ${rows.size}");loadSection();return}
         val row=rows[index]
