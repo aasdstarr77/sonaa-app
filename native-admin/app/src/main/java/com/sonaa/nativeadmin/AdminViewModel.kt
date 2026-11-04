@@ -8,15 +8,19 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null,val editingProfile:JsonElement?=null,val editingProfileId:String?=null,val walletFanniId:String?=null,val walletTransactions:List<JsonElement> = emptyList(),val editingClient:JsonElement?=null,val editingClientId:String?=null,val recoveryDetail:JsonElement?=null,val recoveryDetailId:String?=null)
+data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val adminInfo:JsonElement?=null,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null,val editingProfile:JsonElement?=null,val editingProfileId:String?=null,val walletFanniId:String?=null,val walletTransactions:List<JsonElement> = emptyList(),val editingClient:JsonElement?=null,val editingClientId:String?=null,val recoveryDetail:JsonElement?=null,val recoveryDetailId:String?=null)
 class AdminViewModel(app:Application):AndroidViewModel(app){
  private val repo=AdminRepository(app)
  private val _state=MutableStateFlow(AdminUiState())
  val state=_state.asStateFlow()
- fun restore()=viewModelScope.launch{val ok=repo.hasSession();_state.value=_state.value.copy(checking=false,authenticated=ok);if(ok)refresh()}
+ fun restore()=viewModelScope.launch{
+  val ok=repo.hasSession()
+  if(ok){try{val me=repo.getMe();_state.value=_state.value.copy(checking=false,authenticated=true,adminInfo=me);refresh()}catch(e:Exception){repo.logout();_state.value=AdminUiState(checking=false,error=e.message)}} 
+  else _state.value=_state.value.copy(checking=false,authenticated=false,adminInfo=null)
+ }
  fun login(phone:String,password:String)=viewModelScope.launch{
   _state.value=_state.value.copy(busy=true,error=null)
-  try{repo.login(phone,password);_state.value=_state.value.copy(busy=false,authenticated=true);refresh()}
+  try{repo.login(phone,password);val me=repo.getMe();_state.value=_state.value.copy(busy=false,authenticated=true,adminInfo=me);refresh()}
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تسجيل الدخول")}
  }
  fun refresh()=load(AdminSection.DASHBOARD)
