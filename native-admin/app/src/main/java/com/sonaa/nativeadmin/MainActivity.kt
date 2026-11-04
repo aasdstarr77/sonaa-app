@@ -35,6 +35,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 private val Accent = Color(0xFF087F9C)
 private val DarkAccent = Color(0xFF07566B)
 private val Background = Color(0xFFF4F8FA)
@@ -51,7 +52,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val vm: AdminViewModel = viewModel()
             val state by vm.state.collectAsState()
-            LaunchedEffect(Unit) { vm.restore() }
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); vm.restore() }
             LaunchedEffect(pendingDestination, state.authenticated) { if (state.authenticated) { navigate(pendingDestination, vm); pendingDestination = null } }
             LaunchedEffect(state.authenticated) {
                 if (state.authenticated) {
@@ -63,7 +64,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Surface(Modifier.fillMaxSize(), color = Background) {
                         when {
-                            state.checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
+                            state.checking -> SplashScreen()
                             !state.authenticated -> LoginScreen(state, vm::login)
                             else -> HomeScreen(state, vm)
                         }
@@ -93,6 +94,16 @@ class MainActivity : ComponentActivity() {
                 .setProjectId(BuildConfig.FIREBASE_PROJECT_ID).setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID).build())
         }
     }
+}
+@Composable private fun SplashScreen(){
+ Box(Modifier.fillMaxSize().background(Color.White),contentAlignment=Alignment.Center){
+  Column(horizontalAlignment=Alignment.CenterHorizontally){
+   Image(painterResource(R.drawable.sonaa_logo),"شعار صُنّاع",Modifier.size(150.dp))
+   Spacer(Modifier.height(18.dp))
+   Text("صُنّاع",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Black,color=DarkAccent)
+   Text("كل خدمة تبدأ بخطوة",color=Accent,modifier=Modifier.padding(top=4.dp))
+  }
+ }
 }
 @Composable private fun LoginScreen(state: AdminUiState, login: (String, String) -> Unit) {
     var phone by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }
