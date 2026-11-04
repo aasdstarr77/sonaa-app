@@ -25,7 +25,10 @@ class AdminRepository(context: Context) {
         auth.saveToken(token)
         return response
     }
-    suspend fun hasSession() = !auth.currentToken().isNullOrBlank()
+    suspend fun hasSession(): Boolean {
+        if (auth.currentToken().isNullOrBlank()) return false
+        return try { api.me(); true } catch (_: Exception) { auth.clear(); false }
+    }
     suspend fun logout() = auth.clear()
     suspend fun stats() = api.stats()
     suspend fun load(section: AdminSection): JsonElement = when (section) {

@@ -37,12 +37,12 @@ class SonaaMessagingService : FirebaseMessagingService() {
         getSystemService(NotificationManager::class.java).notify(type.hashCode(), notification)
     }
     private fun channelFor(type: String) = when (type) {
-        "order_new", "new_order" -> "order_new"
-        "fanni_register", "new_fanni" -> "fanni_register"
-        "client_register", "new_client" -> "client_register"
-        "password_reset" -> "password_reset"
-        "support", "new_complaint" -> "support"
-        "wallet_charge", "topup_request" -> "wallet_charge"
+        "order_new", "new_order", "admin_new_order" -> "order_new"
+        "fanni_register", "new_fanni", "admin_new_technician" -> "fanni_register"
+        "client_register", "new_client", "admin_new_client" -> "client_register"
+        "password_reset", "admin_password_recovery" -> "password_reset"
+        "support", "new_complaint", "admin_support_request", "admin_new_complaint" -> "support"
+        "wallet_charge", "topup_request", "admin_new_topup" -> "wallet_charge"
         else -> "support"
     }
     companion object {

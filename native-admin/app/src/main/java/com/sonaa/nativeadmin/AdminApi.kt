@@ -6,6 +6,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 interface AdminApi {
     @POST("api/admin/login") suspend fun login(@Body body: JsonObject): JsonElement
+    @GET("api/admin/me") suspend fun me(): JsonElement
     @GET("api/admin/stats") suspend fun stats(): JsonElement
     @GET("api/admin/orders") suspend fun orders(): JsonElement
     @GET("api/admin/fannis") suspend fun technicians(): JsonElement
