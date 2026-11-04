@@ -10,6 +10,7 @@ import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.widget.*
 import android.media.MediaPlayer
+import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -319,10 +320,10 @@ class MainActivity : Activity() {
             "addBalance","setBalance"->form("قيمة المحفظة",listOf("المبلغ","السبب")){v->mutate("/admin/fannis/$id/${if(action=="addBalance")"add-balance" else "set-balance"}","POST",JSONObject().put("amount",v[0].toDoubleOrNull()?:0).put("reason",v[1]))}
             "freeze"->ask("سبب التجميد (اكتب unfreeze لإلغاء التجميد)","reason"){v->mutate("/admin/wallet/freeze/$id","POST",JSONObject().put("action",if(v=="unfreeze")"unfreeze" else "freeze").put("reason",v))}
             "level"->ask("المستوى المهني","level"){mutate("/admin/fannis/$id/level","PATCH",JSONObject().put("level",it))}
-            "badge"->ask("نوع الشارة (trusted لإضافة موثوق / none للإزالة)","badge"){mutate("/admin/fannis/$id/badge","PATCH",JSONObject().put("badge",it))}
+            "badge"->form("إدارة شارة الفني",listOf("الشارة (trusted / top_rated / verified / fast_response / premium / gold)","الإجراء (add / remove / toggle)")){v->mutate("/admin/fannis/$id/badge","PATCH",JSONObject().put("badge",v[0]).put("action",v[1]))}
             "fanniNote"->ask("الملاحظة الداخلية","note"){mutate("/admin/fannis/$id/note","PATCH",JSONObject().put("note",it))}
-            "limit"->ask("الحد الأقصى للعروض","limit"){mutate("/admin/fannis/$id/limit","PATCH",JSONObject().put("limit",it.toIntOrNull()?:0))}
-            "controls"->form("ضوابط حساب الفني",listOf("السماح باستقبال الطلبات (true/false)","سبب التعديل")){v->mutate("/admin/fannis/$id/profile-controls","PATCH",JSONObject().put("isAvailable",v[0].toBoolean()).put("reason",v[1]))}
+            "limit"->ask("الحد الأقصى للعروض (maxOffers)","maxOffers"){mutate("/admin/fannis/$id/limit","PATCH",JSONObject().put("maxOffers",it.toIntOrNull()?:0))}
+            "controls"->form("ضوابط الثقة والظهور",listOf("درجة الثقة 0-100","موثق؟ true / false","مميز؟ true / false","تاريخ انتهاء التمييز YYYY-MM-DD أو اتركه فارغًا")){v->mutate("/admin/fannis/$id/profile-controls","PATCH",JSONObject().put("trustScore",v[0].toIntOrNull()?:0).put("isVerified",v[1].toBoolean()).put("isFeatured",v[2].toBoolean()).put("featuredUntil",if(v[3].isBlank())JSONObject.NULL else v[3]))}
             "transactions"->request("/admin/wallet/transactions/$id","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}
             "recoveryReply"->ask("اكتب الرد","message"){mutate("/password-recovery/admin/requests/$id/reply","POST",JSONObject().put("message",it))}
             "recoveryCode"->ask("ملاحظة أو سبب إصدار الكود","reason"){mutate("/password-recovery/admin/requests/$id/issue-code","POST",JSONObject().put("reason",it))}
@@ -364,7 +365,7 @@ class MainActivity : Activity() {
             player.setOnPreparedListener{it.start();showMessage("بدأ تشغيل التسجيل. يجب الاستماع حتى النهاية.")}
             player.setOnCompletionListener{playedVoice.add(sn);renderRows();showMessage("انتهى التسجيل. يمكنك الآن تأكيد المراجعة.")}
             player.setOnErrorListener{_,_,_->showMessage("تعذر تشغيل التسجيل الصوتي");true}
-            player.setDataSource("$api/orders/$sn/voice",mapOf("Authorization" to "Bearer $token"))
+            player.setDataSource(this,Uri.parse("$api/orders/$sn/voice"),mapOf("Authorization" to "Bearer $token"))
             player.prepareAsync()
         } catch(e:Exception) { showMessage(e.message ?: "تعذر تحميل التسجيل") }
     }
