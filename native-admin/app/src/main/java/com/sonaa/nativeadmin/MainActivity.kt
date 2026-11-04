@@ -369,11 +369,14 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
    RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock")
   )else emptyList()
-  AdminSection.ORDERS->if(sn!=null)listOf(
-   RowAction("إلغاء الطلب","POST","api/admin/orders/$sn/cancel",JsonObject().apply{addProperty("reason","إلغاء من تطبيق الإدارة")}),
-   RowAction("أرشفة","POST","api/admin/orders/$sn/archive"),
-   RowAction("حذف","DELETE","api/admin/orders/$sn")
-  )else emptyList()
+  AdminSection.ORDERS->if(sn!=null){
+   val actions=mutableListOf(RowAction("نشر الطلب","POST","api/orders/admin/$sn/publish"))
+   if(o.get("hasVoiceRecording")?.asBoolean==true)actions.add(RowAction("تأكيد مراجعة الصوت","POST","api/orders/admin/$sn/voice-reviewed"))
+   actions.add(RowAction("إلغاء الطلب","POST","api/admin/orders/$sn/cancel",JsonObject().apply{addProperty("reason","إلغاء من تطبيق الإدارة")}))
+   actions.add(RowAction("أرشفة","POST","api/admin/orders/$sn/archive"))
+   actions.add(RowAction("حذف","DELETE","api/admin/orders/$sn"))
+   actions
+  }else emptyList()
   AdminSection.RECOVERY->listOf(
    RowAction("إرسال رد","POST","api/password-recovery/admin/requests/$id/reply",JsonObject(),"text","اكتب الرد للمستخدم"),
    RowAction("رفض الطلب","POST","api/password-recovery/admin/requests/$id/reject",JsonObject(),"reason","سبب الرفض")
