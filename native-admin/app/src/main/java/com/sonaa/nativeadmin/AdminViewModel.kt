@@ -84,6 +84,7 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  }
  fun bulkAction(section:AdminSection,ids:List<String>,action:String,reason:String="إجراء جماعي موثق من تطبيق الإدارة")=viewModelScope.launch{
   if(ids.isEmpty())return@launch
+  if(ids.size>100){_state.value=_state.value.copy(actionMessage="الحد الأقصى للإجراء الجماعي 100 عنصر");return@launch}
   _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
   var succeeded=0
   var failed=0
@@ -124,6 +125,7 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  }
  fun bulkPublish(sns:List<String>)=viewModelScope.launch{
   if(sns.isEmpty())return@launch
+  if(sns.size>100){_state.value=_state.value.copy(actionMessage="الحد الأقصى للنشر الجماعي 100 طلب");return@launch}
   _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
   var published=0
   var failed=0
