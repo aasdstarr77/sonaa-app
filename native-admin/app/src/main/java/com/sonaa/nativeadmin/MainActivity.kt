@@ -427,7 +427,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
  }
 }
 
-@Composable private fun RecoveryConversationScreen(payload:JsonElement,busy:Boolean,error:String?,message:String?,onClose:()->Unit,onAction:(String,String,JsonObject)->Unit){
+@Composable private fun RecoveryConversationScreen(payload:JsonElement,busy:Boolean,error:String?,message:String?,onClose:()->Unit,canWrite:(String)->Boolean,onAction:(String,String,JsonObject)->Unit){
  val recovery=payload.asJsonObject.get("recovery")?.takeIf{it.isJsonObject}?.asJsonObject?:payload.asJsonObject
  val id=recovery.get("id")?.asString.orEmpty()
  val messages=recovery.get("messages")?.takeIf{it.isJsonArray}?.asJsonArray
@@ -456,14 +456,14 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
      Text(msg.get("text")?.asString.orEmpty())
      Text(msg.get("createdAt")?.toString().orEmpty(),style=MaterialTheme.typography.labelSmall,color=Color.Gray)
      val messageId=msg.get("id")?.asString.orEmpty()
-     if(messageId.isNotBlank())TextButton(onClick={onAction("DELETE","api/password-recovery/admin/requests/$id/messages/$messageId",JsonObject())}){Text("حذف الرسالة",color=Color(0xFFB3261E))}
+     if(messageId.isNotBlank())TextButton(onClick={onAction("DELETE","api/password-recovery/admin/requests/$id/messages/$messageId",JsonObject())},enabled=canWrite("api/password-recovery/admin/requests/$id/messages/$messageId")){Text("حذف الرسالة",color=Color(0xFFB3261E))}
     }
    }
   }
   OutlinedTextField(reply,{reply=it},label={Text("اكتب ردًا للمستخدم")},modifier=Modifier.fillMaxWidth(),minLines=2)
-  Button(onClick={onAction("POST","api/password-recovery/admin/requests/$id/reply",JsonObject().apply{addProperty("text",reply.trim())});reply=""},enabled=reply.trim().isNotEmpty()&&!busy,modifier=Modifier.fillMaxWidth()){Text("إرسال الرد")}
-  OutlinedButton(onClick={confirmIssue=true},enabled=!busy,modifier=Modifier.fillMaxWidth()){Text("إصدار رمز استعادة بعد التحقق")}
-  OutlinedButton(onClick={rejectOpen=true},enabled=!busy,modifier=Modifier.fillMaxWidth()){Text("رفض طلب الاستعادة")}
+  Button(onClick={onAction("POST","api/password-recovery/admin/requests/$id/reply",JsonObject().apply{addProperty("text",reply.trim())});reply=""},enabled=reply.trim().isNotEmpty()&&!busy&&canWrite("api/password-recovery/admin/requests/$id/reply"),modifier=Modifier.fillMaxWidth()){Text("إرسال الرد")}
+  OutlinedButton(onClick={confirmIssue=true},enabled=!busy&&canWrite("api/password-recovery/admin/requests/$id/issue-code"),modifier=Modifier.fillMaxWidth()){Text("إصدار رمز استعادة بعد التحقق")}
+  OutlinedButton(onClick={rejectOpen=true},enabled=!busy&&canWrite("api/password-recovery/admin/requests/$id/reject"),modifier=Modifier.fillMaxWidth()){Text("رفض طلب الاستعادة")}
   if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
  }
  if(confirmIssue)AlertDialog(onDismissRequest={confirmIssue=false},title={Text("تأكيد إصدار الرمز")},text={Text("تأكدت من هوية صاحب الحساب عبر المحادثة؟ الرمز صالح لمدة 10 دقائق وسيظهر مرة واحدة.")},confirmButton={TextButton(onClick={confirmIssue=false;onAction("POST","api/password-recovery/admin/requests/$id/issue-code",JsonObject())}){Text("إصدار الرمز")}},dismissButton={TextButton(onClick={confirmIssue=false}){Text("إلغاء")}})
@@ -512,7 +512,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
  }
 }
 
-@Composable private fun ConfigEditor(section:AdminSection,payload:JsonElement?,onSave:(String,String,JsonObject)->Unit){
+@Composable private fun ConfigEditor(section:AdminSection,payload:JsonElement?,canWrite:(String)->Boolean,onSave:(String,String,JsonObject)->Unit){
  val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
  if(section==AdminSection.SETTINGS){
   val p=root?.get("settings")?.takeIf{it.isJsonObject}?.asJsonObject
@@ -530,7 +530,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
    OutlinedTextField(attempts,{attempts=it},label={Text("حد محاولات تسجيل الفني")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
    OutlinedTextField(wallet1,{wallet1=it},label={Text("رقم المحفظة الأول")},modifier=Modifier.fillMaxWidth())
    OutlinedTextField(wallet2,{wallet2=it},label={Text("رقم المحفظة الثاني")},modifier=Modifier.fillMaxWidth())
-   Button(onClick={onSave("PUT","api/admin/settings",JsonObject().apply{addProperty("siteName",name.trim());addProperty("maintenance",maintenance);addProperty("maintenanceMessage",message.trim());addProperty("maxFanniSignupAttempts",attempts.toIntOrNull()?:0);addProperty("walletPhone1",wallet1.trim());addProperty("walletPhone2",wallet2.trim())})},enabled=attempts.toIntOrNull()?.let{it in 1..100}==true&&name.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("حفظ الإعدادات")}
+   Button(onClick={onSave("PUT","api/admin/settings",JsonObject().apply{addProperty("siteName",name.trim());addProperty("maintenance",maintenance);addProperty("maintenanceMessage",message.trim());addProperty("maxFanniSignupAttempts",attempts.toIntOrNull()?:0);addProperty("walletPhone1",wallet1.trim());addProperty("walletPhone2",wallet2.trim())})},enabled=attempts.toIntOrNull()?.let{it in 1..100}==true&&name.trim().length>=2&&canWrite("api/admin/settings"),modifier=Modifier.fillMaxWidth()){Text("حفظ الإعدادات")}
   }
  }else if(section==AdminSection.PRICING){
   val p=root?.get("pricing")?.takeIf{it.isJsonObject}?.asJsonObject
@@ -544,7 +544,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
    OutlinedTextField(commission,{commission=it},label={Text("العمولة %")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=Modifier.fillMaxWidth())
    OutlinedTextField(minimum,{minimum=it},label={Text("أقل عرض")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
    OutlinedTextField(maximum,{maximum=it},label={Text("أعلى عرض")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),modifier=Modifier.fillMaxWidth())
-   Button(onClick={onSave("PUT","api/admin/pricing",JsonObject().apply{addProperty("check",check.toDoubleOrNull()?:0.0);addProperty("commission",commission.toDoubleOrNull()?:0.0);addProperty("minOffer",minimum.toIntOrNull()?:0);addProperty("maxOffer",maximum.toIntOrNull()?:0)})},enabled=check.toDoubleOrNull()?.let{it>=0}==true&&commission.toDoubleOrNull()?.let{it in 0.0..100.0}==true&&minimum.toIntOrNull()?.let{it in 1..1000000}==true&&maximum.toIntOrNull()?.let{it in 1..1000000}==true&&(minimum.toIntOrNull()?:Int.MAX_VALUE)<=(maximum.toIntOrNull()?:Int.MIN_VALUE),modifier=Modifier.fillMaxWidth()){Text("حفظ الأسعار")}
+   Button(onClick={onSave("PUT","api/admin/pricing",JsonObject().apply{addProperty("check",check.toDoubleOrNull()?:0.0);addProperty("commission",commission.toDoubleOrNull()?:0.0);addProperty("minOffer",minimum.toIntOrNull()?:0);addProperty("maxOffer",maximum.toIntOrNull()?:0)})},enabled=check.toDoubleOrNull()?.let{it>=0}==true&&commission.toDoubleOrNull()?.let{it in 0.0..100.0}==true&&minimum.toIntOrNull()?.let{it in 1..1000000}==true&&maximum.toIntOrNull()?.let{it in 1..1000000}==true&&(minimum.toIntOrNull()?:Int.MAX_VALUE)<=(maximum.toIntOrNull()?:Int.MIN_VALUE)&&canWrite("api/admin/pricing"),modifier=Modifier.fillMaxWidth()){Text("حفظ الأسعار")}
    Text("سجل تغييرات الأسعار",fontWeight=FontWeight.Bold,color=DarkAccent)
    root?.get("history")?.takeIf{it.isJsonArray}?.asJsonArray?.take(20)?.forEach{Text(it.toString(),style=MaterialTheme.typography.bodySmall,color=Color.Gray)}
   }
@@ -558,7 +558,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
    Text("الإعلانات والأسئلة الشائعة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
    OutlinedTextField(announcement,{announcement=it},label={Text("إعلان واجهة العميل")},modifier=Modifier.fillMaxWidth(),minLines=3)
-   Button(onClick={onSave("PATCH","api/admin/content/announcement",JsonObject().apply{addProperty("announcement",announcement.trim())})},modifier=Modifier.fillMaxWidth()){Text("حفظ الإعلان")}
+   Button(onClick={onSave("PATCH","api/admin/content/announcement",JsonObject().apply{addProperty("announcement",announcement.trim())})},enabled=canWrite("api/admin/content/announcement"),modifier=Modifier.fillMaxWidth()){Text("حفظ الإعلان")}
    Text("الأسئلة الشائعة",fontWeight=FontWeight.Bold,color=DarkAccent)
    faqs?.forEachIndexed{index,faq->
     Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){
@@ -572,7 +572,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
         val body=JsonObject().apply{addProperty("announcement",announcement.trim());val array=com.google.gson.JsonArray();faqs?.forEachIndexed{idx,entry->val copy=entry.asJsonObject.deepCopy();if(idx==index)copy.addProperty("active",copy.get("active")?.asBoolean==false);array.add(copy)};add("faqs",array)}
         onSave("PUT","api/admin/content",body)
        }){Text(if(faq.asJsonObject.get("active")?.asBoolean==false)"تفعيل" else "إيقاف")}
-       TextButton(onClick={onSave("DELETE","api/admin/content/faqs/$index",JsonObject())}){Text("حذف",color=Color(0xFFB3261E))}
+       TextButton(onClick={onSave("DELETE","api/admin/content/faqs/$index",JsonObject())},enabled=canWrite("api/admin/content/faqs/$index")){Text("حذف",color=Color(0xFFB3261E))}
       }
      }
     }
@@ -591,7 +591,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
      add("faqs",array)
     }
     onSave("PUT","api/admin/content",body);faqIndex=-1;question="";answer=""
-   },enabled=question.trim().length>=2&&answer.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text(if(faqIndex>=0)"حفظ تعديل السؤال" else "إضافة السؤال")}
+   },enabled=question.trim().length>=2&&answer.trim().length>=2&&canWrite("api/admin/content"),modifier=Modifier.fillMaxWidth()){Text(if(faqIndex>=0)"حفظ تعديل السؤال" else "إضافة السؤال")}
    if(faqIndex>=0)TextButton(onClick={faqIndex=-1;question="";answer=""},modifier=Modifier.fillMaxWidth()){Text("إلغاء التعديل")}
   }
  }
