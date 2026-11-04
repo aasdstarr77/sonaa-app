@@ -160,11 +160,11 @@ class MainActivity : ComponentActivity() {
             state.section == AdminSection.DASHBOARD || state.section == AdminSection.STATS -> Dashboard(state.stats)
             state.section == AdminSection.PAGE_VISITS -> PageVisitsScreen(state.payload)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
-            state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
+            state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload,{path->canWriteApi(state.adminInfo,path)}) { method, path, body -> vm.mutate(method, path, body) }
             state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeClientProfile() }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
-            state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery) { method,path,body -> vm.recoveryAction(method,path,body) }
+            state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery,{path->canWriteApi(state.adminInfo,path)}) { method,path,body -> vm.recoveryAction(method,path,body) }
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, { path -> canWriteApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
@@ -795,8 +795,8 @@ private data class RowAction(val label:String,val method:String,val path:String,
         }
         if(section==AdminSection.ORDERS && selectedOrders.isNotEmpty()){
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                Button(onClick={pendingPublishSns=selectedOrders.toList();selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("نشر المحدد ("+selectedOrders.size+")")}
-                Button(onClick={
+                if(onCanWriteApi("api/orders/admin/SN000000/publish"))Button(onClick={pendingPublishSns=selectedOrders.toList();selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("نشر المحدد ("+selectedOrders.size+")")}
+                if(onCanWriteApi("api/admin/orders/bulk-delete"))Button(onClick={
                     val body=JsonObject().apply{add("sns",com.google.gson.JsonArray().apply{selectedOrders.forEach{add(it)}})}
                     pending=RowAction("حذف الطلبات المحددة","POST","api/admin/orders/bulk-delete",body);selectedOrders=emptySet()
                 },modifier=Modifier.weight(1f)){Text("حذف المحدد")}
@@ -830,7 +830,17 @@ private data class RowAction(val label:String,val method:String,val path:String,
                             AdminSection.CLIENTS->item.asJsonObject.get("phone")?.asString
                             else->null
                         }
-                        if(bulkKey!=null)Row(verticalAlignment=Alignment.CenterVertically){
+                        val canSelectBulk=when(section){
+                            AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->onCanWriteApi("api/admin/fannis/x/approve")||onCanWriteApi("api/admin/wallet/freeze/x")
+                            AdminSection.WALLETS->onCanWriteApi("api/admin/wallet/freeze/x")
+                            AdminSection.TOPUPS->onCanWriteApi("api/admin/topup-requests/x/approve")
+                            AdminSection.CLIENTS->onCanWriteApi("api/admin/clients/x/account")
+                            AdminSection.COMPLAINTS->onCanWriteApi("api/admin/complaints/x")
+                            AdminSection.OFFERS->onCanWriteApi("api/admin/offers/SN000000/0/reject")
+                            AdminSection.REGIONS->onCanWriteApi("api/admin/regions/x")
+                            else->false
+                        }
+                        if(bulkKey!=null&&canSelectBulk)Row(verticalAlignment=Alignment.CenterVertically){
                             Checkbox(checked=selectedBulk.contains(bulkKey),onCheckedChange={checked->selectedBulk=if(checked)selectedBulk+bulkKey else selectedBulk-bulkKey})
                             Text("تحديد للإجراء الجماعي",style=MaterialTheme.typography.labelSmall,color=Color.Gray)
                         }
@@ -890,7 +900,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                                 }
                             }
                         }
-                        if(section==AdminSection.CLIENTS){
+                        if(section==AdminSection.CLIENTS&&onCanWriteApi("api/admin/client-accounts/x/profile")){
                             val clientId=item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString.orEmpty()
                             if(clientId.isNotBlank())OutlinedButton(onClick={onEditClient(clientId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات العميل")}
                         }
@@ -898,16 +908,16 @@ private data class RowAction(val label:String,val method:String,val path:String,
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
                             if(fanniId.isNotBlank())OutlinedButton(onClick={onOpenWallet(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("عرض حركات المحفظة")}
                         }
-                        if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
+                        if((section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED)&&onCanWriteApi("api/admin/fannis/x/profile-controls")){
                             val fanni=item.asJsonObject
                             OutlinedButton(onClick={advancedFanni=item},modifier=Modifier.fillMaxWidth().padding(top=6.dp)){Text("إعدادات الثقة والظهور")}
                             OutlinedButton(onClick={limitFanni=item},modifier=Modifier.fillMaxWidth()){Text("حدود استقبال الطلبات والعروض")}
                         }
-                        if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
+                        if((section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED)&&onCanWriteApi("api/admin/fannis/x/profile")){
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
                             if(fanniId.isNotBlank())OutlinedButton(onClick={onEditProfile(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات الفني")}
                         }
-                        if(section==AdminSection.ORDERS){
+                        if(section==AdminSection.ORDERS&&onCanWriteApi("api/admin/orders/x/correct")){
                             OutlinedButton(onClick={correctionOrder=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تصحيح بيانات الطلب")}
                         }
                         if(section==AdminSection.ORDERS && item.isJsonObject && item.asJsonObject.get("hasVoiceRecording")?.asBoolean==true){
