@@ -565,6 +565,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null){
    val actions=mutableListOf(RowAction("نشر الطلب","POST","api/orders/admin/$sn/publish"))
+   actions.add(RowAction("تعيين فني","POST","api/admin/orders/$sn/assign",JsonObject(),"offerId","معرّف العرض","reason","سبب التعيين"))
    if(o.get("hasVoiceRecording")?.asBoolean==true)actions.add(RowAction("تأكيد مراجعة الصوت","POST","api/orders/admin/$sn/voice-reviewed"))
    actions.add(RowAction("إلغاء الطلب","POST","api/admin/orders/$sn/cancel",JsonObject().apply{addProperty("reason","إلغاء من تطبيق الإدارة")}))
    actions.add(RowAction("أرشفة","POST","api/admin/orders/$sn/archive"))
