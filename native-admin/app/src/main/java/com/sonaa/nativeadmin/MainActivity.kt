@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
             state.section == AdminSection.DASHBOARD || state.section == AdminSection.STATS -> Dashboard(state.stats)
+            state.section == AdminSection.PAGE_VISITS -> PageVisitsScreen(state.payload)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
@@ -291,6 +292,29 @@ class MainActivity : ComponentActivity() {
    onSave("PATCH","api/admin/fannis/$id/profile",body)
   },modifier=Modifier.fillMaxWidth()){Text("حفظ بيانات الفني")}
   OutlinedButton(onClick=onCancel,modifier=Modifier.fillMaxWidth()){Text("رجوع")}
+ }
+}
+
+@Composable private fun PageVisitsScreen(payload:JsonElement?){
+ val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
+ val summary=root?.get("summary")?.takeIf{it.isJsonArray}?.asJsonArray
+ val recent=root?.get("recent")?.takeIf{it.isJsonArray}?.asJsonArray
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+  Text("سجل زيارات الموقع",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+  Text("إجمالي الزيارات: "+(root?.get("total")?.toString()?: "0"),fontWeight=FontWeight.Bold)
+  Text("ملخص الصفحات",fontWeight=FontWeight.Bold,color=DarkAccent)
+  summary?.forEach{item->
+   val o=item.asJsonObject
+   Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){
+    Column(Modifier.padding(12.dp)){
+     Text(o.get("pageName")?.asString?:o.get("pageKey")?.asString.orEmpty(),fontWeight=FontWeight.Bold)
+     Text("الزيارات: "+(o.get("visits")?.toString()?: "0"))
+     Text("آخر زيارة: "+(o.get("lastVisit")?.toString()?: "—"),style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+    }
+   }
+  }
+  Text("أحدث الزيارات",fontWeight=FontWeight.Bold,color=DarkAccent)
+  recent?.forEach{Text(it.toString(),style=MaterialTheme.typography.bodySmall)}
  }
 }
 
