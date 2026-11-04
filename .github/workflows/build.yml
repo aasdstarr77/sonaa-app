@@ -7,6 +7,7 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'app.json'
+      - 'google-services-con.json'
       - 'assets/**'
       - 'package.json'
       - 'package-lock.json'
