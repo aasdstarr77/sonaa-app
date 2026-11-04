@@ -246,7 +246,9 @@ class MainActivity : Activity() {
             "support"->listOf("تمت المراجعة" to "review")
             "wallets"->listOf("إضافة رصيد" to "addBalance","تسوية الرصيد" to "setBalance","تجميد المحفظة" to "freeze","حركات المحفظة" to "transactions")
             "offers"->listOf("مراجعة العروض" to "offers")
-            "roles"->listOf("تغيير المنصب" to "role","تخصيص الصلاحيات" to "permissions","سحب الصلاحية" to "revoke")\n            "recovery"->listOf("إرسال رد" to "recoveryReply","إصدار كود" to "recoveryCode","رفض الطلب" to "recoveryReject")\n            "notifications"->listOf("حذف الإشعار" to "deleteNotification")
+            "roles"->listOf("تغيير المنصب" to "role","تخصيص الصلاحيات" to "permissions","سحب الصلاحية" to "revoke")
+            "recovery"->listOf("إرسال رد" to "recoveryReply","إصدار كود" to "recoveryCode","رفض الطلب" to "recoveryReject")
+            "notifications"->listOf("حذف الإشعار" to "deleteNotification")
             else->emptyList()
         }
     }
@@ -274,7 +276,11 @@ class MainActivity : Activity() {
             "fanniNote"->ask("الملاحظة الداخلية","note"){mutate("/admin/fannis/$id/note","PATCH",JSONObject().put("note",it))}
             "limit"->ask("الحد الأقصى للعروض","limit"){mutate("/admin/fannis/$id/limit","PATCH",JSONObject().put("limit",it.toIntOrNull()?:0))}
             "controls"->form("ضوابط حساب الفني",listOf("السماح باستقبال الطلبات (true/false)","سبب التعديل")){v->mutate("/admin/fannis/$id/profile-controls","PATCH",JSONObject().put("isAvailable",v[0].toBoolean()).put("reason",v[1]))}
-            "transactions"->request("/admin/wallet/transactions/$id","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}\n            "recoveryReply"->ask("اكتب الرد","message"){mutate("/password-recovery/admin/requests/$id/reply","POST",JSONObject().put("message",it))}\n            "recoveryCode"->ask("ملاحظة أو سبب إصدار الكود","reason"){mutate("/password-recovery/admin/requests/$id/issue-code","POST",JSONObject().put("reason",it))}\n            "recoveryReject"->ask("سبب رفض الطلب","reason"){mutate("/password-recovery/admin/requests/$id/reject","POST",JSONObject().put("reason",it))}\n            "deleteNotification"->confirm("حذف الإشعار؟"){mutate("/admin/notifications/direct/$id","DELETE",null)}
+            "transactions"->request("/admin/wallet/transactions/$id","GET",token,null){d,e->showMessage(if(e!=null)e else d.toString())}
+            "recoveryReply"->ask("اكتب الرد","message"){mutate("/password-recovery/admin/requests/$id/reply","POST",JSONObject().put("message",it))}
+            "recoveryCode"->ask("ملاحظة أو سبب إصدار الكود","reason"){mutate("/password-recovery/admin/requests/$id/issue-code","POST",JSONObject().put("reason",it))}
+            "recoveryReject"->ask("سبب رفض الطلب","reason"){mutate("/password-recovery/admin/requests/$id/reject","POST",JSONObject().put("reason",it))}
+            "deleteNotification"->confirm("حذف الإشعار؟"){mutate("/admin/notifications/direct/$id","DELETE",null)}
             "publish"->confirm("نشر الطلب ${sn} للفنيين؟"){mutate("/orders/admin/$sn/publish","POST",JSONObject())}
             "cancel","archive"->ask("سبب الإجراء","reason"){mutate("/admin/orders/$sn/$action","POST",JSONObject().put("reason",it))}
             "deleteOrder"->confirm("حذف الطلب نهائيًا؟"){mutate("/admin/orders/$sn","DELETE",null)}
@@ -297,7 +303,8 @@ class MainActivity : Activity() {
         when(active){
             "regions"->ask("اسم المنطقة","name"){mutate("/admin/regions","POST",JSONObject().put("name",it))}
             "services"->form("إضافة خدمة",listOf("اسم الخدمة","القسم","رمز تعبيري")){v->mutate("/admin/services","POST",JSONObject().put("name",v[0]).put("category",v[1]).put("emoji",v[2]))}
-            "notifications"->form("إرسال إشعار",listOf("دور المستلم (client / fanni)","معرّف المستلم","العنوان","نص الإشعار")){v->mutate("/admin/notifications/direct","POST",JSONObject().put("recipientRole",v[0]).put("recipientId",v[1]).put("title",v[2]).put("message",v[3]))}\n            "roles"->form("إضافة مشرف أو مدير من الفنيين المعتمدين",listOf("معرّف الفني المعتمد","المنصب: مدير / مشرف أول / مشرف / قراءة فقط")){v->mutate("/admin/admin-users","POST",JSONObject().put("fanniId",v[0]).put("role",v[1]))}
+            "notifications"->form("إرسال إشعار",listOf("دور المستلم (client / fanni)","معرّف المستلم","العنوان","نص الإشعار")){v->mutate("/admin/notifications/direct","POST",JSONObject().put("recipientRole",v[0]).put("recipientId",v[1]).put("title",v[2]).put("message",v[3]))}
+            "roles"->form("إضافة مشرف أو مدير من الفنيين المعتمدين",listOf("معرّف الفني المعتمد","المنصب: مدير / مشرف أول / مشرف / قراءة فقط")){v->mutate("/admin/admin-users","POST",JSONObject().put("fanniId",v[0]).put("role",v[1]))}
             else->showMessage("الإضافة غير متاحة لهذا القسم من هذا العرض.")
         }
     }
