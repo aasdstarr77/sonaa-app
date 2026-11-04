@@ -349,7 +349,8 @@ class MainActivity : Activity() {
             "correct"->form("تصحيح الطلب",listOf("اسم العميل","رقم الهاتف","الخدمة","المنطقة","العنوان","وصف الطلب","الميزانية")){v->mutate("/admin/orders/$sn/correct","PATCH",JSONObject().put("clientName",v[0]).put("clientPhone",v[1]).put("service",v[2]).put("area",v[3]).put("address",v[4]).put("description",v[5]).put("budget",v[6]))}
             "offers"->request("/admin/orders/$sn/offers","GET",token,null){d,e->if(e!=null)showMessage(e)else showOffers(sn,d?:JSONObject())}
             "assign"->ask("معرّف العرض Offer ID","offerId"){offerId->ask("سبب التعيين الإداري","reason"){reason->mutate("/admin/orders/$sn/assign","POST",JSONObject().put("offerId",offerId).put("reason",reason))}}
-            "approveTopup","rejectTopup"->mutate("/admin/topup-requests/$id/${if(action=="approveTopup")"approve" else "reject"}","POST",JSONObject())
+            "approveTopup"->confirm("اعتماد طلب الشحن وإضافة المبلغ إلى محفظة الفني؟"){mutate("/admin/topup-requests/$id/approve","POST",JSONObject())}
+            "rejectTopup"->ask("سبب رفض طلب الشحن","reason"){reason->mutate("/admin/topup-requests/$id/reject","POST",JSONObject().put("reason",reason))}
             "complaint"->form("تحديث الشكوى",listOf("الحالة (جديدة / قيد المراجعة / تم الحل / مرفوضة)","ملاحظة الإدارة","الرد على العميل")){v->mutate("/admin/complaints/$id","PATCH",JSONObject().put("status",v[0]).put("adminNote",v[1]).put("adminResponse",v[2]))}
             "block"->ask("سبب حظر العميل","reason"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/block","POST",JSONObject().put("reason",v))}
             "note"->ask("الملاحظة الداخلية","note"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/note","POST",JSONObject().put("note",v))}
