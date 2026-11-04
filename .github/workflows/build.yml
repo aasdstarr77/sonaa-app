@@ -1,7 +1,7 @@
 name: Build APK Final
 on:
   push:
-    branches: [ main, 'feature/sync-web-updates-20261103' ]
+    branches: [ main, 'feature/sync-web-updates-20261103', 'experiment/apk-size-optimization' ]
     paths:
       - 'App.js'
       - 'src/**'
