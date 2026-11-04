@@ -145,7 +145,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         Row(Modifier.fillMaxWidth().background(Color.White).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            AdminSection.entries.forEach { tab ->
+            AdminSection.entries.filter { canReadSection(state.adminInfo,it) }.forEach { tab ->
                 TextButton(onClick = { if (tab == AdminSection.DASHBOARD) vm.refresh() else vm.open(tab) }) {
                     Text(tab.title, color = if (tab == state.section) Accent else Color.DarkGray, fontWeight = if (tab == state.section) FontWeight.Bold else FontWeight.Normal)
                 }
@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeClientProfile() }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
             state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery) { method,path,body -> vm.recoveryAction(method,path,body) }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, { path -> canWriteApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -199,6 +199,7 @@ private val permissionSections=listOf(
  "notifications" to "الإشعارات","clientsData" to "بيانات العملاء"
 )
 private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean>>{
+ if(!item.isJsonObject)return emptyMap()
  val obj=item.asJsonObject
  val role=obj.get("adminRole")?.takeIf{!it.isJsonNull}?.asString?:if(obj.get("role")?.asString=="admin")"مشرف" else "قراءة فقط"
  val all=permissionSections.map{it.first}.toSet()
@@ -225,6 +226,69 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
  }
  return out
 }
+private fun isRootAdminInfo(info:JsonElement?):Boolean{
+ val o=info?.takeIf{it.isJsonObject}?.asJsonObject?:return false
+ return o.get("isRootAdmin")?.asBoolean==true||o.get("adminRoleLabel")?.asString=="أدمن رئيسي"
+}
+private fun permissionKeyForNativePath(path:String):String?{
+ val clean=path.substringBefore("?").removePrefix("/")
+ if(clean.startsWith("api/orders/admin/")&&clean.endsWith("/publish"))return "publishOrders"
+ if(clean.startsWith("api/orders/admin/")&&clean.endsWith("/voice-reviewed"))return "voiceReview"
+ if(clean.startsWith("api/orders/")&&clean.endsWith("/voice"))return "voiceReview"
+ if(clean.startsWith("api/password-recovery/admin/requests"))return "passwordRecovery"
+ if(clean.startsWith("api/admin/admin-users")||clean.startsWith("api/admin/audit-logs")||clean.startsWith("api/admin/page-visits"))return null
+ if(clean.startsWith("api/admin/wallet/")||clean.endsWith("/set-balance")||clean.endsWith("/add-balance"))return "wallet"
+ val prefix="api/admin/"
+ if(!clean.startsWith(prefix))return null
+ return when(clean.removePrefix(prefix).substringBefore("/")){
+  "me","counts","stats","reports","mobile-panel"->"dashboard"
+  "fannis","fanni-profile-edits"->"fannis"
+  "orders"->"orders"
+  "offers"->"offers"
+  "complaints"->"complaints"
+  "topup-requests"->"topups"
+  "clients"->"clients"
+  "client-accounts"->"clientsData"
+  "pricing"->"pricing"
+  "settings"->"settings"
+  "content"->"content"
+  "support"->"support"
+  "regions"->"regions"
+  "notifications"->"notifications"
+  "services"->"services"
+  else->null
+ }
+}
+private fun canReadSection(info:JsonElement?,section:AdminSection):Boolean{
+ if(isRootAdminInfo(info))return true
+ val key=when(section){
+  AdminSection.DASHBOARD,AdminSection.STATS,AdminSection.REPORTS->"dashboard"
+  AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.PROFILE_EDITS,AdminSection.DISABLED,AdminSection.LEVELS->"fannis"
+  AdminSection.ORDERS->"orders"
+  AdminSection.OFFERS->"offers"
+  AdminSection.WALLETS->"wallet"
+  AdminSection.TOPUPS->"topups"
+  AdminSection.SERVICES->"services"
+  AdminSection.REGIONS->"regions"
+  AdminSection.COMPLAINTS->"complaints"
+  AdminSection.SUPPORT->"support"
+  AdminSection.RECOVERY->"passwordRecovery"
+  AdminSection.NOTIFICATIONS->"notifications"
+  AdminSection.CONTENT->"content"
+  AdminSection.PRICING->"pricing"
+  AdminSection.SETTINGS->"settings"
+  AdminSection.CLIENTS->"clients"
+  AdminSection.SECURITY,AdminSection.PAGE_VISITS,AdminSection.ROLES->return false
+ }
+ return permissionDefaults(info).get(key)?.first==true
+}
+private fun canWriteApi(info:JsonElement?,path:String):Boolean{
+ if(isRootAdminInfo(info))return true
+ val key=permissionKeyForNativePath(path)?:return false
+ if(key=="dashboard"&&path.contains("/reports"))return permissionDefaults(info)[key]?.first==true
+ return permissionDefaults(info)[key]?.second==true
+}
+
 @Composable private fun AdminPermissionsDialog(item:JsonElement,onDismiss:()->Unit,onSave:(JsonObject)->Unit){
  var permissions by remember(item){mutableStateOf(permissionDefaults(item))}
  val role=item.asJsonObject.get("adminRole")?.takeIf{!it.isJsonNull}?.asString?: "مشرف"
@@ -546,7 +610,7 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onBulkAction:(AdminSection,List<String>,String)->Unit, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onBulkAction:(AdminSection,List<String>,String)->Unit, onCanWriteApi:(String)->Boolean, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -700,10 +764,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
     )
     Column(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp), label = { Text("بحث في " + section.title) }, singleLine = true)
-        if(section==AdminSection.SERVICES||section==AdminSection.REGIONS) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
-        if(section==AdminSection.SERVICES) Button(onClick={categoryOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب أقسام الخدمات")}
-        if(section==AdminSection.SERVICES) OutlinedButton(onClick={serviceOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب الخدمات داخل القسم")}
-        if(section==AdminSection.NOTIFICATIONS) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
+        if((section==AdminSection.SERVICES&&onCanWriteApi("api/admin/services"))||(section==AdminSection.REGIONS&&onCanWriteApi("api/admin/regions"))) Button(onClick={createOpen=true},modifier=Modifier.fillMaxWidth()){Text(if(section==AdminSection.SERVICES)"إضافة خدمة جديدة" else "إضافة منطقة جديدة")}
+        if(section==AdminSection.SERVICES&&onCanWriteApi("api/admin/services/categories/order")) Button(onClick={categoryOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب أقسام الخدمات")}
+        if(section==AdminSection.SERVICES&&onCanWriteApi("api/admin/services/order")) OutlinedButton(onClick={serviceOrderOpen=true},modifier=Modifier.fillMaxWidth()){Text("ترتيب الخدمات داخل القسم")}
+        if(section==AdminSection.NOTIFICATIONS&&onCanWriteApi("api/admin/notifications/direct")) Button(onClick={notifyOpen=true},modifier=Modifier.fillMaxWidth()){Text("إنشاء وإرسال إشعار")}
         if(section==AdminSection.SUPPORT) Button(onClick={onSupportSearch(query)},enabled=query.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("بحث في الطلبات والشكاوى وأرقام الهواتف")}
         if(selectedBulk.isNotEmpty()){
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
@@ -751,7 +815,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
             }
         } else LazyColumn(contentPadding = PaddingValues(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(filtered) { item ->
-                val actions=rowActions(section,item)
+                val actions=rowActions(section,item).filter{onCanWriteApi(it.path)}
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         if(section==AdminSection.ORDERS){
