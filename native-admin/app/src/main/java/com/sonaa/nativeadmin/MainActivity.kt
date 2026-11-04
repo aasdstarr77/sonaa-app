@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity() {
             state.walletFanniId!=null -> WalletTransactionsScreen(state.walletTransactions,vm::closeWalletTransactions)
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeClientProfile() }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.mutate(method,path,body);vm.closeProfile() }
+            state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery) { method,path,body -> vm.recoveryAction(method,path,body) }
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
