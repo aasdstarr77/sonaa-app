@@ -368,7 +368,10 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("رفض","POST","api/admin/fannis/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")}),
    RowAction("إيقاف","POST","api/admin/fannis/$id/disable",JsonObject().apply{addProperty("reason","إيقاف من تطبيق الإدارة")}),
    RowAction("تفعيل","POST","api/admin/fannis/$id/enable"),
-   RowAction("حذف الفني","DELETE","api/admin/fannis/$id")
+   RowAction("حذف الفني","DELETE","api/admin/fannis/$id"),
+   RowAction("تعديل المستوى","PATCH","api/admin/fannis/$id/level",JsonObject(),"level","المستوى الجديد"),
+   RowAction("شارة موثوق","PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge","trusted")}),
+   RowAction("حفظ ملاحظة","PATCH","api/admin/fannis/$id/note",JsonObject(),"note","الملاحظة الداخلية")
   )
   AdminSection.PROFILE_EDITS->listOf(
    RowAction("قبول التعديل","POST","api/admin/fanni-profile-edits/$id/approve"),
