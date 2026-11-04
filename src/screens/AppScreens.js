@@ -216,7 +216,8 @@ function AppScreens({ onScreenChange, onAuthRestoringChange }) {
     async function loadPublicData() {
       setServicesLoading(true); setServicesError('');
       try {
-        const [serviceResponse, regionResponse] = await Promise.allSettled([api('/services'), api('/regions')]);
+        const regionRequest = api('/regions').catch(error => error?.status === 404 ? api('/areas') : Promise.reject(error));
+        const [serviceResponse, regionResponse] = await Promise.allSettled([api('/services'), regionRequest]);
         if (serviceResponse.status !== 'fulfilled') throw serviceResponse.reason;
         const serviceResult = serviceResponse.value;
         if (!Array.isArray(serviceResult.categories) || serviceResult.categories.length === 0) throw new Error('قائمة الخدمات من الخادم غير متاحة حاليًا');
