@@ -213,7 +213,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("اعتماد","POST","api/admin/fannis/$id/approve"),
    RowAction("رفض","POST","api/admin/fannis/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")}),
    RowAction("إيقاف","POST","api/admin/fannis/$id/disable",JsonObject().apply{addProperty("reason","إيقاف من تطبيق الإدارة")}),
-   RowAction("تفعيل","POST","api/admin/fannis/$id/enable")
+   RowAction("تفعيل","POST","api/admin/fannis/$id/enable"),\n   RowAction("حذف الفني","DELETE","api/admin/fannis/$id")
   )
   AdminSection.PROFILE_EDITS->listOf(
    RowAction("قبول التعديل","POST","api/admin/fanni-profile-edits/$id/approve"),
@@ -224,7 +224,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("رفض الشحن","POST","api/admin/topup-requests/$id/reject",JsonObject().apply{addProperty("reason","رفض من تطبيق الإدارة")})
   )
   AdminSection.CLIENTS->if(phone!=null)listOf(
-   RowAction("حظر العميل","POST","api/admin/clients/$phone/block"),
+   RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
    RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock")
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null)listOf(
@@ -238,7 +238,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("رفض","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","مرفوضة")})
   )
   AdminSection.REGIONS->listOf(
-   RowAction("تفعيل","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",true)}),
+   RowAction("تفعيل","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",true)}),\n   RowAction("استعادة","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isDeleted",false)}),
    RowAction("إيقاف","PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("isActive",false)}),
    RowAction("حذف","DELETE","api/admin/regions/$id")
   )
