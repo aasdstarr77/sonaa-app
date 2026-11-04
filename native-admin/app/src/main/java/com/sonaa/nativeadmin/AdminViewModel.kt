@@ -20,8 +20,8 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  }
  fun refresh()=load(AdminSection.DASHBOARD)
  fun open(section:AdminSection)=load(section)
- private fun load(section:AdminSection)=viewModelScope.launch{
-  _state.value=_state.value.copy(section=section,busy=true,error=null,items=emptyList(),actionMessage=null)
+ private fun load(section:AdminSection,preserveMessage:Boolean=false)=viewModelScope.launch{
+  _state.value=_state.value.copy(section=section,busy=true,error=null,items=emptyList(),actionMessage=if(preserveMessage)_state.value.actionMessage else null)
   try{val data=repo.get(section);val loaded=section.extract(data);val visible=when(section){AdminSection.PENDING->loaded.filter{it.isJsonObject&&it.asJsonObject.get("isApproved")?.asBoolean!=true&&it.asJsonObject.get("isDisabled")?.asBoolean!=true&&it.asJsonObject.get("status")?.asString!="rejected"};AdminSection.DISABLED->loaded.filter{it.isJsonObject&&(it.asJsonObject.get("isDisabled")?.asBoolean==true||it.asJsonObject.get("status")?.asString=="disabled")};AdminSection.OFFERS->loaded.filter{it.isJsonObject&&it.asJsonObject.get("offers")?.let{v->v.isJsonArray&&v.asJsonArray.size()>0}==true};else->loaded};_state.value=_state.value.copy(busy=false,stats=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)data else _state.value.stats,items=visible,payload=data)}
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل البيانات")}
  }
