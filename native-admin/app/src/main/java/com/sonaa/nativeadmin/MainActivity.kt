@@ -85,6 +85,9 @@ class MainActivity : ComponentActivity() {
             "technicians" -> AdminSection.TECHNICIANS
             "clients" -> AdminSection.CLIENTS
             "complaints" -> AdminSection.COMPLAINTS
+            "recovery" -> AdminSection.RECOVERY
+            "topups" -> AdminSection.TOPUPS
+            "wallets" -> AdminSection.WALLETS
             else -> null
         }
         if (section != null && vm != null) vm.open(section)
