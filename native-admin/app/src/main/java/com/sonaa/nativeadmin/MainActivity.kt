@@ -156,6 +156,7 @@ class MainActivity : ComponentActivity() {
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
             state.section == AdminSection.DASHBOARD -> Dashboard(state.stats)
+            state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload) { method, path, body -> vm.mutate(method, path, body) }
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice) { method, path, body -> vm.mutate(method, path, body) }
         }
@@ -178,6 +179,25 @@ class MainActivity : ComponentActivity() {
    Text("تسجيل صوتي للطلب",modifier=Modifier.weight(1f),fontWeight=FontWeight.Bold,color=DarkAccent)
    Button(onClick={if(prepared){if(playing){player.pause();playing=false}else{player.start();playing=true}}},enabled=prepared){Text(if(!prepared)"تحميل..." else if(playing)"إيقاف مؤقت" else "تشغيل")}
   }
+ }
+}
+
+@Composable private fun ReportEditor(payload:JsonElement?,onGenerate:(String,String,JsonObject)->Unit){
+ var startDate by remember{mutableStateOf("")}
+ var endDate by remember{mutableStateOf("")}
+ var service by remember{mutableStateOf("")}
+ var area by remember{mutableStateOf("")}
+ val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
+ val summary=root?.get("summary")?.takeIf{it.isJsonObject}?.asJsonObject
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+  Text("تقارير المنصة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+  OutlinedTextField(startDate,{startDate=it},label={Text("من تاريخ YYYY-MM-DD")},modifier=Modifier.fillMaxWidth())
+  OutlinedTextField(endDate,{endDate=it},label={Text("إلى تاريخ YYYY-MM-DD")},modifier=Modifier.fillMaxWidth())
+  OutlinedTextField(service,{service=it},label={Text("الخدمة")},modifier=Modifier.fillMaxWidth())
+  OutlinedTextField(area,{area=it},label={Text("المنطقة")},modifier=Modifier.fillMaxWidth())
+  Button(onClick={onGenerate("POST","api/admin/reports",JsonObject().apply{addProperty("startDate",startDate);addProperty("endDate",endDate);addProperty("service",service);addProperty("area",area)})},modifier=Modifier.fillMaxWidth()){Text("إنشاء التقرير")}
+  if(summary!=null) summary.entrySet().forEach{Text(it.key+" : "+it.value.toString())}
+  root?.get("topServices")?.takeIf{it.isJsonArray}?.asJsonArray?.forEach{Text(it.toString())}
  }
 }
 
