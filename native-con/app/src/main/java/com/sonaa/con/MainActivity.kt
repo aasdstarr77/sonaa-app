@@ -30,6 +30,7 @@ class MainActivity : Activity() {
     private var token = ""
     private var profile = JSONObject()
     private var active = "dashboard"
+    private var currentFilter = "الكل"
     private var allRows = JSONArray()
     private var contentData = JSONObject()
     private val selectedRows = linkedMapOf<String,JSONObject>()
@@ -168,6 +169,7 @@ class MainActivity : Activity() {
         root.addView(searchBox)
         val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
         controls.addView(button("تحديث"){loadSection()})
+        controls.addView(button("فلترة الحالة"){showStatusFilters()})
         controls.addView(button("إجراءات المحدد"){showBulkActions()})
         controls.addView(button("بحث الدعم"){if(active!="support"){showMessage("افتح قسم الدعم أولًا");return@button};val q=searchBox.text.toString().trim();if(q.length<2)showMessage("اكتب كود الطلب أو رقم هاتف للبحث")else request("/admin/support/search?q=${enc(q)}","GET",token,null){d,e->if(e!=null)showMessage(e)else{allRows=extractArray(d?:JSONObject(),listOf("results","orders","complaints","items","data"));renderRows()}}})
         controls.addView(button("إضافة عنصر"){createForActive()})
@@ -178,6 +180,7 @@ class MainActivity : Activity() {
         loadSection()
     }
     private fun loadSection() {
+        currentFilter="الكل"
         val section=sections.firstOrNull{it.id==active} ?: sections[0]
         status.text="جاري تحميل ${section.label}..."
         if(section.id=="stats") {
@@ -285,6 +288,23 @@ class MainActivity : Activity() {
         c.keys().forEach{k->body.addView(text((labels[k]?:k)+" : "+c.opt(k),17f,true))}
         status.text="مؤشرات المنصة"
     }
+
+    private fun showStatusFilters() {
+        val options=when(active){
+            "orders"->arrayOf("الكل","قيد المراجعة","تم النشر","وصلتك عروض","تم اختيار فني","تم الانتهاء","ملغي","مؤرشف")
+            "fannis","pending","disabled","levels"->arrayOf("الكل","معتمد","قيد المراجعة","معلق","مرفوض")
+            "topups"->arrayOf("الكل","قيد المراجعة","مقبول","مرفوض","pending","approved","rejected")
+            "complaints"->arrayOf("الكل","جديدة","قيد المراجعة","تم الحل","مرفوضة")
+            "clients"->arrayOf("الكل","نشط","معلق")
+            else->arrayOf("الكل")
+        }
+        AlertDialog.Builder(this).setTitle("فلترة حسب الحالة").setSingleChoiceItems(options,options.indexOf(currentFilter).coerceAtLeast(0)){dialog,which->
+            currentFilter=options[which]
+            dialog.dismiss()
+            renderRows()
+        }.setNegativeButton("إغلاق",null).show()
+    }
+
     private fun renderRows() {
         if(!::body.isInitialized)return
         body.removeAllViews()
@@ -292,6 +312,7 @@ class MainActivity : Activity() {
         for(i in 0 until allRows.length()){
             val item=allRows.optJSONObject(i)?:continue
             val raw=item.toString()
+            if(currentFilter!="الكل" && item.optString("status",item.optString("actualStatus",""))!=currentFilter)continue
             if(active=="pending"&&(item.optBoolean("isApproved")||item.optBoolean("isDisabled")))continue
             if(active=="disabled"&&!item.optBoolean("isDisabled"))continue
             if(active=="offers"&&(item.optJSONArray("offers")?.length()?:0)==0)continue
