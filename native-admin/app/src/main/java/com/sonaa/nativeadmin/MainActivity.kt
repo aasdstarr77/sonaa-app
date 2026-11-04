@@ -198,8 +198,8 @@ private val permissionSections=listOf(
  "support" to "الدعم","regions" to "المناطق","offers" to "العروض",
  "notifications" to "الإشعارات","clientsData" to "بيانات العملاء"
 )
-private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean>>{
- if(!item.isJsonObject)return emptyMap()
+private fun permissionDefaults(item:JsonElement?):Map<String,Pair<Boolean,Boolean>>{
+ if(item==null||!item.isJsonObject)return emptyMap()
  val obj=item.asJsonObject
  val role=obj.get("adminRole")?.takeIf{!it.isJsonNull}?.asString?:if(obj.get("role")?.asString=="admin")"مشرف" else "قراءة فقط"
  val all=permissionSections.map{it.first}.toSet()
