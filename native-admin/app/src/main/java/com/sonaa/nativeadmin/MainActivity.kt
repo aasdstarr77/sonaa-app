@@ -356,6 +356,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyPhone by remember(section){mutableStateOf("")}
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
+    var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
     val filtered = remember(items, query, statusFilter, regionFilter, dateFilter) {
         items.filter { item ->
             val raw = item.toString()
@@ -369,6 +370,11 @@ private data class RowAction(val label:String,val method:String,val path:String,
             (dateFilter.isBlank() || date.contains(dateFilter.trim(), true))
         }
     }
+    correctionOrder?.let{order->OrderCorrectionDialog(order,{correctionOrder=null}){body->
+        val sn=order.asJsonObject.get("sn")?.asString.orEmpty()
+        correctionOrder=null
+        onAction("PATCH","api/admin/orders/$sn/correct",body)
+    }}
     if(notifyOpen) AlertDialog(
         onDismissRequest={notifyOpen=false},
         title={Text("إرسال إشعار مباشر")},
@@ -462,6 +468,9 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         if(section==AdminSection.TECHNICIANS||section==AdminSection.PENDING||section==AdminSection.DISABLED){
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
                             if(fanniId.isNotBlank())OutlinedButton(onClick={onEditProfile(fanniId)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تعديل بيانات الفني")}
+                        }
+                        if(section==AdminSection.ORDERS){
+                            OutlinedButton(onClick={correctionOrder=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تصحيح بيانات الطلب")}
                         }
                         if(section==AdminSection.ORDERS && item.isJsonObject && item.asJsonObject.get("hasVoiceRecording")?.asBoolean==true){
                             val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
