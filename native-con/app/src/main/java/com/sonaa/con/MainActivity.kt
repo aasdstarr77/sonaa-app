@@ -38,7 +38,12 @@ class MainActivity : Activity() {
         Section("dashboard","الرئيسية","/admin/counts"),
         Section("stats","الإحصائيات","/admin/reports"),
         Section("orders","الطلبات","/admin/orders?limit=500",listOf("orders","data","items")),
-        Section("fannis","الفنيون","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("pending","انتظار الاعتماد","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("disabled","الفنيون الموقوفون","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("offers","عروض الفنيين","/admin/orders?limit=500",listOf("orders","data","items")),\n        Section("wallets","محافظ الفنيين","/admin/fannis?limit=500",listOf("fannis","data","items")),\n        Section("levels","المستويات والشارات","/admin/fannis?limit=500",listOf("fannis","data","items")),
+        Section("fannis","الفنيون","/admin/fannis?limit=500",listOf("fannis","data","items")),
+        Section("pending","انتظار الاعتماد","/admin/fannis?limit=500",listOf("fannis","data","items")),
+        Section("disabled","الفنيون الموقوفون","/admin/fannis?limit=500",listOf("fannis","data","items")),
+        Section("offers","عروض الفنيين","/admin/orders?limit=500",listOf("orders","data","items")),
+        Section("wallets","محافظ الفنيين","/admin/fannis?limit=500",listOf("fannis","data","items")),
+        Section("levels","المستويات والشارات","/admin/fannis?limit=500",listOf("fannis","data","items")),
         Section("profileEdits","تعديل البيانات","/admin/fanni-profile-edits",listOf("requests","edits","data","items")),
         Section("clients","العملاء","/admin/clients?limit=500",listOf("clients","data","items")),
         Section("regions","المناطق","/admin/regions",listOf("regions","items","data")),
@@ -317,7 +322,8 @@ class MainActivity : Activity() {
                 mutate("/admin/admin-users/$id/permissions","PATCH",JSONObject().put("permissions",perms))
             }.show()
     }
-\n    private fun createForActive() {
+
+    private fun createForActive() {
         if(!canWrite(active)){showMessage("لا تملك صلاحية الإضافة في هذا القسم");return}
         when(active){
             "regions"->ask("اسم المنطقة","name"){mutate("/admin/regions","POST",JSONObject().put("name",it))}
