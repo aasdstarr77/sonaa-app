@@ -295,7 +295,7 @@ class MainActivity : Activity() {
                 add("إضافة رصيد" to "addBalance");add("تسوية الرصيد" to "setBalance")
                 add("تجميد المحفظة" to "freeze");add("المستوى المهني" to "level");add("شارة موثوق" to "badge");add("ملاحظة داخلية" to "fanniNote");add("حد العروض" to "limit");add("ضوابط الحساب" to "controls");add("حذف الفني" to "delete")
             }
-            "orders"->buildList{val sn=item.optString("sn");if(item.optString("status")=="قيد المراجعة")add("نشر" to "publish");add("إلغاء" to "cancel");add("أرشفة" to "archive");add("تصحيح" to "correct");if(sn.isNotBlank()){add("العروض" to "offers");add("تعيين فني" to "assign");add("حذف الطلب" to "deleteOrder")}}
+            "orders"->buildList{val sn=item.optString("sn");if(item.optString("status")=="قيد المراجعة")add("نشر" to "publish");add("إلغاء" to "cancel");add("أرشفة" to "archive");add("تصحيح" to "correct");if(sn.isNotBlank()){add("العروض" to "offers");if(profile.optString("adminRoleLabel")=="أدمن رئيسي")add("تعيين فني" to "assign");add("حذف الطلب" to "deleteOrder")}}
             "topups"->listOf("قبول الشحن" to "approveTopup","رفض الشحن" to "rejectTopup")
             "complaints"->listOf("تحديث الشكوى" to "complaint")
             "clients"->listOf((if(item.optString("status")=="معلق")"إلغاء الحظر" else "حظر العميل") to (if(item.optString("status")=="معلق")"unblock" else "block"),"ملاحظة" to "note","تغيير كلمة السر" to "clientPassword","تعديل البيانات" to "clientProfile")
@@ -465,9 +465,19 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this).setTitle("عروض الطلب $sn").setItems(labels){_,which->
             val offer=offers.optJSONObject(which)?:JSONObject()
-            AlertDialog.Builder(this).setTitle(labels[which]).setItems(arrayOf("إزالة العرض","رفض العرض")){_,choice->
-                if(choice==0)confirm("إزالة العرض؟"){mutate("/admin/offers/$sn/$which","DELETE",null)}
-                else ask("سبب رفض العرض","reason"){mutate("/admin/offers/$sn/$which/reject","POST",JSONObject().put("reason",it))}
+            val choices=if(profile.optString("adminRoleLabel")=="أدمن رئيسي")arrayOf("إزالة العرض","رفض العرض","تعيين الفني على الطلب") else arrayOf("إزالة العرض","رفض العرض")
+            AlertDialog.Builder(this).setTitle(labels[which]).setItems(choices){_,choice->
+                when(choices[choice]){
+                    "إزالة العرض"->confirm("إزالة العرض؟"){mutate("/admin/offers/$sn/$which","DELETE",null)}
+                    "رفض العرض"->ask("سبب رفض العرض","reason"){mutate("/admin/offers/$sn/$which/reject","POST",JSONObject().put("reason",it))}
+                    "تعيين الفني على الطلب"->{
+                        val offerId=offer.optString("_id",offer.optString("id"))
+                        ask("سبب التعيين الإداري (3 أحرف على الأقل)","reason"){reason->
+                            if(reason.length<3){showMessage("سبب التعيين مطلوب من 3 أحرف");return@ask}
+                            mutate("/admin/orders/$sn/assign","POST",JSONObject().put("offerId",offerId).put("reason",reason))
+                        }
+                    }
+                }
             }.show()
         }.setNegativeButton("إغلاق",null).show()
     }
