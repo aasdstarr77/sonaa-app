@@ -375,7 +375,8 @@ class MainActivity : Activity() {
             if(e!=null)showMessage(e) else {playedVoice.remove(sn);showMessage(d?.optString("message","تم تأكيد المراجعة")?:"تم تأكيد المراجعة");loadSection()}
         }
     }
-\n    private fun showBulkActions() {
+
+    private fun showBulkActions() {
         val rows=selectedRows.filterKeys{it.startsWith("$active:")}.values.toList()
         if(rows.isEmpty()){showMessage("حدد عناصر أولًا");return}
         val actions=when(active){
