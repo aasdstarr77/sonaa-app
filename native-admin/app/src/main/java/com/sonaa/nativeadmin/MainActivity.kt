@@ -183,6 +183,28 @@ class MainActivity : ComponentActivity() {
  }
 }
 
+@Composable private fun ProfileEditor(payload:JsonElement,id:String,onCancel:()->Unit,onSave:(String,String,JsonObject)->Unit){
+ val f=payload.takeIf{it.isJsonObject}?.asJsonObject?.get("fanni")?.takeIf{it.isJsonObject}?.asJsonObject
+ var phone by remember(payload){mutableStateOf(f?.get("phone")?.asString.orEmpty())}
+ var specialties by remember(payload){mutableStateOf(f?.get("specialties")?.asJsonArray?.joinToString("، "){it.asString}.orEmpty())}
+ var areas by remember(payload){mutableStateOf(f?.get("areas")?.asJsonArray?.joinToString("، "){it.asString}.orEmpty())}
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+  Text("تعديل بيانات الفني",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+  OutlinedTextField(phone,{phone=it},label={Text("رقم الهاتف")},modifier=Modifier.fillMaxWidth())
+  OutlinedTextField(specialties,{specialties=it},label={Text("التخصصات — افصل بينها بفاصلة")},modifier=Modifier.fillMaxWidth(),minLines=2)
+  OutlinedTextField(areas,{areas=it},label={Text("مناطق العمل — افصل بينها بفاصلة")},modifier=Modifier.fillMaxWidth(),minLines=3)
+  Button(onClick={
+   val body=JsonObject().apply{
+    addProperty("phone",phone.trim())
+    add("specialties",com.google.gson.JsonArray().apply{specialties.split(',', '،').map{it.trim()}.filter{it.isNotEmpty()}.forEach{add(it)}})
+    add("areas",com.google.gson.JsonArray().apply{areas.split(',', '،').map{it.trim()}.filter{it.isNotEmpty()}.forEach{add(it)}})
+   }
+   onSave("PATCH","api/admin/fannis/$id/profile",body)
+  },modifier=Modifier.fillMaxWidth()){Text("حفظ بيانات الفني")}
+  OutlinedButton(onClick=onCancel,modifier=Modifier.fillMaxWidth()){Text("رجوع")}
+ }
+}
+
 @Composable private fun ReportEditor(payload:JsonElement?,onGenerate:(String,String,JsonObject)->Unit){
  var startDate by remember{mutableStateOf("")}
  var endDate by remember{mutableStateOf("")}
