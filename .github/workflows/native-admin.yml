@@ -4,12 +4,9 @@ on:
   push:
     paths:
       - "native-admin/**"
-      - ".github/workflows/native-admin.yml"
   pull_request:
     paths:
       - "native-admin/**"
-      - ".github/workflows/native-admin.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
