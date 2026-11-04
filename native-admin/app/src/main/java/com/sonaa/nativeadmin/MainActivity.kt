@@ -489,6 +489,7 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
   var announcement by remember(payload){mutableStateOf(p?.get("announcement")?.asString.orEmpty())}
   var question by remember(payload){mutableStateOf("")}
   var answer by remember(payload){mutableStateOf("")}
+  var faqIndex by remember(payload){mutableStateOf(-1)}
   val faqs=p?.get("faqs")?.takeIf{it.isJsonArray}?.asJsonArray
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
    Text("الإعلانات والأسئلة الشائعة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
@@ -500,7 +501,15 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
      Column(Modifier.padding(12.dp)){
       Text(faq.asJsonObject.get("question")?.asString.orEmpty(),fontWeight=FontWeight.Bold)
       Text(faq.asJsonObject.get("answer")?.asString.orEmpty(),style=MaterialTheme.typography.bodySmall)
-      TextButton(onClick={onSave("DELETE","api/admin/content/faqs/$index",JsonObject())}){Text("حذف السؤال")}
+      Text("الحالة: "+if(faq.asJsonObject.get("active")?.asBoolean!=false)"مفعل" else "متوقف",style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+      Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+       TextButton(onClick={faqIndex=index;question=faq.asJsonObject.get("question")?.asString.orEmpty();answer=faq.asJsonObject.get("answer")?.asString.orEmpty()}){Text("تعديل")}
+       TextButton(onClick={
+        val body=JsonObject().apply{addProperty("announcement",announcement.trim());val array=com.google.gson.JsonArray();faqs?.forEachIndexed{idx,entry->val copy=entry.asJsonObject.deepCopy();if(idx==index)copy.addProperty("active",copy.get("active")?.asBoolean==false);array.add(copy)};add("faqs",array)}
+        onSave("PUT","api/admin/content",body)
+       }){Text(if(faq.asJsonObject.get("active")?.asBoolean==false)"تفعيل" else "إيقاف")}
+       TextButton(onClick={onSave("DELETE","api/admin/content/faqs/$index",JsonObject())}){Text("حذف",color=Color(0xFFB3261E))}
+      }
      }
     }
    }
@@ -511,11 +520,15 @@ private fun permissionDefaults(item:JsonElement):Map<String,Pair<Boolean,Boolean
      addProperty("announcement",announcement.trim())
      val array=com.google.gson.JsonArray()
      faqs?.forEach{array.add(it)}
-     array.add(JsonObject().apply{addProperty("question",question.trim());addProperty("answer",answer.trim());addProperty("active",true)})
+     if(faqIndex>=0&&faqIndex<array.size()){
+      val old=array[faqIndex].asJsonObject.deepCopy()
+      old.addProperty("question",question.trim());old.addProperty("answer",answer.trim());array.set(faqIndex,old)
+     }else array.add(JsonObject().apply{addProperty("question",question.trim());addProperty("answer",answer.trim());addProperty("active",true)})
      add("faqs",array)
     }
-    onSave("PUT","api/admin/content",body)
-   },enabled=question.trim().length>=2&&answer.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("إضافة السؤال")}
+    onSave("PUT","api/admin/content",body);faqIndex=-1;question="";answer=""
+   },enabled=question.trim().length>=2&&answer.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text(if(faqIndex>=0)"حفظ تعديل السؤال" else "إضافة السؤال")}
+   if(faqIndex>=0)TextButton(onClick={faqIndex=-1;question="";answer=""},modifier=Modifier.fillMaxWidth()){Text("إلغاء التعديل")}
   }
  }
 }
