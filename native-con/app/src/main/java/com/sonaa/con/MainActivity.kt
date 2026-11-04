@@ -201,6 +201,9 @@ class MainActivity : Activity() {
         for(i in 0 until allRows.length()){
             val item=allRows.optJSONObject(i)?:continue
             val raw=item.toString()
+            if(active=="pending"&&(item.optBoolean("isApproved")||item.optBoolean("isDisabled")))continue
+            if(active=="disabled"&&!item.optBoolean("isDisabled"))continue
+            if(active=="offers"&&(item.optJSONArray("offers")?.length()?:0)==0)continue
             if(q.isNotBlank()&&!raw.lowercase().contains(q))continue
             val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(12,8,12,10);setBackgroundColor(white)}
             val name=item.optString("name",item.optString("title",item.optString("sn",item.optString("action","سجل ${i+1}"))))
@@ -239,6 +242,7 @@ class MainActivity : Activity() {
             "clients"->listOf((if(item.optString("status")=="معلق")"إلغاء الحظر" else "حظر العميل") to (if(item.optString("status")=="معلق")"unblock" else "block"),"ملاحظة" to "note","حذف الحساب" to "deleteClient")
             "regions"->listOf("إظهار/إخفاء" to "toggle","حذف" to "deleteRegion")
             "services"->listOf("إخفاء" to "hideService","إظهار" to "showService","حذف" to "deleteService")
+            "profileEdits"->listOf("اعتماد التعديل" to "approveEdit","رفض التعديل" to "rejectEdit")
             "support"->listOf("تمت المراجعة" to "review")\n            "wallets"->listOf("إضافة رصيد" to "addBalance","تسوية الرصيد" to "setBalance","تجميد المحفظة" to "freeze","حركات المحفظة" to "transactions")\n            "offers"->listOf("مراجعة العروض" to "offers")
             "roles"->listOf("تغيير المنصب" to "role","تخصيص الصلاحيات" to "permissions","سحب الصلاحية" to "revoke")
             else->emptyList()
@@ -264,7 +268,7 @@ class MainActivity : Activity() {
             "complaint"->form("تحديث الشكوى",listOf("الحالة (جديدة / قيد المراجعة / تم الحل / مرفوضة)","ملاحظة الإدارة","الرد على العميل")){v->mutate("/admin/complaints/$id","PATCH",JSONObject().put("status",v[0]).put("adminNote",v[1]).put("adminResponse",v[2]))}
             "block"->ask("سبب حظر العميل","reason"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/block","POST",JSONObject().put("reason",v))}
             "note"->ask("الملاحظة الداخلية","note"){v->mutate("/admin/clients/${enc(item.optString("phone"))}/note","POST",JSONObject().put("note",v))}
-            "toggle"->mutate("/admin/${if(active=="regions")"regions" else "services"}/$id","PATCH",JSONObject().put(if(active=="regions")"isActive" else "isActive",!item.optBoolean("isActive",true)))
+            "toggle"->if(active=="regions")mutate("/admin/regions/$id","PATCH",JSONObject().put("isActive",!item.optBoolean("isActive",true))) else mutate("/admin/services/${enc(item.optString("name"))}/${if(item.optBoolean("isActive",true))"hide" else "show"}","POST",JSONObject())
             "review"->mutate("/admin/support/$sn/review","POST",JSONObject())
             "role"->ask("المنصب: مدير أو مشرف أول أو مشرف أو قراءة فقط","role"){mutate("/admin/admin-users/$id/role","PATCH",JSONObject().put("role",it))}
             "permissions"->showMessage("تخصيص الصلاحيات التفصيلي متاح بعد اختيار حساب المشرف من قسم الصلاحيات.")
@@ -287,7 +291,7 @@ class MainActivity : Activity() {
         val faqs=contentData.optJSONArray("faqs")?:JSONArray()
         body.addView(text("الأسئلة الشائعة: ${faqs.length()}",16f,true))
         for(i in 0 until faqs.length()){val f=faqs.optJSONObject(i)?:continue;body.addView(text("${i+1}) ${f.optString("question")}\n${f.optString("answer")}",12f));body.addView(button("حذف السؤال"){mutate("/admin/content/faqs/$i","DELETE",null)})}
-        body.addView(button("إضافة سؤال شائع"){form("إضافة سؤال",listOf("السؤال","الإجابة")){v->val next=JSONArray(faqs).put(JSONObject().put("question",v[0]).put("answer",v[1]).put("active",true));mutate("/admin/content","PUT",JSONObject().put("announcement",announcement.text.toString()).put("faqs",next))}})
+        body.addView(button("إضافة سؤال شائع"){form("إضافة سؤال",listOf("السؤال","الإجابة")){v->val next=JSONArray();for(j in 0 until faqs.length())next.put(faqs.opt(j));next.put(JSONObject().put("question",v[0]).put("answer",v[1]).put("active",true));mutate("/admin/content","PUT",JSONObject().put("announcement",announcement.text.toString()).put("faqs",next))}})
     }
     private fun showObjectSettings(section:String,data:JSONObject) {
         body.removeAllViews()
@@ -295,7 +299,7 @@ class MainActivity : Activity() {
         val fields=if(section=="settings")listOf("siteName","maintenance","maintenanceMessage","maxFanniSignupAttempts","walletPhone1","walletPhone2") else obj.keys().asSequence().toList()
         val edits=mutableMapOf<String,EditText>()
         fields.forEach{k->val v=obj.opt(k);body.addView(text(k,12f,true));val e=input(k,if(v is JSONObject||v is JSONArray) v.toString() else v?.toString()?: "");edits[k]=e;body.addView(e)}
-        body.addView(button("حفظ التعديلات"){val out=JSONObject();edits.forEach{(k,e)->val old=obj.opt(k);val value=e.text.toString();out.put(k,when(old){is java.lang.Boolean->value.equals("true",true);is java.lang.Integer->value.toIntOrNull()?:0;is java.lang.Double->value.toDoubleOrNull()?:0.0;else->value})};mutate(if(section=="settings")"/admin/settings" else "/admin/pricing",if(section=="settings")"PUT" else "PUT",out)})
+        body.addView(button("حفظ التعديلات"){val out=JSONObject();edits.forEach{(k,e)->val old=obj.opt(k);val value=e.text.toString();out.put(k,when(old){is Boolean->value.equals("true",true);is Int->value.toIntOrNull()?:0;is Double->value.toDoubleOrNull()?:0.0;else->value})};mutate(if(section=="settings")"/admin/settings" else "/admin/pricing",if(section=="settings")"PUT" else "PUT",out)})
     }
     private fun mutate(path:String,method:String,bodyData:JSONObject?) {
         if(!canWrite(active)&&active!="dashboard"){showMessage("لا تملك صلاحية التنفيذ في هذا القسم");return}
