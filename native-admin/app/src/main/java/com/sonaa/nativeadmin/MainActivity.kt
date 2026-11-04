@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity() {
    OutlinedTextField(wallet2,{wallet2=it},label={Text("رقم المحفظة الثاني")},modifier=Modifier.fillMaxWidth())
    Button(onClick={onSave("PUT","api/admin/settings",JsonObject().apply{addProperty("siteName",name.trim());addProperty("maintenance",maintenance);addProperty("maintenanceMessage",message.trim());addProperty("maxFanniSignupAttempts",attempts.toIntOrNull()?:0);addProperty("walletPhone1",wallet1.trim());addProperty("walletPhone2",wallet2.trim())})},modifier=Modifier.fillMaxWidth()){Text("حفظ الإعدادات")}
   }
- }else{
+ }else if(section==AdminSection.PRICING){
   val p=root?.get("pricing")?.takeIf{it.isJsonObject}?.asJsonObject
   var check by remember(payload){mutableStateOf(p?.get("check")?.toString().orEmpty())}
   var commission by remember(payload){mutableStateOf(p?.get("commission")?.toString().orEmpty())}
@@ -191,6 +191,39 @@ class MainActivity : ComponentActivity() {
    Button(onClick={onSave("PUT","api/admin/pricing",JsonObject().apply{addProperty("check",check.toDoubleOrNull()?:0.0);addProperty("commission",commission.toDoubleOrNull()?:0.0);addProperty("minOffer",minimum.toIntOrNull()?:0);addProperty("maxOffer",maximum.toIntOrNull()?:0)})},modifier=Modifier.fillMaxWidth()){Text("حفظ الأسعار")}
    Text("سجل تغييرات الأسعار",fontWeight=FontWeight.Bold,color=DarkAccent)
    root?.get("history")?.takeIf{it.isJsonArray}?.asJsonArray?.take(20)?.forEach{Text(it.toString(),style=MaterialTheme.typography.bodySmall,color=Color.Gray)}
+  }
+ }else{
+  val p=root?.get("content")?.takeIf{it.isJsonObject}?.asJsonObject
+  var announcement by remember(payload){mutableStateOf(p?.get("announcement")?.asString.orEmpty())}
+  var question by remember(payload){mutableStateOf("")}
+  var answer by remember(payload){mutableStateOf("")}
+  val faqs=p?.get("faqs")?.takeIf{it.isJsonArray}?.asJsonArray
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+   Text("الإعلانات والأسئلة الشائعة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+   OutlinedTextField(announcement,{announcement=it},label={Text("إعلان واجهة العميل")},modifier=Modifier.fillMaxWidth(),minLines=3)
+   Button(onClick={onSave("PATCH","api/admin/content/announcement",JsonObject().apply{addProperty("announcement",announcement.trim())})},modifier=Modifier.fillMaxWidth()){Text("حفظ الإعلان")}
+   Text("الأسئلة الشائعة",fontWeight=FontWeight.Bold,color=DarkAccent)
+   faqs?.forEachIndexed{index,faq->
+    Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){
+     Column(Modifier.padding(12.dp)){
+      Text(faq.asJsonObject.get("question")?.asString.orEmpty(),fontWeight=FontWeight.Bold)
+      Text(faq.asJsonObject.get("answer")?.asString.orEmpty(),style=MaterialTheme.typography.bodySmall)
+      TextButton(onClick={onSave("DELETE","api/admin/content/faqs/$index",JsonObject())}){Text("حذف السؤال")}
+     }
+    }
+   }
+   OutlinedTextField(question,{question=it},label={Text("سؤال جديد")},modifier=Modifier.fillMaxWidth())
+   OutlinedTextField(answer,{answer=it},label={Text("الإجابة")},modifier=Modifier.fillMaxWidth(),minLines=2)
+   Button(onClick={
+    val body=JsonObject().apply{
+     addProperty("announcement",announcement.trim())
+     val array=com.google.gson.JsonArray()
+     faqs?.forEach{array.add(it)}
+     array.add(JsonObject().apply{addProperty("question",question.trim());addProperty("answer",answer.trim());addProperty("active",true)})
+     add("faqs",array)
+    }
+    onSave("PUT","api/admin/content",body)
+   },enabled=question.trim().length>=2&&answer.trim().length>=2,modifier=Modifier.fillMaxWidth()){Text("إضافة السؤال")}
   }
  }
 }
