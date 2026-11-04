@@ -33,6 +33,12 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    else{_state.value=_state.value.copy(busy=false,actionMessage=result.toString());load(_state.value.section,true)}
   }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تنفيذ العملية")}
  }
+ fun openFanniProfile(id:String)=viewModelScope.launch{
+  _state.value=_state.value.copy(busy=true,error=null,editingProfile=null,editingProfileId=null)
+  try{val data=repo.get("api/admin/fannis/$id/profile");_state.value=_state.value.copy(busy=false,editingProfile=data,editingProfileId=id)}
+  catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل بيانات الفني")}
+ }
+ fun closeProfile(){_state.value=_state.value.copy(editingProfile=null,editingProfileId=null)}
  fun loadVoice(sn:String)=viewModelScope.launch{_state.value=_state.value.copy(busy=true,error=null);try{val file=repo.downloadVoice(sn);_state.value=_state.value.copy(busy=false,voicePath=file.absolutePath)}catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل التسجيل الصوتي")}}
  fun retry(){load(_state.value.section)}
  fun logout()=viewModelScope.launch{repo.logout();_state.value=AdminUiState(checking=false)}
