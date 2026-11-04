@@ -544,6 +544,7 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
    RowAction("رفض الطلب","POST","api/password-recovery/admin/requests/$id/reject",JsonObject(),"reason","سبب الرفض")
   )
   AdminSection.COMPLAINTS->listOf(
+   RowAction("حفظ رد وملاحظة","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","قيد المراجعة")},"adminNote","ملاحظة داخلية","adminResponse","رد رسمي للعميل"),
    RowAction("قيد المراجعة","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","قيد المراجعة")}),
    RowAction("حل الشكوى","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","تم الحل")}),
    RowAction("رفض","PATCH","api/admin/complaints/$id",JsonObject().apply{addProperty("status","مرفوضة")})
