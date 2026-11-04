@@ -453,7 +453,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 Button(onClick={
                     val body=JsonObject().apply{add("sns",com.google.gson.JsonArray().apply{selectedOrders.forEach{add(it)}})}
-                    onAction("POST","api/admin/orders/bulk-delete",body);selectedOrders=emptySet()
+                    pending=RowAction("حذف الطلبات المحددة","POST","api/admin/orders/bulk-delete",body);selectedOrders=emptySet()
                 },modifier=Modifier.weight(1f)){Text("حذف المحدد ("+selectedOrders.size+")")}
                 OutlinedButton(onClick={selectedOrders=emptySet()},modifier=Modifier.weight(1f)){Text("إلغاء التحديد")}
             }
