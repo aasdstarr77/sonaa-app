@@ -20,9 +20,10 @@ class SonaaMessagingService : FirebaseMessagingService() {
         val destination = when (channel) {
             "order_new" -> "orders"
             "fanni_register" -> "technicians"
-            "client_register", "password_reset" -> "clients"
+            "client_register" -> "clients"
+            "password_reset" -> "recovery"
             "support" -> "complaints"
-            "wallet_charge" -> "technicians"
+            "wallet_charge" -> "topups"
             else -> "dashboard"
         }
         val intent = Intent(this, MainActivity::class.java).apply {
