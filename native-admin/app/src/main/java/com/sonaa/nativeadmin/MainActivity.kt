@@ -1003,14 +1003,12 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         }
                         val bulkKey=when(section){
                             AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED,AdminSection.WALLETS,AdminSection.TOPUPS,AdminSection.COMPLAINTS,AdminSection.REGIONS->item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString
-                            AdminSection.CLIENTS->item.asJsonObject.get("phone")?.asString
                             else->null
                         }
                         val canSelectBulk=when(section){
                             AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED->onCanWriteApi("api/admin/fannis/x/approve")||onCanWriteApi("api/admin/wallet/freeze/x")
                             AdminSection.WALLETS->onCanWriteApi("api/admin/wallet/freeze/x")
                             AdminSection.TOPUPS->onCanWriteApi("api/admin/topup-requests/x/approve")
-                            AdminSection.CLIENTS->onCanWriteApi("api/admin/clients/x/account")
                             AdminSection.COMPLAINTS->onCanWriteApi("api/admin/complaints/x")
                             AdminSection.OFFERS->onCanWriteApi("api/admin/offers/SN000000/0/reject")
                             AdminSection.REGIONS->onCanWriteApi("api/admin/regions/x")
@@ -1160,10 +1158,8 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
   AdminSection.CLIENTS->if(phone!=null)listOf(
    RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
    RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock"),
-   RowAction("تغيير كلمة المرور","PATCH","api/admin/clients/$phone/password",JsonObject(),"newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور"),
-   RowAction("حفظ ملاحظة داخلية","POST","api/admin/clients/$phone/note",JsonObject(),"note","الملاحظة الداخلية"),
-   RowAction("حذف طلبات العميل التجريبية","DELETE","api/admin/clients/$phone"),
-   RowAction("حذف الحساب المسجل","DELETE","api/admin/clients/$phone/account")
+   RowAction("تغيير كلمة المرور","PATCH","api/admin/clients/$phone/password",JsonObject(), "newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور"),
+   RowAction("حفظ ملاحظة داخلية","POST","api/admin/clients/$phone/note",JsonObject(), "note","الملاحظة الداخلية")
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null){
    val actions=mutableListOf(RowAction("نشر الطلب","POST","api/orders/admin/$sn/publish"))
