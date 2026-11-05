@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
             val vm: AdminViewModel = viewModel()
             val state by vm.state.collectAsState()
             LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); vm.restore() }
-            LaunchedEffect(pendingDestination, state.authenticated) { if (state.authenticated) { navigate(pendingDestination, vm); pendingDestination = null } }
+            LaunchedEffect(pendingDestination, state.authenticated, state.adminInfo) { if (state.authenticated) { navigate(pendingDestination, state.adminInfo, vm); pendingDestination = null } }
             LaunchedEffect(state.authenticated) {
                 if (state.authenticated) {
                     FirebaseMessaging.getInstance().token.addOnSuccessListener(vm::registerFcm)
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent); setIntent(intent)
         pendingDestination = intent.getStringExtra("destination")
     }
-    private fun navigate(destination: String?, vm: AdminViewModel?) {
+    private fun navigate(destination: String?, adminInfo: JsonElement?, vm: AdminViewModel?) {
         val section = when (destination) {
             "orders" -> AdminSection.ORDERS
             "technicians" -> AdminSection.TECHNICIANS
@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
             "wallets" -> AdminSection.WALLETS
             else -> null
         }
-        if (section != null && vm != null) vm.open(section)
+        if (section != null && vm != null && canReadSection(adminInfo, section)) vm.open(section)
     }
     private fun initializeFirebase() {
         if (FirebaseApp.getApps(this).isEmpty()) {
