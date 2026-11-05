@@ -71,7 +71,7 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    _state.value=_state.value.copy(busy=false,editingProfile=null,editingProfileId=null,editingClient=null,editingClientId=null,actionMessage=message)
    load(_state.value.section,true)
   }catch(e:Exception){
-   _state.value=_state.value.copy(busy=false,error=e.message?: "تعذر حفظ التعديلات")
+   _state.value=_state.value.copy(busy=false,error=null,actionMessage=e.message?: "تعذر حفظ التعديلات")
   }
  }
  fun closeProfile(){_state.value=_state.value.copy(editingProfile=null,editingProfileId=null)}
