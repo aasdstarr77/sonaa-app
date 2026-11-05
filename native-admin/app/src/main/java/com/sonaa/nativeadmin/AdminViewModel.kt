@@ -63,6 +63,17 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    _state.value=_state.value.copy(busy=false,editingProfile=data,editingProfileId=id)
   }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل بيانات الفني")}
  }
+ fun saveEditedProfile(method:String,path:String,body:JsonObject)=viewModelScope.launch{
+  _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
+  try{
+   val result=repo.mutate(method,path,body)
+   val message=result.takeIf{it.isJsonObject}?.asJsonObject?.get("message")?.takeIf{!it.isJsonNull}?.asString?: "تم حفظ البيانات بنجاح"
+   _state.value=_state.value.copy(busy=false,editingProfile=null,editingProfileId=null,editingClient=null,editingClientId=null,actionMessage=message)
+   load(_state.value.section,true)
+  }catch(e:Exception){
+   _state.value=_state.value.copy(busy=false,error=e.message?: "تعذر حفظ التعديلات")
+  }
+ }
  fun closeProfile(){_state.value=_state.value.copy(editingProfile=null,editingProfileId=null)}
  fun openRecovery(id:String)=viewModelScope.launch{
   _state.value=_state.value.copy(busy=true,error=null,recoveryDetail=null,recoveryDetailId=id)
