@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val vm: AdminViewModel = viewModel()
             val state by vm.state.collectAsState()
-            LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); vm.restore() }
+            LaunchedEffect(Unit) { vm.restore() }
             LaunchedEffect(pendingDestination, state.authenticated, state.adminInfo) { if (state.authenticated) { navigate(pendingDestination, state.adminInfo, vm); pendingDestination = null } }
             LaunchedEffect(state.authenticated) {
                 if (state.authenticated) {
@@ -144,10 +144,46 @@ class MainActivity : ComponentActivity() {
                 Text(message, modifier=Modifier.padding(10.dp), color=DarkAccent, maxLines=5)
             }
         }
-        Row(Modifier.fillMaxWidth().background(Color.White).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            AdminSection.entries.filter { canReadSection(state.adminInfo,it) }.forEach { tab ->
-                TextButton(onClick = { if (tab == AdminSection.DASHBOARD) vm.refresh() else vm.open(tab) }) {
-                    Text(tab.title, color = if (tab == state.section) Accent else Color.DarkGray, fontWeight = if (tab == state.section) FontWeight.Bold else FontWeight.Normal)
+        var sectionMenuExpanded by remember { mutableStateOf(false) }
+        val readableSections = AdminSection.entries.filter { canReadSection(state.adminInfo,it) }
+        Box(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 14.dp, vertical = 9.dp)) {
+            Surface(
+                onClick = { sectionMenuExpanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = Color(0xFFF1F7FB),
+                shadowElevation = 5.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD6E6F0))
+            ) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(38.dp).background(Accent, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                        Text("☷", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge)
+                    }
+                    Column(Modifier.weight(1f).padding(horizontal = 11.dp)) {
+                        Text("القائمة الرئيسية", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(state.section.title, fontWeight = FontWeight.ExtraBold, color = DarkAccent)
+                    }
+                    Text("⌄", color = Accent, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                }
+            }
+            DropdownMenu(
+                expanded = sectionMenuExpanded,
+                onDismissRequest = { sectionMenuExpanded = false },
+                modifier = Modifier.fillMaxWidth(0.92f).background(Color.White)
+            ) {
+                readableSections.forEach { tab ->
+                    DropdownMenuItem(
+                        text = { Text(tab.title, fontWeight = if (tab == state.section) FontWeight.ExtraBold else FontWeight.Medium, color = if (tab == state.section) Accent else Color(0xFF263746)) },
+                        leadingIcon = {
+                            Box(Modifier.size(34.dp).background(if (tab == state.section) Color(0xFFE1F4F7) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                                Text("◆", color = if (tab == state.section) Accent else Color(0xFF78909C), style = MaterialTheme.typography.labelMedium)
+                            }
+                        },
+                        onClick = {
+                            sectionMenuExpanded = false
+                            if (tab == AdminSection.DASHBOARD) vm.refresh() else vm.open(tab)
+                        }
+                    )
                 }
             }
         }
