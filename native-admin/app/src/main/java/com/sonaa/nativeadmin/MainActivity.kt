@@ -477,24 +477,50 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
 
 @Composable private fun PageVisitsScreen(payload:JsonElement?){
  val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
- val summary=root?.get("summary")?.takeIf{it.isJsonArray}?.asJsonArray
- val recent=root?.get("recent")?.takeIf{it.isJsonArray}?.asJsonArray
- Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+ val summary=root?.get("summary")?.takeIf{it.isJsonArray}?.asJsonArray?.toList().orEmpty()
+ val recent=root?.get("recent")?.takeIf{it.isJsonArray}?.asJsonArray?.toList().orEmpty()
+ var filter by remember{mutableStateOf("")}
+ val term=filter.trim()
+ val filteredSummary=summary.filter{entry->
+  val o=entry.takeIf{it.isJsonObject}?.asJsonObject
+  term.isBlank()||listOf("pageName","pageKey").any{k->o?.get(k)?.toString()?.contains(term,true)==true}
+ }
+ val filteredRecent=recent.filter{entry->
+  val o=entry.takeIf{it.isJsonObject}?.asJsonObject
+  term.isBlank()||listOf("pageName","pageKey","path","referrer").any{k->o?.get(k)?.toString()?.contains(term,true)==true}
+ }
+ Column(Modifier.fillMaxSize().padding(horizontal=14.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
   Text("سجل زيارات الموقع",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
   Text("إجمالي الزيارات: "+(root?.get("total")?.toString()?: "0"),fontWeight=FontWeight.Bold)
+  OutlinedTextField(filter,{filter=it},label={Text("تصفية باسم الصفحة أو المسار")},singleLine=true,modifier=Modifier.fillMaxWidth())
   Text("ملخص الصفحات",fontWeight=FontWeight.Bold,color=DarkAccent)
-  summary?.forEach{item->
-   val o=item.asJsonObject
+  if(filteredSummary.isEmpty())Text("لا توجد صفحات مطابقة")
+  filteredSummary.forEach{entry->
+   val o=entry.asJsonObject
    Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){
-    Column(Modifier.padding(12.dp)){
+    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(3.dp)){
      Text(o.get("pageName")?.asString?:o.get("pageKey")?.asString.orEmpty(),fontWeight=FontWeight.Bold)
-     Text("الزيارات: "+(o.get("visits")?.toString()?: "0"))
+     Text("المفتاح: "+(o.get("pageKey")?.asString?: "—"),style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+     Text("عدد الزيارات: "+(o.get("visits")?.toString()?: "0"))
      Text("آخر زيارة: "+(o.get("lastVisit")?.toString()?: "—"),style=MaterialTheme.typography.bodySmall,color=Color.Gray)
     }
    }
   }
   Text("أحدث الزيارات",fontWeight=FontWeight.Bold,color=DarkAccent)
-  recent?.forEach{Text(it.toString(),style=MaterialTheme.typography.bodySmall)}
+  if(filteredRecent.isEmpty())Text("لا توجد زيارات مطابقة")
+  LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(7.dp)){
+   items(filteredRecent){entry->
+    val o=entry.asJsonObject
+    Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){
+     Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(3.dp)){
+      Text(o.get("pageName")?.asString?:o.get("pageKey")?.asString.orEmpty(),fontWeight=FontWeight.Bold)
+      Text("المسار: "+(o.get("path")?.asString?: "—"),style=MaterialTheme.typography.bodySmall)
+      Text("المصدر: "+(o.get("referrer")?.asString?: "مباشر"),style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+      Text("التوقيت: "+(o.get("visitedAt")?.toString()?: "—"),style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+     }
+    }
+   }
+  }
  }
 }
 
