@@ -132,6 +132,10 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
       }
      }
      AdminSection.WALLETS->repo.mutate("POST","api/admin/wallet/freeze/$raw",JsonObject().apply{addProperty("action",action);addProperty("reason",reason)})
+     AdminSection.CLIENTS->{
+      if(action!="delete")error("الإجراء الجماعي المتاح للعملاء هو حذف الحساب فقط")
+      repo.mutate("DELETE","api/admin/clients/${Uri.encode(raw)}/account")
+     }
      AdminSection.TOPUPS->repo.mutate("POST","api/admin/topup-requests/$raw/$action",JsonObject().apply{if(action=="reject")addProperty("reason",reason)})
      AdminSection.COMPLAINTS->repo.mutate("PATCH","api/admin/complaints/$raw",JsonObject().apply{addProperty("status",action)})
      AdminSection.OFFERS->{

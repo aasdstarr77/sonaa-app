@@ -1061,6 +1061,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         }
                         val bulkKey=when(section){
                             AdminSection.TECHNICIANS,AdminSection.PENDING,AdminSection.DISABLED,AdminSection.WALLETS,AdminSection.TOPUPS,AdminSection.COMPLAINTS,AdminSection.REGIONS->item.asJsonObject.get("_id")?.asString?:item.asJsonObject.get("id")?.asString
+                            AdminSection.CLIENTS->item.asJsonObject.get("phone")?.asString?.takeIf{it.isNotBlank()}
                             else->null
                         }
                         val canSelectBulk=when(section){
@@ -1070,6 +1071,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                             AdminSection.COMPLAINTS->onCanWriteApi("api/admin/complaints/x")
                             AdminSection.OFFERS->onCanWriteApi("api/admin/offers/SN000000/0/reject")
                             AdminSection.REGIONS->onCanWriteApi("api/admin/regions/x")
+                            AdminSection.CLIENTS->onCanWriteApi("api/admin/clients/x/account")
                             else->false
                         }
                         if(bulkKey!=null&&canSelectBulk)Row(verticalAlignment=Alignment.CenterVertically){
@@ -1205,19 +1207,23 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
   AdminSection.SERVICES->{
    val name=value("name")?:return emptyList()
    val encoded=Uri.encode(name)
+   val category=value("category").orEmpty()
+   val categoryQuery="?category="+Uri.encode(category)
+   val categoryBody=JsonObject().apply{addProperty("category",category)}
    listOf(
-    RowAction("إخفاء الخدمة","POST","api/admin/services/$encoded/hide"),
-    RowAction("إظهار الخدمة","POST","api/admin/services/$encoded/show"),
-    RowAction("تعديل الاسم","PATCH","api/admin/services/$encoded?category="+Uri.encode(value("category").orEmpty()),JsonObject().apply{addProperty("category",value("category").orEmpty())},"name","اسم الخدمة الجديد"),
-    RowAction("تغيير الأيقونة","PATCH","api/admin/services/$encoded?category="+Uri.encode(value("category").orEmpty()),JsonObject().apply{addProperty("category",value("category").orEmpty())},"emoji","رمز الخدمة"),
-    RowAction("حذف الخدمة","DELETE","api/admin/services/$id?category="+Uri.encode(value("category").orEmpty()))
+    RowAction("إخفاء الخدمة","POST","api/admin/services/$encoded/hide"+categoryQuery,categoryBody),
+    RowAction("إظهار الخدمة","POST","api/admin/services/$encoded/show"+categoryQuery,categoryBody),
+    RowAction("تعديل الاسم","PATCH","api/admin/services/$encoded"+categoryQuery,categoryBody,"name","اسم الخدمة الجديد"),
+    RowAction("تغيير الأيقونة","PATCH","api/admin/services/$encoded"+categoryQuery,categoryBody,"emoji","رمز الخدمة"),
+    RowAction("حذف الخدمة","DELETE","api/admin/services/$id"+categoryQuery)
    )
   }
   AdminSection.CLIENTS->if(phone!=null)listOf(
-   RowAction("حظر العميل","POST","api/admin/clients/$phone/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
-   RowAction("إلغاء الحظر","POST","api/admin/clients/$phone/unblock"),
-   RowAction("تغيير كلمة المرور","PATCH","api/admin/clients/$phone/password",JsonObject(), "newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور"),
-   RowAction("حفظ ملاحظة داخلية","POST","api/admin/clients/$phone/note",JsonObject(), "note","الملاحظة الداخلية")
+   RowAction("حظر العميل","POST","api/admin/clients/${Uri.encode(phone)}/block",JsonObject().apply{addProperty("reason","حظر من تطبيق الإدارة")}),
+   RowAction("إلغاء الحظر","POST","api/admin/clients/${Uri.encode(phone)}/unblock"),
+   RowAction("تغيير كلمة المرور","PATCH","api/admin/clients/${Uri.encode(phone)}/password",JsonObject(), "newPassword","كلمة المرور الجديدة","confirmPassword","تأكيد كلمة المرور"),
+   RowAction("حفظ ملاحظة داخلية","POST","api/admin/clients/${Uri.encode(phone)}/note",JsonObject(), "note","الملاحظة الداخلية"),
+   RowAction("حذف حساب العميل","DELETE","api/admin/clients/${Uri.encode(phone)}/account")
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null){
    val actions=mutableListOf(RowAction("نشر الطلب","POST","api/orders/admin/$sn/publish"))
