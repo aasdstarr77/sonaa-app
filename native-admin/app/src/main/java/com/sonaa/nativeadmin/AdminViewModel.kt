@@ -186,6 +186,24 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
   _state.value=_state.value.copy(busy=false,actionMessage="نجح $succeeded — تعذر $failed"+if(errors.isEmpty())"" else " — "+errors.joinToString(" | "))
   load(_state.value.section,true)
  }
+ fun bulkRenameRegions(names:Map<String,String>)=viewModelScope.launch{
+  if(names.isEmpty())return@launch
+  if(names.size>100){_state.value=_state.value.copy(actionMessage="الحد الأقصى لتعديل المناطق دفعة واحدة 100 منطقة");return@launch}
+  val invalid=names.values.any{it.trim().length !in 2..100}
+  if(invalid){_state.value=_state.value.copy(error="تأكد أن كل اسم يتكون من حرفين إلى 100 حرف");return@launch}
+  _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
+  var succeeded=0
+  var failed=0
+  val errors=mutableListOf<String>()
+  for((id,rawName) in names){
+   try{
+    repo.mutate("PATCH","api/admin/regions/$id",JsonObject().apply{addProperty("name",rawName.trim().replace(Regex("\\s+")," "))})
+    succeeded++
+   }catch(e:Exception){failed++;if(errors.size<3)errors.add("$rawName: "+(e.message?: "تعذر التعديل"))}
+  }
+  _state.value=_state.value.copy(busy=false,actionMessage="تم تعديل $succeeded منطقة، وتعذر تعديل $failed"+if(errors.isEmpty())"" else " — "+errors.joinToString(" | "))
+  load(AdminSection.REGIONS,true)
+ }
  fun bulkPublish(sns:List<String>)=viewModelScope.launch{
   if(sns.isEmpty())return@launch
   if(sns.size>100){_state.value=_state.value.copy(actionMessage="الحد الأقصى للنشر الجماعي 100 طلب");return@launch}
