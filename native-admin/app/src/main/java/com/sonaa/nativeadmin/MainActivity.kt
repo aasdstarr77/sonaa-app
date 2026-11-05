@@ -47,6 +47,11 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 private val Accent = Color(0xFF087F9C)
 private val DarkAccent = Color(0xFF07566B)
 private val Background = Color(0xFFF4F8FA)
@@ -242,7 +247,7 @@ class MainActivity : ComponentActivity() {
                 Text(state.error, color = MaterialTheme.colorScheme.error)
                 Button(onClick = vm::retry, modifier = Modifier.padding(top = 12.dp)) { Text("إعادة المحاولة") }
             }
-            state.section == AdminSection.DASHBOARD || state.section == AdminSection.STATS -> Dashboard(state.stats)
+            state.section == AdminSection.DASHBOARD || state.section == AdminSection.STATS -> Dashboard(state.stats, state.section == AdminSection.STATS)
             state.section == AdminSection.PAGE_VISITS -> PageVisitsScreen(state.payload)
             state.section == AdminSection.REPORTS -> ReportEditor(state.payload) { method, path, body -> vm.mutate(method, path, body) }
             state.section == AdminSection.SETTINGS || state.section == AdminSection.PRICING || state.section == AdminSection.CONTENT -> ConfigEditor(state.section, state.payload,{path->canWriteApi(state.adminInfo,path)}) { method, path, body -> vm.mutate(method, path, body) }
@@ -859,7 +864,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
  }
 }
 
-@Composable private fun Dashboard(stats: JsonElement?) {
+@Composable private fun Dashboard(stats: JsonElement?, showMonthly:Boolean) {
     val root = stats?.takeIf { it.isJsonObject }?.asJsonObject
     val data = root?.get("counts")?.takeIf { it.isJsonObject }?.asJsonObject ?: root
     val orders = root?.get("dashboardOrders")?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty()
@@ -883,6 +888,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
         cards.forEach { (label, value) -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(18.dp)) { Text(label, color = Color.Gray); Text(value, style = MaterialTheme.typography.headlineMedium, color = Accent, fontWeight = FontWeight.Bold) }
         } }
+        if(showMonthly) MonthlyOrdersChart(monthlyOrderStats(orders))
         Text("أحدث الطلبات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = DarkAccent, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
         if (orders.isEmpty()) Text("لا توجد طلبات متاحة أو لا تملك صلاحية عرضها", color = Color.Gray)
         orders.take(5).forEach { order ->
@@ -896,6 +902,70 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
         }
     }
 }
+
+private data class MonthlyOrderStat(val label:String,val created:Int,val completed:Int)
+private fun parseAdminDate(raw:String?):Date?{
+ if(raw.isNullOrBlank())return null
+ val patterns=listOf("yyyy-MM-dd'T'HH:mm:ss.SSSX","yyyy-MM-dd'T'HH:mm:ssX","yyyy-MM-dd")
+ for(pattern in patterns){
+  try{
+   val parser=SimpleDateFormat(pattern,Locale.US).apply{isLenient=false;timeZone=TimeZone.getTimeZone("UTC")}
+   parser.parse(raw)?.let{return it}
+  }catch(_:Exception){}
+ }
+ return null
+}
+private fun monthlyOrderStats(orders:List<JsonElement>):List<MonthlyOrderStat>{
+ val cairo=TimeZone.getTimeZone("Africa/Cairo")
+ val now=Calendar.getInstance(cairo,Locale("ar","EG"))
+ val completedStatuses=setOf("تم الانتهاء","منتهي","مكتمل")
+ return (11 downTo 0).map{offset->
+  val month=Calendar.getInstance(cairo,Locale("ar","EG")).apply{
+   time=now.time;set(Calendar.DAY_OF_MONTH,1);set(Calendar.HOUR_OF_DAY,0);set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0);add(Calendar.MONTH,-offset)
+  }
+  fun belongs(raw:String?):Boolean{
+   val date=parseAdminDate(raw)?:return false
+   val candidate=Calendar.getInstance(cairo,Locale("ar","EG")).apply{time=date}
+   return candidate.get(Calendar.YEAR)==month.get(Calendar.YEAR)&&candidate.get(Calendar.MONTH)==month.get(Calendar.MONTH)
+  }
+  val created=orders.count{item->val obj=item.takeIf{it.isJsonObject}?.asJsonObject;belongs(obj?.get("createdAt")?.takeIf{!it.isJsonNull}?.asString)}
+  val completed=orders.count{item->
+   val obj=item.takeIf{it.isJsonObject}?.asJsonObject?:return@count false
+   val status=obj.get("status")?.takeIf{!it.isJsonNull}?.asString.orEmpty()
+   if(status !in completedStatuses)return@count false
+   val date=listOf("completedAt","updatedAt","createdAt").firstNotNullOfOrNull{key->obj.get(key)?.takeIf{!it.isJsonNull}?.asString?.takeIf{it.isNotBlank()}}
+   belongs(date)
+  }
+  val label=SimpleDateFormat("MMM yy",Locale("ar","EG")).apply{timeZone=cairo}.format(month.time)
+  MonthlyOrderStat(label,created,completed)
+ }
+}
+@Composable private fun MonthlyOrdersChart(months:List<MonthlyOrderStat>){
+ val maxValue=(months.maxOfOrNull{maxOf(it.created,it.completed)}?:0).coerceAtLeast(1)
+ Card(Modifier.fillMaxWidth().padding(top=10.dp,bottom=12.dp),colors=CardDefaults.cardColors(containerColor=Color.White)){
+  Column(Modifier.padding(14.dp)){
+   Text("الإحصائيات الشهرية",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,color=DarkAccent)
+   Text("الطلبات المنشأة والمكتملة خلال آخر 12 شهرًا من الطلبات المحمّلة",style=MaterialTheme.typography.bodySmall,color=Color.Gray,modifier=Modifier.padding(top=3.dp,bottom=12.dp))
+   Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(9.dp),verticalAlignment=Alignment.Bottom){
+    months.forEach{month->
+     Column(Modifier.width(54.dp),horizontalAlignment=Alignment.CenterHorizontally){
+      Text("${month.created}/${month.completed}",style=MaterialTheme.typography.labelSmall,color=Color.DarkGray)
+      Row(Modifier.height(104.dp).padding(top=5.dp),horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.Bottom){
+       Box(Modifier.width(16.dp).height((month.created.toFloat()/maxValue*88f).coerceAtLeast(if(month.created>0)3f else 0f).dp).background(Accent,RoundedCornerShape(topStart=5.dp,topEnd=5.dp)))
+       Box(Modifier.width(16.dp).height((month.completed.toFloat()/maxValue*88f).coerceAtLeast(if(month.completed>0)3f else 0f).dp).background(Color(0xFF16A36A),RoundedCornerShape(topStart=5.dp,topEnd=5.dp)))
+      }
+      Text(month.label,style=MaterialTheme.typography.labelSmall,color=Color.Gray,maxLines=1)
+     }
+    }
+   }
+   Row(Modifier.padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(14.dp)){
+    Text("■ الطلبات المنشأة",style=MaterialTheme.typography.labelSmall,color=Accent)
+    Text("■ الطلبات المكتملة",style=MaterialTheme.typography.labelSmall,color=Color(0xFF16A36A))
+   }
+  }
+ }
+}
+
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
 @Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onAuditFilter:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onBulkAction:(AdminSection,List<String>,String)->Unit, onBulkRenameRegions:(Map<String,String>)->Unit, onCanWriteApi:(String)->Boolean, onCanReadApi:(String)->Boolean, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
