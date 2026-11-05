@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.saveEditedProfile(method,path,body) }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.saveEditedProfile(method,path,body) }
             state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery,{path->canWriteApi(state.adminInfo,path)}) { method,path,body -> vm.recoveryAction(method,path,body) }
-            state.section == AdminSection.SUPPORT -> SupportAdminScreen(state.supportCases,state.supportSelectedCase,state.actionMessage,{vm::retry()},{id->vm.openSupportCase(id)},{method,path,body->vm.supportAction(method,path,body)},{path->canWriteApi(state.adminInfo,path)})
+            state.section == AdminSection.SUPPORT -> SupportAdminScreen(state.supportCases,state.supportSelectedCase,state.actionMessage,{vm.retry()},{id->vm.openSupportCase(id)},{method,path,body->vm.supportAction(method,path,body)},{path->canWriteApi(state.adminInfo,path)})
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::filterAuditLogs, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, vm::bulkRenameRegions, { path -> canWriteApi(state.adminInfo,path) }, { path -> canReadApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
@@ -715,9 +715,9 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
    val item=entry.takeIf{it.isJsonObject}?.asJsonObject
    val id=item?.get("_id")?.asString.orEmpty()
    if(id.isNotBlank())Card(
-    Modifier.fillMaxWidth(),
-    colors=CardDefaults.cardColors(containerColor=if(id==selectedId)Color(0xFFEAF5F7) else Color.White),
-    onClick={onOpen(id)}
+    onClick={onOpen(id)},
+    modifier=Modifier.fillMaxWidth(),
+    colors=CardDefaults.cardColors(containerColor=if(id==selectedId)Color(0xFFEAF5F7) else Color.White)
    ){
     Column(Modifier.padding(11.dp),verticalArrangement=Arrangement.spacedBy(3.dp)){
      Text((item?.get("subject")?.asString?: "استفسار عام")+" — "+(item?.get("ownerName")?.asString?: "مستخدم"),fontWeight=FontWeight.Bold,color=DarkAccent)
