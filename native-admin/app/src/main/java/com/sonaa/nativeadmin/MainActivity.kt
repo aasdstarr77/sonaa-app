@@ -250,7 +250,7 @@ class MainActivity : ComponentActivity() {
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.saveEditedProfile(method,path,body) }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.saveEditedProfile(method,path,body) }
             state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery,{path->canWriteApi(state.adminInfo,path)}) { method,path,body -> vm.recoveryAction(method,path,body) }
-            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::filterAuditLogs, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, { path -> canWriteApi(state.adminInfo,path) }, { path -> canReadApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
+            else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::filterAuditLogs, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, vm::bulkRenameRegions, { path -> canWriteApi(state.adminInfo,path) }, { path -> canReadApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
 }
@@ -897,7 +897,7 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")
-@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onAuditFilter:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onBulkAction:(AdminSection,List<String>,String)->Unit, onCanWriteApi:(String)->Boolean, onCanReadApi:(String)->Boolean, onAction:(String,String,JsonObject)->Unit) {
+@Composable private fun ListScreen(section: AdminSection, items: List<JsonElement>, retry: () -> Unit, onVoice:(String)->Unit, onEditProfile:(String)->Unit, onOpenWallet:(String)->Unit, onEditClient:(String)->Unit, onSupportSearch:(String)->Unit, onAuditFilter:(String)->Unit, onBulkPublish:(List<String>)->Unit, onOpenRecovery:(String)->Unit, onBulkAction:(AdminSection,List<String>,String)->Unit, onBulkRenameRegions:(Map<String,String>)->Unit, onCanWriteApi:(String)->Boolean, onCanReadApi:(String)->Boolean, onAction:(String,String,JsonObject)->Unit) {
     var query by remember(section) { mutableStateOf("") }
     var statusFilter by remember(section) { mutableStateOf("") }
     var regionFilter by remember(section) { mutableStateOf("") }
@@ -918,6 +918,8 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var notifyAudience by remember(section){mutableStateOf("all")}
     var selectedOrders by remember(section){mutableStateOf(setOf<String>())}
     var selectedBulk by remember(section){mutableStateOf(setOf<String>())}
+    var bulkRegionEditOpen by remember(section){mutableStateOf(false)}
+    var bulkRegionNames by remember(section){mutableStateOf<Map<String,String>>(emptyMap())}
     var pendingBulk by remember{mutableStateOf<Pair<String,List<String>>?>(null)}
     var pendingPublishSns by remember{mutableStateOf<List<String>?>(null)}
     var categoryOrderOpen by remember(section){mutableStateOf(false)}
@@ -1012,6 +1014,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
         },enabled=notifyTitle.trim().length>=2&&notifyMessage.trim().length>=2&&notifyRole in listOf("fanni","client")&&notifyMode in listOf("single","group")&&!(notifyRole=="fanni"&&notifyMode=="group"&&notifyAudience=="active")){Text("إرسال")}},
         dismissButton={TextButton(onClick={notifyOpen=false}){Text("إلغاء")}}
     )
+    if(bulkRegionEditOpen) AlertDialog(onDismissRequest={bulkRegionEditOpen=false},title={Text("تعديل أسماء المناطق المحددة")},text={Column(Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){bulkRegionNames.toList().forEach{(id,name)->OutlinedTextField(value=name,onValueChange={value->bulkRegionNames=bulkRegionNames.toMutableMap().apply{put(id,value)}},label={Text("الاسم الجديد — $name")},singleLine=true,modifier=Modifier.fillMaxWidth())}}},confirmButton={TextButton(onClick={val clean=bulkRegionNames.mapValues{it.value.trim().replace(Regex("\\s+")," ")};if(clean.values.any{it.length<2||it.length>100})return@TextButton;bulkRegionEditOpen=false;selectedBulk=emptySet();onBulkRenameRegions(clean)},enabled=bulkRegionNames.isNotEmpty()&&bulkRegionNames.values.all{it.trim().length in 2..100}){Text("حفظ الأسماء")}},dismissButton={TextButton(onClick={bulkRegionEditOpen=false}){Text("إلغاء")}})
     pendingBulk?.let{pendingAction->
         AlertDialog(
             onDismissRequest={pendingBulk=null},
@@ -1109,7 +1112,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                     AdminSection.CLIENTS->{if(onCanWriteApi("api/admin/clients/x/account"))Button(onClick={runBulk("delete")}){Text("حذف الحسابات المحددة")}}
                     AdminSection.COMPLAINTS->{if(onCanWriteApi("api/admin/complaints/x")){Button(onClick={runBulk("قيد المراجعة")}){Text("مراجعة")};Button(onClick={runBulk("تم الحل")}){Text("حل الشكاوى")};Button(onClick={runBulk("مرفوضة")}){Text("رفض")}}}
                     AdminSection.OFFERS->{if(onCanWriteApi("api/admin/offers/SN000000/0/reject"))Button(onClick={runBulk("reject")}){Text("رفض العروض")}}
-                    AdminSection.REGIONS->{if(onCanWriteApi("api/admin/regions/x")){Button(onClick={runBulk("activate")}){Text("تفعيل")};Button(onClick={runBulk("deactivate")}){Text("إيقاف")};Button(onClick={runBulk("restore")}){Text("استعادة")};Button(onClick={runBulk("delete")}){Text("حذف")}}}
+                    AdminSection.REGIONS->{if(onCanWriteApi("api/admin/regions/x")){OutlinedButton(onClick={bulkRegionNames=items.filter{it.isJsonObject}.mapNotNull{item->val obj=item.asJsonObject;val id=obj.get("_id")?.asString?:obj.get("id")?.asString; if(id!=null&&id in selectedBulk) id to (obj.get("name")?.asString.orEmpty()) else null}.toMap();bulkRegionEditOpen=true}){Text("تعديل أسماء المحدد")};Button(onClick={runBulk("activate")}){Text("تفعيل")};Button(onClick={runBulk("deactivate")}){Text("إيقاف")};Button(onClick={runBulk("restore")}){Text("استعادة")};Button(onClick={runBulk("delete")}){Text("حذف")}}}
                     else->Unit
                 }
                 OutlinedButton(onClick={selectedBulk=emptySet()}){Text("إلغاء")}
