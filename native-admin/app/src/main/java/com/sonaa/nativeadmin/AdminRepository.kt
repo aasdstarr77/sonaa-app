@@ -40,7 +40,7 @@ class AdminRepository(context:Context){
   }.getOrNull()
   val detail=serverMessage?.takeIf{it.isNotBlank()}?:raw.replace(Regex("\\s+")," ").take(180).ifBlank{"لم يُرجع الخادم تفاصيل إضافية"}
   val requestPath=response?.raw()?.request?.url?.encodedPath.orEmpty()
-  return IllegalStateException("فشل الطلب (HTTP \${e.code()}): $detail"+if(requestPath.isNotBlank())"\nالمسار: $requestPath" else "",e)
+  return IllegalStateException("فشل الطلب (HTTP ${e.code()}): $detail"+if(requestPath.isNotBlank())"\nالمسار: $requestPath" else "",e)
  }
  suspend fun downloadVoice(sn:String):File{
   val response=api.getVoice("api/orders/${sn}/voice")
