@@ -6,6 +6,8 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
+import retrofit2.HttpException
+import com.google.gson.JsonParser
 import retrofit2.converter.gson.GsonConverterFactory
 class AdminRepository(context:Context){
  private val appContext=context.applicationContext
@@ -28,7 +30,18 @@ class AdminRepository(context:Context){
   "POST"->api.post(section.path,section.defaultBody())
   else->api.get(section.path)
  }
- suspend fun get(path:String)=api.get(path)
+ suspend fun get(path:String):JsonElement=try{api.get(path)}catch(e:HttpException){throw apiFailure(e)}
+ private fun apiFailure(e:HttpException):IllegalStateException{
+  val response=e.response()
+  val raw=runCatching{response?.errorBody()?.string().orEmpty()}.getOrDefault("")
+  val serverMessage=runCatching{
+   val parsed=JsonParser.parseString(raw)
+   if(parsed.isJsonObject)parsed.asJsonObject.get("message")?.takeIf{!it.isJsonNull}?.asString else null
+  }.getOrNull()
+  val detail=serverMessage?.takeIf{it.isNotBlank()}?:raw.replace(Regex("\\s+")," ").take(180).ifBlank{"لم يُرجع الخادم تفاصيل إضافية"}
+  val requestPath=response?.raw()?.request?.url?.encodedPath.orEmpty()
+  return IllegalStateException("فشل الطلب (HTTP \${e.code()}): $detail"+if(requestPath.isNotBlank())"\nالمسار: $requestPath" else "",e)
+ }
  suspend fun downloadVoice(sn:String):File{
   val response=api.getVoice("api/orders/${sn}/voice")
   if(!response.isSuccessful)error("تعذر تحميل التسجيل الصوتي (HTTP ${response.code()})")
@@ -37,9 +50,11 @@ class AdminRepository(context:Context){
   file.writeBytes(bytes)
   return file
  }
- suspend fun mutate(method:String,path:String,body:JsonObject=JsonObject()):JsonElement=when(method.uppercase()){
-  "POST"->api.post(path,body);"PATCH"->api.patch(path,body);"PUT"->api.put(path,body);"DELETE"->api.delete(path);else->error("طريقة غير مدعومة")
- }
+ suspend fun mutate(method:String,path:String,body:JsonObject=JsonObject()):JsonElement=try{
+  when(method.uppercase()){
+   "POST"->api.post(path,body);"PATCH"->api.patch(path,body);"PUT"->api.put(path,body);"DELETE"->api.delete(path);else->error("طريقة غير مدعومة")
+  }
+ }catch(e:HttpException){throw apiFailure(e)}
  suspend fun registerFcm(token:String){api.registerFcmToken(JsonObject().apply{addProperty("token",token);addProperty("platform","fcm-android")})}
 }
 enum class AdminSection(
