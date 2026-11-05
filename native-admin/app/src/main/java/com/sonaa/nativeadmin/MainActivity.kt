@@ -514,9 +514,11 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
  }
 }
 
-@Composable private fun FanniLevelBadgeControls(item:JsonElement,onAction:(String,String,JsonObject)->Unit){
+@Composable private fun FanniLevelBadgeControls(item:JsonElement,canWrite:(String)->Boolean,onAction:(String,String,JsonObject)->Unit){
  val f=item.asJsonObject
  val id=f.get("_id")?.asString.orEmpty()
+ val canEditLevel=canWrite("api/admin/fannis/$id/level")
+ val canEditBadge=canWrite("api/admin/fannis/$id/badge")
  val levels=listOf("مبتدئ","ممارس","محترف","خبير مبتدئ","خبير","خبير أول","استشاري فني","نخبة","أسطوري")
  val badges=listOf("trusted","top_rated","verified","fast_response","premium","gold")
  val badgeLabels=mapOf("trusted" to "موثوق","top_rated" to "الأعلى تقييمًا","verified" to "تم التحقق","fast_response" to "سريع الاستجابة","premium" to "مميز","gold" to "ذهبي")
@@ -531,12 +533,12 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
    Column(Modifier.fillMaxWidth().padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
     Text("تغيير مستوى الفني",fontWeight=FontWeight.Bold)
     Box{
-     OutlinedButton(onClick={levelMenu=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text(selectedLevel)}
+     OutlinedButton(onClick={levelMenu=true},enabled=canEditLevel,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text(selectedLevel)}
      DropdownMenu(expanded=levelMenu,onDismissRequest={levelMenu=false}){
       levels.forEach{level->DropdownMenuItem(text={Text(level)},onClick={selectedLevel=level;levelMenu=false})}
      }
     }
-    Button(onClick={onAction("PATCH","api/admin/fannis/$id/level",JsonObject().apply{addProperty("level",selectedLevel)})},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp),elevation=ButtonDefaults.buttonElevation(defaultElevation=5.dp,pressedElevation=1.dp)){Text("حفظ المستوى")}
+    Button(onClick={onAction("PATCH","api/admin/fannis/$id/level",JsonObject().apply{addProperty("level",selectedLevel)})},enabled=canEditLevel,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp),elevation=ButtonDefaults.buttonElevation(defaultElevation=5.dp,pressedElevation=1.dp)){Text("حفظ المستوى")}
    }
   }
   Text("الشارات الحالية: "+if(currentBadges.isEmpty())"لا توجد شارات" else currentBadges.map{badgeLabels[it]?:it}.joinToString("، "),style=MaterialTheme.typography.bodySmall)
@@ -544,14 +546,14 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
    Column(Modifier.fillMaxWidth().padding(10.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
     Text("إدارة الشارات",fontWeight=FontWeight.Bold,color=Color(0xFF79520A))
     Box{
-     OutlinedButton(onClick={badgeMenu=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text(badgeLabels[selectedBadge]?:selectedBadge)}
+     OutlinedButton(onClick={badgeMenu=true},enabled=canEditBadge,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text(badgeLabels[selectedBadge]?:selectedBadge)}
      DropdownMenu(expanded=badgeMenu,onDismissRequest={badgeMenu=false}){
       badges.forEach{badge->DropdownMenuItem(text={Text(badgeLabels[badge]?:badge)},onClick={selectedBadge=badge;badgeMenu=false})}
      }
     }
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-     Button(onClick={onAction("PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge",selectedBadge);addProperty("action","add")})},modifier=Modifier.weight(1f),shape=RoundedCornerShape(13.dp),elevation=ButtonDefaults.buttonElevation(defaultElevation=5.dp)){Text("إضافة")}
-     OutlinedButton(onClick={onAction("PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge",selectedBadge);addProperty("action","remove")})},modifier=Modifier.weight(1f),shape=RoundedCornerShape(13.dp)){Text("إزالة")}
+     Button(onClick={onAction("PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge",selectedBadge);addProperty("action","add")})},enabled=canEditBadge,modifier=Modifier.weight(1f),shape=RoundedCornerShape(13.dp),elevation=ButtonDefaults.buttonElevation(defaultElevation=5.dp)){Text("إضافة")}
+     OutlinedButton(onClick={onAction("PATCH","api/admin/fannis/$id/badge",JsonObject().apply{addProperty("badge",selectedBadge);addProperty("action","remove")})},enabled=canEditBadge,modifier=Modifier.weight(1f),shape=RoundedCornerShape(13.dp)){Text("إزالة")}
     }
    }
   }
@@ -1089,7 +1091,7 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         }
                         if(section==AdminSection.LEVELS && item.isJsonObject){
                             val fanniId=item.asJsonObject.get("_id")?.asString.orEmpty()
-                            if(fanniId.isNotBlank()) FanniLevelBadgeControls(item) { method,path,body -> onAction(method,path,body) }
+                            if(fanniId.isNotBlank()) FanniLevelBadgeControls(item,onCanWriteApi) { method,path,body -> onAction(method,path,body) }
                         }
                         if(section==AdminSection.PROFILE_EDITS && item.isJsonObject){
                             val pending=item.asJsonObject.get("pendingProfileChange")?.takeIf{it.isJsonObject}?.asJsonObject
