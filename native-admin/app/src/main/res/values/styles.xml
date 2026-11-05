@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-<style name="Theme.SonaaAdmin" parent="android:style/Theme.Material.Light.NoActionBar">
-<item name="android:fontFamily">sans</item><item name="android:colorAccent">#087F9C</item>
-<item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">#FFFFFF</item>
-<item name="android:navigationBarColor">#F4F8FA</item>
-<item name="android:windowSplashScreenBackground">#FFFFFF</item>
-<item name="android:windowSplashScreenAnimatedIcon">@drawable/sonaa_logo</item>
-</style>
+    <style name="Theme.SonaaAdmin" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/sonaa_logo</item>
+        <item name="windowSplashScreenAnimationDuration">900</item>
+        <item name="postSplashScreenTheme">@style/Theme.SonaaAdmin.PostSplash</item>
+    </style>
+    <style name="Theme.SonaaAdmin.PostSplash" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#087F9C</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:navigationBarColor">#F4F8FA</item>
+    </style>
 </resources>
