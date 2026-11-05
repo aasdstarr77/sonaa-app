@@ -255,6 +255,7 @@ class MainActivity : ComponentActivity() {
             state.editingClient!=null -> ClientProfileEditor(state.editingClient,state.editingClientId.orEmpty(),{vm.closeClientProfile()}) { method:String,path:String,body:JsonObject -> vm.saveEditedProfile(method,path,body) }
             state.editingProfile!=null -> ProfileEditor(state.editingProfile,state.editingProfileId.orEmpty(),{vm.closeProfile()}) { method:String,path:String,body:JsonObject -> vm.saveEditedProfile(method,path,body) }
             state.recoveryDetail!=null -> RecoveryConversationScreen(state.recoveryDetail,state.busy,state.error,state.actionMessage,vm::closeRecovery,{path->canWriteApi(state.adminInfo,path)}) { method,path,body -> vm.recoveryAction(method,path,body) }
+            state.section == AdminSection.SUPPORT -> SupportAdminScreen(state.supportCases,state.supportSelectedCase,state.actionMessage,{vm::retry()},{id->vm.openSupportCase(id)},{method,path,body->vm.supportAction(method,path,body)},{path->canWriteApi(state.adminInfo,path)})
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::filterAuditLogs, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, vm::bulkRenameRegions, { path -> canWriteApi(state.adminInfo,path) }, { path -> canReadApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
@@ -337,6 +338,7 @@ private fun permissionKeyForNativePath(path:String):String?{
  if(clean.startsWith("api/orders/admin/")&&clean.endsWith("/voice-reviewed"))return "voiceReview"
  if(clean.startsWith("api/orders/")&&clean.endsWith("/voice"))return "voiceReview"
  if(clean.startsWith("api/password-recovery/admin/requests"))return "passwordRecovery"
+ if(clean.startsWith("api/support/admin"))return "support"
  if(clean.startsWith("api/admin/admin-users")||clean.startsWith("api/admin/audit-logs")||clean.startsWith("api/admin/page-visits"))return null
  if(clean.startsWith("api/admin/wallet/")||clean.endsWith("/set-balance")||clean.endsWith("/add-balance"))return "wallet"
  val prefix="api/admin/"
@@ -683,6 +685,85 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
  }
  if(confirmIssue)AlertDialog(onDismissRequest={confirmIssue=false},title={Text("تأكيد إصدار الرمز")},text={Text("تأكدت من هوية صاحب الحساب عبر المحادثة؟ الرمز صالح لمدة 10 دقائق وسيظهر مرة واحدة.")},confirmButton={TextButton(onClick={confirmIssue=false;onAction("POST","api/password-recovery/admin/requests/$id/issue-code",JsonObject())}){Text("إصدار الرمز")}},dismissButton={TextButton(onClick={confirmIssue=false}){Text("إلغاء")}})
  if(rejectOpen)AlertDialog(onDismissRequest={rejectOpen=false},title={Text("رفض طلب الاستعادة")},text={OutlinedTextField(rejectReason,{rejectReason=it},label={Text("سبب الرفض")},minLines=2)},confirmButton={TextButton(onClick={rejectOpen=false;onAction("POST","api/password-recovery/admin/requests/$id/reject",JsonObject().apply{addProperty("reason",rejectReason.trim())})}){Text("تأكيد الرفض")}},dismissButton={TextButton(onClick={rejectOpen=false}){Text("إلغاء")}})
+}
+
+@Composable private fun SupportAdminScreen(
+ cases:List<JsonElement>,
+ selected:JsonElement?,
+ notice:String?,
+ onRefresh:()->Unit,
+ onOpen:(String)->Unit,
+ onAction:(String,String,JsonObject)->Unit,
+ canWrite:(String)->Boolean
+){
+ var reply by remember(selected){mutableStateOf("")}
+ var statusMenu by remember(selected){mutableStateOf(false)}
+ var status by remember(selected){mutableStateOf(selected?.takeIf{it.isJsonObject}?.asJsonObject?.get("status")?.asString?: "جديدة")}
+ val statuses=listOf("جديدة","بانتظار الدعم","قيد المعالجة","بانتظار رد المستخدم","تم الحل","مغلقة")
+ val selectedObject=selected?.takeIf{it.isJsonObject}?.asJsonObject
+ val selectedId=selectedObject?.get("_id")?.asString.orEmpty()
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
+  Row(verticalAlignment=Alignment.CenterVertically){
+   Text("محادثات خدمة العملاء",modifier=Modifier.weight(1f),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
+   TextButton(onClick=onRefresh){Text("تحديث")}
+  }
+  Text("إجمالي الحالات المحمّلة: ${cases.size}",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+  if(!notice.isNullOrBlank())Text(notice,color=Color(0xFF087F55),fontWeight=FontWeight.Bold)
+  Text("قائمة المحادثات",fontWeight=FontWeight.Bold,color=DarkAccent)
+  if(cases.isEmpty())Text("لا توجد محادثات دعم حاليًا",color=Color.Gray)
+  cases.forEach{entry->
+   val item=entry.takeIf{it.isJsonObject}?.asJsonObject
+   val id=item?.get("_id")?.asString.orEmpty()
+   if(id.isNotBlank())Card(
+    Modifier.fillMaxWidth(),
+    colors=CardDefaults.cardColors(containerColor=if(id==selectedId)Color(0xFFEAF5F7) else Color.White),
+    onClick={onOpen(id)}
+   ){
+    Column(Modifier.padding(11.dp),verticalArrangement=Arrangement.spacedBy(3.dp)){
+     Text((item?.get("subject")?.asString?: "استفسار عام")+" — "+(item?.get("ownerName")?.asString?: "مستخدم"),fontWeight=FontWeight.Bold,color=DarkAccent)
+     Text((if(item?.get("ownerRole")?.asString=="client")"عميل" else "فني")+" • "+(item?.get("status")?.asString?: "جديدة")+(if(item?.get("needsHuman")?.asBoolean==true)" • يحتاج تدخل" else ""),style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+     Text("آخر تحديث: "+(item?.get("lastMessageAt")?.toString()?:item?.get("createdAt")?.toString().orEmpty()),style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+    }
+   }
+  }
+  if(selectedObject!=null&&selectedId.isNotBlank()){
+   Divider()
+   Text("تفاصيل المحادثة",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,color=DarkAccent)
+   Text("الاسم: "+(selectedObject.get("ownerName")?.asString?: "—"))
+   Text("نوع الحساب: "+(if(selectedObject.get("ownerRole")?.asString=="client")"عميل" else "فني"))
+   Text("الموضوع: "+(selectedObject.get("subject")?.asString?: "—"))
+   Row(verticalAlignment=Alignment.CenterVertically){
+    Text("الحالة:",fontWeight=FontWeight.Bold)
+    Spacer(Modifier.width(8.dp))
+    Box{
+     OutlinedButton(onClick={statusMenu=true}){Text(status)}
+     DropdownMenu(expanded=statusMenu,onDismissRequest={statusMenu=false}){
+      statuses.forEach{value->DropdownMenuItem(text={Text(value)},onClick={status=value;statusMenu=false})}
+     }
+    }
+    Spacer(Modifier.weight(1f))
+    Button(onClick={onAction("PATCH","api/support/admin/$selectedId/status",JsonObject().apply{addProperty("status",status)})},enabled=canWrite("api/support/admin/$selectedId/status")){Text("حفظ الحالة")}
+   }
+   Text("الرسائل",fontWeight=FontWeight.Bold,color=DarkAccent)
+   val messages=selectedObject.get("messages")?.takeIf{it.isJsonArray}?.asJsonArray
+   if(messages==null||messages.size()==0)Text("لا توجد رسائل")
+   else messages.forEach{message->
+    val m=message.takeIf{it.isJsonObject}?.asJsonObject
+    val role=m?.get("senderRole")?.asString.orEmpty()
+    val messageId=m?.get("_id")?.asString?:m?.get("id")?.asString.orEmpty()
+    Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=if(role=="admin")Color(0xFFEAF5F7) else Color.White)){
+     Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+      Text(if(role=="admin")"دعم صُنّاع" else if(role=="client")"العميل" else if(role=="assistant")"المساعد" else "الفني",fontWeight=FontWeight.Bold,color=DarkAccent)
+      Text(m?.get("text")?.asString.orEmpty())
+      Text(m?.get("createdAt")?.toString().orEmpty(),style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+      if(messageId.isNotBlank())TextButton(onClick={onAction("DELETE","api/support/admin/$selectedId/messages/$messageId",JsonObject())},enabled=canWrite("api/support/admin/$selectedId/messages/$messageId")){Text("حذف الرسالة",color=Color(0xFFB3261E))}
+     }
+    }
+   }
+   OutlinedTextField(reply,{reply=it},label={Text("اكتب ردًا للمستخدم")},modifier=Modifier.fillMaxWidth(),minLines=2)
+   Button(onClick={onAction("POST","api/support/admin/$selectedId/reply",JsonObject().apply{addProperty("text",reply.trim())});reply=""},enabled=reply.trim().isNotEmpty()&&canWrite("api/support/admin/$selectedId/reply"),modifier=Modifier.fillMaxWidth()){Text("إرسال الرد")}
+  }
+ }
 }
 
 @Composable private fun PageVisitsScreen(payload:JsonElement?){
