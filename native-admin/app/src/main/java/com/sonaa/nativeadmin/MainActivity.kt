@@ -436,12 +436,38 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
 }
 
 @Composable private fun WalletTransactionsScreen(items:List<JsonElement>,onBack:()->Unit){
+ val labels=mapOf("commission" to "عمولة طلب","topup" to "شحن محفظة","admin_adjustment" to "تسوية إدارية","refund" to "استرداد")
  Column(Modifier.fillMaxSize().padding(16.dp)){
-  Text("حركات المحفظة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
-  OutlinedButton(onClick=onBack,modifier=Modifier.fillMaxWidth().padding(vertical=8.dp)){Text("رجوع للمحافظ")}
-  if(items.isEmpty())Text("لا توجد حركات مالية مسجلة")
-  else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
-   items(items){entry->Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color.White)){Column(Modifier.padding(12.dp)){Text(entry.toString(),style=MaterialTheme.typography.bodySmall)}}}
+  Text("حركات المحفظة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.ExtraBold,color=DarkAccent)
+  Text("سجل العمليات المالية مع الرصيد قبل الحركة وبعدها",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+  Button(onClick=onBack,modifier=Modifier.fillMaxWidth().padding(vertical=8.dp),shape=RoundedCornerShape(14.dp),elevation=ButtonDefaults.buttonElevation(defaultElevation=5.dp)){Text("رجوع للمحافظ")}
+  if(items.isEmpty())Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("لا توجد حركات مالية مسجلة",color=Color.Gray)}
+  else LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)){
+   items(items){entry->
+    val o=entry.takeIf{it.isJsonObject}?.asJsonObject
+    val type=o?.get("type")?.takeIf{!it.isJsonNull}?.asString.orEmpty()
+    val amount=o?.get("amount")?.takeIf{it.isJsonPrimitive}?.asString?: "—"
+    val before=o?.get("balanceBefore")?.takeIf{it.isJsonPrimitive}?.asString?: "—"
+    val after=o?.get("balanceAfter")?.takeIf{it.isJsonPrimitive}?.asString?: "—"
+    val description=o?.get("description")?.takeIf{!it.isJsonNull}?.asString.orEmpty()
+    val order=o?.get("orderSN")?.takeIf{!it.isJsonNull}?.asString.orEmpty()
+    val date=o?.get("createdAt")?.takeIf{!it.isJsonNull}?.asString?: "—"
+    Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(17.dp),colors=CardDefaults.cardColors(containerColor=Color.White),elevation=CardDefaults.cardElevation(defaultElevation=3.dp)){
+     Column(Modifier.fillMaxWidth().padding(13.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+      Row(verticalAlignment=Alignment.CenterVertically){
+       Text(labels[type]?:if(type.isBlank())"حركة مالية" else type,modifier=Modifier.weight(1f),fontWeight=FontWeight.ExtraBold,color=DarkAccent)
+       Text("$amount ج.م",fontWeight=FontWeight.Black,color=if(amount.startsWith("-"))Color(0xFFB3261E) else Color(0xFF087F55))
+      }
+      if(description.isNotBlank())Text(description,color=Color(0xFF455A64))
+      Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+       Surface(shape=RoundedCornerShape(10.dp),color=Color(0xFFF0F5F8)){Text("قبل: $before ج.م",modifier=Modifier.padding(horizontal=9.dp,vertical=6.dp),style=MaterialTheme.typography.labelMedium)}
+       Surface(shape=RoundedCornerShape(10.dp),color=Color(0xFFE8F5F2)){Text("بعد: $after ج.م",modifier=Modifier.padding(horizontal=9.dp,vertical=6.dp),style=MaterialTheme.typography.labelMedium)}
+      }
+      if(order.isNotBlank())Text("رقم الطلب: $order",style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+      Text(date,style=MaterialTheme.typography.labelSmall,color=Color.Gray)
+     }
+    }
+   }
   }
  }
 }
