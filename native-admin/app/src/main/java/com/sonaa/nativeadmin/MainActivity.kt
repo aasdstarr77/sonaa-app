@@ -1,5 +1,6 @@
 package com.sonaa.nativeadmin
 import android.Manifest
+import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.app.NotificationManager
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -732,8 +734,24 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
  var endDate by remember{mutableStateOf("")}
  var service by remember{mutableStateOf("")}
  var area by remember{mutableStateOf("")}
+ val context=LocalContext.current
  val root=payload?.takeIf{it.isJsonObject}?.asJsonObject
  val summary=root?.get("summary")?.takeIf{it.isJsonObject}?.asJsonObject
+ val topServices=root?.get("topServices")?.takeIf{it.isJsonArray}?.asJsonArray
+ fun csvCell(value:String)="\""+value.replace("\"","\"\"")+"\""
+ val csv=remember(payload){
+  buildString{
+   append('\uFEFF')
+   append(csvCell("المؤشر")).append(',').append(csvCell("القيمة")).append('\n')
+   summary?.entrySet()?.forEach{entry->append(csvCell(entry.key)).append(',').append(csvCell(entry.value.toString())).append('\n')}
+   append(csvCell("الخدمة")).append(',').append(csvCell("عدد الطلبات")).append('\n')
+   topServices?.forEach{entry->
+    val obj=entry.takeIf{it.isJsonObject}?.asJsonObject
+    append(csvCell(obj?.get("service")?.toString()?.trim('"')?:entry.toString()))
+     .append(',').append(csvCell(obj?.get("count")?.toString()?: "")).append('\n')
+   }
+  }
+ }
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
   Text("تقارير المنصة",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
   OutlinedTextField(startDate,{startDate=it},label={Text("من تاريخ YYYY-MM-DD")},modifier=Modifier.fillMaxWidth())
@@ -741,8 +759,18 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
   OutlinedTextField(service,{service=it},label={Text("الخدمة")},modifier=Modifier.fillMaxWidth())
   OutlinedTextField(area,{area=it},label={Text("المنطقة")},modifier=Modifier.fillMaxWidth())
   Button(onClick={onGenerate("POST","api/admin/reports",JsonObject().apply{addProperty("startDate",startDate);addProperty("endDate",endDate);addProperty("service",service);addProperty("area",area)})},modifier=Modifier.fillMaxWidth()){Text("إنشاء التقرير")}
-  if(summary!=null) summary.entrySet().forEach{Text(it.key+" : "+it.value.toString())}
-  root?.get("topServices")?.takeIf{it.isJsonArray}?.asJsonArray?.forEach{Text(it.toString())}
+  if(summary!=null){
+   summary.entrySet().forEach{Text(it.key+" : "+it.value.toString())}
+   OutlinedButton(onClick={
+    val intent=Intent(Intent.ACTION_SEND).apply{
+     type="text/csv"
+     putExtra(Intent.EXTRA_SUBJECT,"تقرير صُنّاع")
+     putExtra(Intent.EXTRA_TEXT,csv)
+    }
+    context.startActivity(Intent.createChooser(intent,"تصدير التقرير"))
+   },modifier=Modifier.fillMaxWidth()){Text("تصدير التقرير ومشاركته بصيغة CSV")}
+  }
+  topServices?.forEach{Text(it.toString())}
  }
 }
 
