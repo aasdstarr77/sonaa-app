@@ -21,6 +21,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -118,9 +124,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 @Composable private fun SplashScreen(){
+ val motion=rememberInfiniteTransition(label="sonaa-splash-motion")
+ val horizontalOffset by motion.animateFloat(
+  initialValue=-20f,
+  targetValue=20f,
+  animationSpec=infiniteRepeatable(
+   animation=tween(durationMillis=900,easing=FastOutSlowInEasing),
+   repeatMode=RepeatMode.Reverse
+  ),
+  label="sonaa-logo-horizontal-offset"
+ )
  Box(Modifier.fillMaxSize().background(Color.White),contentAlignment=Alignment.Center){
   Column(horizontalAlignment=Alignment.CenterHorizontally){
-   Image(painterResource(R.drawable.sonaa_logo),"شعار صُنّاع",Modifier.size(150.dp))
+   Image(painterResource(R.drawable.sonaa_logo),"شعار صُنّاع",Modifier.offset(x=horizontalOffset.dp).size(150.dp))
    Spacer(Modifier.height(18.dp))
    Text("صُنّاع",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Black,color=DarkAccent)
    Text("كل خدمة تبدأ بخطوة",color=Accent,modifier=Modifier.padding(top=4.dp))
