@@ -113,6 +113,16 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    _state.value=_state.value.copy(busy=false,items=rows,payload=data)
   }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر البحث في أدوات الدعم")}
  }
+ fun filterAuditLogs(date:String)=viewModelScope.launch{
+  _state.value=_state.value.copy(busy=true,error=null)
+  try{
+   val clean=date.trim()
+   val path="api/admin/audit-logs"+if(clean.isBlank())"" else "?date="+Uri.encode(clean)
+   val data=repo.get(path)
+   val rows=if(data.isJsonObject)data.asJsonObject.get("logs")?.takeIf{it.isJsonArray}?.asJsonArray?.map{it} ?: data.asJsonObject.get("items")?.takeIf{it.isJsonArray}?.asJsonArray?.map{it} ?: emptyList() else emptyList()
+   _state.value=_state.value.copy(busy=false,section=AdminSection.SECURITY,items=rows,payload=data,actionMessage=if(clean.isBlank())"تم تحديث سجل التدقيق" else "تم تطبيق فلتر التاريخ: $clean")
+  }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تصفية سجل التدقيق")}
+ }
  fun bulkAction(section:AdminSection,ids:List<String>,action:String,reason:String="إجراء جماعي موثق من تطبيق الإدارة")=viewModelScope.launch{
   if(ids.isEmpty())return@launch
   if(ids.size>100){_state.value=_state.value.copy(actionMessage="الحد الأقصى للإجراء الجماعي 100 عنصر");return@launch}
