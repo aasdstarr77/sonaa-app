@@ -133,7 +133,6 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
      }
      AdminSection.WALLETS->repo.mutate("POST","api/admin/wallet/freeze/$raw",JsonObject().apply{addProperty("action",action);addProperty("reason",reason)})
      AdminSection.TOPUPS->repo.mutate("POST","api/admin/topup-requests/$raw/$action",JsonObject().apply{if(action=="reject")addProperty("reason",reason)})
-     AdminSection.CLIENTS->repo.mutate("DELETE","api/admin/clients/$raw/account")
      AdminSection.COMPLAINTS->repo.mutate("PATCH","api/admin/complaints/$raw",JsonObject().apply{addProperty("status",action)})
      AdminSection.OFFERS->{
       val parts=raw.split("|")
