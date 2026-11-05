@@ -491,24 +491,61 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
 }
 
 @Composable private fun ProfileEditor(payload:JsonElement,id:String,onCancel:()->Unit,onSave:(String,String,JsonObject)->Unit){
- val f=payload.takeIf{it.isJsonObject}?.asJsonObject?.get("fanni")?.takeIf{it.isJsonObject}?.asJsonObject
+ val root=payload.takeIf{it.isJsonObject}?.asJsonObject
+ val f=root?.get("fanni")?.takeIf{it.isJsonObject}?.asJsonObject
+ val serviceOptions=root?.get("serviceOptions")?.takeIf{it.isJsonArray}?.asJsonArray?.mapNotNull{it.takeIf{v->v.isJsonPrimitive}?.asString}?.distinct().orEmpty()
+ val areaOptions=root?.get("areaOptions")?.takeIf{it.isJsonArray}?.asJsonArray?.mapNotNull{it.takeIf{v->v.isJsonPrimitive}?.asString}?.distinct().orEmpty()
  var phone by remember(payload){mutableStateOf(f?.get("phone")?.asString.orEmpty())}
- var specialties by remember(payload){mutableStateOf(f?.get("specialties")?.asJsonArray?.joinToString("، "){it.asString}.orEmpty())}
- var areas by remember(payload){mutableStateOf(f?.get("areas")?.asJsonArray?.joinToString("، "){it.asString}.orEmpty())}
- Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-  Text("تعديل بيانات الفني",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=DarkAccent)
-  OutlinedTextField(phone,{phone=it},label={Text("رقم الهاتف")},modifier=Modifier.fillMaxWidth())
-  OutlinedTextField(specialties,{specialties=it},label={Text("التخصصات — افصل بينها بفاصلة")},modifier=Modifier.fillMaxWidth(),minLines=2)
-  OutlinedTextField(areas,{areas=it},label={Text("مناطق العمل — افصل بينها بفاصلة")},modifier=Modifier.fillMaxWidth(),minLines=3)
+ val selectedServices=remember(payload){androidx.compose.runtime.mutableStateListOf<String>().apply{addAll(f?.get("specialties")?.takeIf{it.isJsonArray}?.asJsonArray?.mapNotNull{it.takeIf{v->v.isJsonPrimitive}?.asString}.orEmpty())}}
+ val selectedAreas=remember(payload){androidx.compose.runtime.mutableStateListOf<String>().apply{addAll(f?.get("areas")?.takeIf{it.isJsonArray}?.asJsonArray?.mapNotNull{it.takeIf{v->v.isJsonPrimitive}?.asString}.orEmpty())}}
+ var servicesExpanded by remember{mutableStateOf(false)}
+ var areasExpanded by remember{mutableStateOf(false)}
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+  Text("تعديل بيانات الفني",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.ExtraBold,color=DarkAccent)
+  OutlinedTextField(phone,{phone=it},label={Text("رقم الهاتف")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+  Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(17.dp),color=Color.White,shadowElevation=3.dp,border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFFDCE8F0))){
+   Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+    Text("الخدمات والمهن",fontWeight=FontWeight.Bold,color=DarkAccent)
+    Text("اختار الخدمات المعتمدة للفني بدل كتابتها يدويًا",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+    Box{
+     OutlinedButton(onClick={servicesExpanded=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text(if(selectedServices.isEmpty())"اختيار الخدمات" else "تم اختيار ${selectedServices.size} خدمة")}
+     DropdownMenu(expanded=servicesExpanded,onDismissRequest={servicesExpanded=false},modifier=Modifier.heightIn(max=360.dp)){
+      serviceOptions.forEach{service->DropdownMenuItem(
+       text={Text(service)},
+       leadingIcon={Checkbox(checked=service in selectedServices,onCheckedChange=null)},
+       onClick={if(service in selectedServices)selectedServices.remove(service) else selectedServices.add(service)}
+      )}
+     }
+    }
+    if(selectedServices.isNotEmpty())Text(selectedServices.joinToString(" • "),style=MaterialTheme.typography.bodySmall,color=Accent)
+   }
+  }
+  Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(17.dp),color=Color.White,shadowElevation=3.dp,border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFFDCE8F0))){
+   Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+    Text("مناطق العمل",fontWeight=FontWeight.Bold,color=DarkAccent)
+    Text("اختار المناطق من القائمة الموحدة المعتمدة",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+    Box{
+     OutlinedButton(onClick={areasExpanded=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text(if(selectedAreas.isEmpty())"اختيار مناطق العمل" else "تم اختيار ${selectedAreas.size} منطقة")}
+     DropdownMenu(expanded=areasExpanded,onDismissRequest={areasExpanded=false},modifier=Modifier.heightIn(max=360.dp)){
+      areaOptions.forEach{area->DropdownMenuItem(
+       text={Text(area)},
+       leadingIcon={Checkbox(checked=area in selectedAreas,onCheckedChange=null)},
+       onClick={if(area in selectedAreas)selectedAreas.remove(area) else selectedAreas.add(area)}
+      )}
+     }
+    }
+    if(selectedAreas.isNotEmpty())Text(selectedAreas.joinToString(" • "),style=MaterialTheme.typography.bodySmall,color=Accent)
+   }
+  }
   Button(onClick={
    val body=JsonObject().apply{
     addProperty("phone",phone.trim())
-    add("specialties",com.google.gson.JsonArray().apply{specialties.split(',', '،').map{it.trim()}.filter{it.isNotEmpty()}.forEach{add(it)}})
-    add("areas",com.google.gson.JsonArray().apply{areas.split(',', '،').map{it.trim()}.filter{it.isNotEmpty()}.forEach{add(it)}})
+    add("specialties",com.google.gson.JsonArray().apply{selectedServices.forEach{add(it)}})
+    add("areas",com.google.gson.JsonArray().apply{selectedAreas.forEach{add(it)}})
    }
    onSave("PATCH","api/admin/fannis/$id/profile",body)
-  },modifier=Modifier.fillMaxWidth()){Text("حفظ بيانات الفني")}
-  OutlinedButton(onClick=onCancel,modifier=Modifier.fillMaxWidth()){Text("رجوع")}
+  },enabled=phone.isNotBlank()&&selectedServices.isNotEmpty()&&selectedAreas.isNotEmpty(),modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(15.dp),elevation=ButtonDefaults.buttonElevation(defaultElevation=6.dp,pressedElevation=1.dp)){Text("حفظ بيانات الفني")}
+  OutlinedButton(onClick=onCancel,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(15.dp)){Text("رجوع")}
  }
 }
 
