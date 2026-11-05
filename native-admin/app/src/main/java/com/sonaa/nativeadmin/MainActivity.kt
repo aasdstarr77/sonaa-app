@@ -926,6 +926,9 @@ private data class RowAction(val label:String,val method:String,val path:String,
     var serviceOrderCategory by remember(section,items){mutableStateOf(items.firstOrNull{it.isJsonObject}?.asJsonObject?.get("category")?.asString.orEmpty())}
     var serviceOrderText by remember(section,items){mutableStateOf(items.filter{it.isJsonObject}.filter{it.asJsonObject.get("category")?.asString==serviceOrderCategory}.sortedBy{it.asJsonObject.get("sortOrder")?.asInt?:0}.mapNotNull{it.asJsonObject.get("name")?.asString}.joinToString("، "))}
     var correctionOrder by remember{mutableStateOf<JsonElement?>(null)}
+    var assigningOrder by remember{mutableStateOf<JsonElement?>(null)}
+    var assigningOfferIndex by remember{mutableStateOf(0)}
+    var assigningReason by remember{mutableStateOf("تعيين إداري بعد مراجعة العروض")}
     var advancedFanni by remember{mutableStateOf<JsonElement?>(null)}
     var limitFanni by remember{mutableStateOf<JsonElement?>(null)}
     var editingPermissions by remember{mutableStateOf<JsonElement?>(null)}
@@ -960,6 +963,38 @@ private data class RowAction(val label:String,val method:String,val path:String,
         correctionOrder=null
         onAction("PATCH","api/admin/orders/$sn/correct",body)
     }}
+    assigningOrder?.let{order->
+        val orderObject=order.asJsonObject
+        val offers=orderObject.get("offers")?.takeIf{it.isJsonArray}?.asJsonArray?.toList().orEmpty()
+        val chosenOffer=offers.getOrNull(assigningOfferIndex)
+        val offerId=chosenOffer?.takeIf{it.isJsonObject}?.asJsonObject?.get("_id")?.takeIf{!it.isJsonNull}?.asString.orEmpty()
+        AlertDialog(
+            onDismissRequest={assigningOrder=null},
+            title={Text("تعيين فني على الطلب "+(orderObject.get("sn")?.asString.orEmpty()))},
+            text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                offers.forEachIndexed{index,offer->
+                    val obj=offer.takeIf{it.isJsonObject}?.asJsonObject
+                    val name=obj?.get("fanniName")?.asString?: "فني"
+                    val price=obj?.get("price")?.toString()?.trim('"')?: "—"
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        RadioButton(selected=assigningOfferIndex==index,onClick={assigningOfferIndex=index})
+                        Column(Modifier.weight(1f)){
+                            Text(name,fontWeight=FontWeight.Bold)
+                            Text("قيمة العرض: "+price+" جنيه",style=MaterialTheme.typography.bodySmall,color=Color.Gray)
+                        }
+                    }
+                }
+                OutlinedTextField(assigningReason,{assigningReason=it},label={Text("سبب التعيين الإداري")},modifier=Modifier.fillMaxWidth(),minLines=2)
+            }},
+            confirmButton={TextButton(onClick={
+                val sn=orderObject.get("sn")?.asString.orEmpty()
+                val body=JsonObject().apply{addProperty("offerId",offerId);addProperty("reason",assigningReason.trim())}
+                assigningOrder=null
+                onAction("POST","api/admin/orders/$sn/assign",body)
+            },enabled=offerId.isNotBlank()&&assigningReason.trim().length>=3){Text("تأكيد التعيين")}},
+            dismissButton={TextButton(onClick={assigningOrder=null}){Text("إلغاء")}}
+        )
+    }
     if(notifyOpen) AlertDialog(
         onDismissRequest={notifyOpen=false},
         title={Text("إرسال إشعار مباشر")},
@@ -1206,6 +1241,10 @@ private data class RowAction(val label:String,val method:String,val path:String,
                         if(section==AdminSection.ORDERS&&onCanWriteApi("api/admin/orders/x/correct")){
                             OutlinedButton(onClick={correctionOrder=item},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("تصحيح بيانات الطلب")}
                         }
+                        if(section==AdminSection.ORDERS&&item.isJsonObject&&onCanWriteApi("api/admin/orders/x/assign")){
+                            val offers=item.asJsonObject.get("offers")?.takeIf{it.isJsonArray}?.asJsonArray
+                            if(offers!=null&&offers.size()>0)OutlinedButton(onClick={assigningOrder=item;assigningOfferIndex=0;assigningReason="تعيين إداري بعد مراجعة العروض"},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("اختيار عرض وتعيين الفني")}
+                        }
                         if(section==AdminSection.ORDERS && item.isJsonObject && item.asJsonObject.get("hasVoiceRecording")?.asBoolean==true){
                             val orderSn=item.asJsonObject.get("sn")?.asString.orEmpty()
                             OutlinedButton(onClick={onVoice(orderSn)},modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text("استماع للتسجيل الصوتي")}
@@ -1281,7 +1320,6 @@ private fun rowActions(section:AdminSection,item:JsonElement):List<RowAction>{
   )else emptyList()
   AdminSection.ORDERS->if(sn!=null){
    val actions=mutableListOf(RowAction("نشر الطلب","POST","api/orders/admin/$sn/publish"))
-   actions.add(RowAction("تعيين فني","POST","api/admin/orders/$sn/assign",JsonObject(),"offerId","معرّف العرض","reason","سبب التعيين"))
    if(o.get("hasVoiceRecording")?.asBoolean==true)actions.add(RowAction("تأكيد مراجعة الصوت","POST","api/orders/admin/$sn/voice-reviewed"))
    actions.add(RowAction("إلغاء الطلب","POST","api/admin/orders/$sn/cancel",JsonObject().apply{addProperty("reason","إلغاء من تطبيق الإدارة")}))
    actions.add(RowAction("أرشفة","POST","api/admin/orders/$sn/archive"))
