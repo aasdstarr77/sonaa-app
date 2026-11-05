@@ -151,8 +151,23 @@ class MainActivity : ComponentActivity() {
                 Text("إدارة صُنّاع CON", fontWeight = FontWeight.Bold, color = DarkAccent)
                 Text(state.section.title, style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             }
-            TextButton(onClick = vm::retry) { Text("تحديث", color = Accent) }
-            TextButton(onClick = vm::logout) { Text("خروج", color = Color(0xFFB3261E)) }
+            Surface(
+                onClick = vm::retry,
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFE8F5F7),
+                shadowElevation = 5.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC8E5E9))
+            ) { Box(contentAlignment = Alignment.Center) { Text("↻", color = Accent, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall) } }
+            Spacer(Modifier.width(8.dp))
+            Surface(
+                onClick = vm::logout,
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFFFEEEE),
+                shadowElevation = 5.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF3CACA))
+            ) { Box(contentAlignment = Alignment.Center) { Text("⇥", color = Color(0xFFB3261E), fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge) } }
         }
         if(state.section==AdminSection.ORDERS)state.voicePath?.let { path -> VoicePlayer(path) { } }
         state.actionMessage?.let { message ->
@@ -192,7 +207,7 @@ class MainActivity : ComponentActivity() {
                         text = { Text(tab.title, fontWeight = if (tab == state.section) FontWeight.ExtraBold else FontWeight.Medium, color = if (tab == state.section) Accent else Color(0xFF263746)) },
                         leadingIcon = {
                             Box(Modifier.size(34.dp).background(if (tab == state.section) Color(0xFFE1F4F7) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                                Text("◆", color = if (tab == state.section) Accent else Color(0xFF78909C), style = MaterialTheme.typography.labelMedium)
+                                Text(sectionGlyph(tab), color = if (tab == state.section) Accent else Color(0xFF78909C), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
                             }
                         },
                         onClick = {
@@ -220,6 +235,17 @@ class MainActivity : ComponentActivity() {
             else -> ListScreen(state.section, state.items, vm::retry, vm::loadVoice, vm::openFanniProfile, vm::openWalletTransactions, vm::openClientProfile, vm::searchSupport, vm::bulkPublish, vm::openRecovery, { section, ids, action -> vm.bulkAction(section, ids, action) }, { path -> canWriteApi(state.adminInfo,path) }, { path -> canReadApi(state.adminInfo,path) }) { method, path, body -> vm.mutate(method, path, body) }
         }
     }
+}
+private fun sectionGlyph(section:AdminSection):String=when(section){
+ AdminSection.DASHBOARD->"⌂";AdminSection.STATS->"▥";AdminSection.ORDERS->"▤"
+ AdminSection.TECHNICIANS->"♟";AdminSection.PENDING->"◷";AdminSection.PROFILE_EDITS->"✎"
+ AdminSection.DISABLED->"⊘";AdminSection.LEVELS->"★";AdminSection.OFFERS->"%"
+ AdminSection.WALLETS->"◉";AdminSection.TOPUPS->"+";AdminSection.SERVICES->"⚒"
+ AdminSection.REGIONS->"⌖";AdminSection.COMPLAINTS->"!";AdminSection.SUPPORT->"?"
+ AdminSection.RECOVERY->"↻";AdminSection.NOTIFICATIONS->"♢";AdminSection.CONTENT->"▣"
+ AdminSection.PRICING->"$";AdminSection.REPORTS->"▤";AdminSection.PAGE_VISITS->"◉"
+ AdminSection.SECURITY->"⌑";AdminSection.SETTINGS->"⚙";AdminSection.ROLES->"♙"
+ AdminSection.CLIENTS->"♧"
 }
 @Composable private fun VoicePlayer(path:String,onClose:()->Unit){
  var prepared by remember(path){mutableStateOf(false)}
