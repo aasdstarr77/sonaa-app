@@ -862,13 +862,38 @@ private fun canWriteApi(info:JsonElement?,path:String):Boolean{
 @Composable private fun Dashboard(stats: JsonElement?) {
     val root = stats?.takeIf { it.isJsonObject }?.asJsonObject
     val data = root?.get("counts")?.takeIf { it.isJsonObject }?.asJsonObject ?: root
-    val cards = listOf("إجمالي الفنيين" to (data?.get("technicians")?.toString() ?: "—"), "الفنيون المعتمدون" to (data?.get("verifiedTechnicians")?.toString() ?: "—"), "العملاء" to (data?.get("clients")?.toString() ?: "—"))
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    val orders = root?.get("dashboardOrders")?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty()
+    val topups = root?.get("dashboardTopups")?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty()
+    val complaints = root?.get("dashboardComplaints")?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty()
+    fun field(item: JsonElement, key: String): String = item.takeIf { it.isJsonObject }?.asJsonObject?.get(key)?.takeIf { !it.isJsonNull }?.asString.orEmpty()
+    val approvedTopups = topups.filter { field(it, "status") == "approved" }.sumOf { field(it, "amount").toDoubleOrNull() ?: 0.0 }
+    val cards = listOf(
+        "إجمالي الفنيين" to (data?.get("technicians")?.toString() ?: "—"),
+        "الفنيون المعتمدون" to (data?.get("verifiedTechnicians")?.toString() ?: "—"),
+        "العملاء المسجلون" to (data?.get("clients")?.toString() ?: "—"),
+        "إجمالي الطلبات" to orders.size.toString(),
+        "طلبات بانتظار النشر" to orders.count { field(it, "status") == "قيد المراجعة" }.toString(),
+        "طلبات شحن معلقة" to topups.count { field(it, "status") == "pending" }.toString(),
+        "شكاوى جديدة" to complaints.count { field(it, "status") == "جديدة" }.toString(),
+        "إجمالي الشحنات المقبولة" to String.format(java.util.Locale.US, "%.2f ج", approvedTopups)
+    )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("ملخص المنصة", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = DarkAccent)
         Spacer(Modifier.height(12.dp))
         cards.forEach { (label, value) -> Card(Modifier.fillMaxWidth().padding(bottom = 10.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(18.dp)) { Text(label, color = Color.Gray); Text(value, style = MaterialTheme.typography.headlineMedium, color = Accent, fontWeight = FontWeight.Bold) }
         } }
+        Text("أحدث الطلبات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = DarkAccent, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
+        if (orders.isEmpty()) Text("لا توجد طلبات متاحة أو لا تملك صلاحية عرضها", color = Color.Gray)
+        orders.take(5).forEach { order ->
+            Card(Modifier.fillMaxWidth().padding(bottom = 7.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(field(order, "sn").ifBlank { "طلب بدون رقم" }, fontWeight = FontWeight.Bold, color = DarkAccent)
+                    Text(field(order, "clientName").ifBlank { "عميل" }, color = Color.DarkGray)
+                    Text(field(order, "status").ifBlank { "—" }, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+            }
+        }
     }
 }
 private data class RowAction(val label:String,val method:String,val path:String,val body:JsonObject=JsonObject(),val inputKey:String?=null,val inputHint:String="",val secondInputKey:String?=null,val secondInputHint:String="")

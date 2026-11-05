@@ -23,11 +23,30 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
   try{repo.login(phone,password);val me=repo.getMe();_state.value=_state.value.copy(busy=false,authenticated=true,adminInfo=me);refresh()}
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تسجيل الدخول")}
  }
+ private suspend fun enrichDashboard(source:JsonElement):JsonElement{
+  val root=source.takeIf{it.isJsonObject}?.asJsonObject?.deepCopy()?:return source
+  fun findArray(response:JsonElement?,vararg keys:String):com.google.gson.JsonArray?{
+   if(response==null)return null
+   if(response.isJsonArray)return response.asJsonArray
+   if(response.isJsonObject){for(key in keys){val value=response.asJsonObject.get(key);if(value?.isJsonArray==true)return value.asJsonArray}}
+   return null
+  }
+  runCatching{repo.get("api/admin/orders")}.getOrNull()?.let{findArray(it,"orders","data","items")?.let{rows->root.add("dashboardOrders",rows)}}
+  runCatching{repo.get("api/admin/topup-requests")}.getOrNull()?.let{findArray(it,"requests","topups","data","items")?.let{rows->root.add("dashboardTopups",rows)}}
+  runCatching{repo.get("api/admin/complaints")}.getOrNull()?.let{findArray(it,"complaints","data","items")?.let{rows->root.add("dashboardComplaints",rows)}}
+  return root
+ }
  fun refresh()=load(AdminSection.DASHBOARD)
  fun open(section:AdminSection)=load(section)
  private fun load(section:AdminSection,preserveMessage:Boolean=false)=viewModelScope.launch{
   _state.value=_state.value.copy(section=section,busy=true,error=null,items=emptyList(),actionMessage=if(preserveMessage)_state.value.actionMessage else null)
-  try{val data=repo.get(section);val loaded=section.extract(data);val visible=when(section){AdminSection.PENDING->loaded.filter{it.isJsonObject&&it.asJsonObject.get("isApproved")?.asBoolean!=true&&it.asJsonObject.get("isDisabled")?.asBoolean!=true&&it.asJsonObject.get("status")?.asString!="rejected"};AdminSection.DISABLED->loaded.filter{it.isJsonObject&&(it.asJsonObject.get("isDisabled")?.asBoolean==true||it.asJsonObject.get("status")?.asString=="disabled")};AdminSection.OFFERS->loaded.filter{it.isJsonObject&&it.asJsonObject.get("offers")?.let{v->v.isJsonArray&&v.asJsonArray.size()>0}==true};else->loaded};_state.value=_state.value.copy(busy=false,stats=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)data else _state.value.stats,items=visible,payload=data)}
+  try{
+   val response=repo.get(section)
+   val data=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)enrichDashboard(response) else response
+   val loaded=section.extract(data)
+   val visible=when(section){AdminSection.PENDING->loaded.filter{it.isJsonObject&&it.asJsonObject.get("isApproved")?.asBoolean!=true&&it.asJsonObject.get("isDisabled")?.asBoolean!=true&&it.asJsonObject.get("status")?.asString!="rejected"};AdminSection.DISABLED->loaded.filter{it.isJsonObject&&(it.asJsonObject.get("isDisabled")?.asBoolean==true||it.asJsonObject.get("status")?.asString=="disabled")};AdminSection.OFFERS->loaded.filter{it.isJsonObject&&it.asJsonObject.get("offers")?.let{v->v.isJsonArray&&v.asJsonArray.size()>0}==true};else->loaded}
+   _state.value=_state.value.copy(busy=false,stats=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)data else _state.value.stats,items=visible,payload=data)
+  }
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل البيانات")}
  }
  fun mutate(method:String,path:String,body:JsonObject=JsonObject())=viewModelScope.launch{
