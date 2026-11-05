@@ -8,7 +8,7 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val adminInfo:JsonElement?=null,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null,val editingProfile:JsonElement?=null,val editingProfileId:String?=null,val walletFanniId:String?=null,val walletTransactions:List<JsonElement> = emptyList(),val editingClient:JsonElement?=null,val editingClientId:String?=null,val recoveryDetail:JsonElement?=null,val recoveryDetailId:String?=null)
+data class AdminUiState(val checking:Boolean=true,val authenticated:Boolean=false,val adminInfo:JsonElement?=null,val busy:Boolean=false,val error:String?=null,val section:AdminSection=AdminSection.DASHBOARD,val stats:JsonElement?=null,val items:List<JsonElement> = emptyList(),val actionMessage:String?=null,val payload:JsonElement?=null,val voicePath:String?=null,val editingProfile:JsonElement?=null,val editingProfileId:String?=null,val walletFanniId:String?=null,val walletTransactions:List<JsonElement> = emptyList(),val editingClient:JsonElement?=null,val editingClientId:String?=null,val recoveryDetail:JsonElement?=null,val recoveryDetailId:String?=null,val supportCases:List<JsonElement> = emptyList(),val supportSelectedCase:JsonElement?=null)
 class AdminViewModel(app:Application):AndroidViewModel(app){
  private val repo=AdminRepository(app)
  private val _state=MutableStateFlow(AdminUiState())
@@ -44,8 +44,9 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
    val response=repo.get(section)
    val data=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)enrichDashboard(response) else response
    val loaded=section.extract(data)
+   val supportCases=if(section==AdminSection.SUPPORT)runCatching{repo.get("api/support/admin").asJsonObject.get("supportCases")?.takeIf{it.isJsonArray}?.asJsonArray?.map{it}?:emptyList()}.getOrDefault(emptyList()) else _state.value.supportCases
    val visible=when(section){AdminSection.PENDING->loaded.filter{it.isJsonObject&&it.asJsonObject.get("isApproved")?.asBoolean!=true&&it.asJsonObject.get("isDisabled")?.asBoolean!=true&&it.asJsonObject.get("status")?.asString!="rejected"};AdminSection.DISABLED->loaded.filter{it.isJsonObject&&(it.asJsonObject.get("isDisabled")?.asBoolean==true||it.asJsonObject.get("status")?.asString=="disabled")};AdminSection.OFFERS->loaded.filter{it.isJsonObject&&it.asJsonObject.get("offers")?.let{v->v.isJsonArray&&v.asJsonArray.size()>0}==true};else->loaded}
-   _state.value=_state.value.copy(busy=false,stats=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)data else _state.value.stats,items=visible,payload=data)
+   _state.value=_state.value.copy(busy=false,stats=if(section==AdminSection.DASHBOARD||section==AdminSection.STATS)data else _state.value.stats,items=visible,payload=data,supportCases=supportCases,supportSelectedCase=if(section==AdminSection.SUPPORT)null else _state.value.supportSelectedCase)
   }
   catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل البيانات")}
  }
@@ -121,6 +122,26 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  fun closeClientProfile(){_state.value=_state.value.copy(editingClient=null,editingClientId=null)}
  fun openWalletTransactions(id:String)=viewModelScope.launch{_state.value=_state.value.copy(busy=true,error=null,walletFanniId=id);try{val data=repo.get("api/admin/wallet/transactions/$id");val rows=if(data.isJsonObject)data.asJsonObject.get("transactions")?.takeIf{it.isJsonArray}?.asJsonArray?.map{it}?:emptyList() else emptyList();_state.value=_state.value.copy(busy=false,walletTransactions=rows)}catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل حركات المحفظة")}}
  fun closeWalletTransactions(){_state.value=_state.value.copy(walletFanniId=null,walletTransactions=emptyList())}
+ fun openSupportCase(id:String)=viewModelScope.launch{
+  _state.value=_state.value.copy(busy=true,error=null)
+  try{
+   val data=repo.get("api/support/admin/$id")
+   val item=data.takeIf{it.isJsonObject}?.asJsonObject?.get("supportCase")
+   _state.value=_state.value.copy(busy=false,supportSelectedCase=item)
+  }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل محادثة الدعم")}
+ }
+ fun supportAction(method:String,path:String,body:JsonObject=JsonObject())=viewModelScope.launch{
+  _state.value=_state.value.copy(busy=true,error=null,actionMessage=null)
+  try{
+   val result=repo.mutate(method,path,body)
+   val updated=result.takeIf{it.isJsonObject}?.asJsonObject?.get("supportCase")
+   val id=_state.value.supportSelectedCase?.takeIf{it.isJsonObject}?.asJsonObject?.get("_id")?.asString
+   val detail=if(updated!=null)updated else if(!id.isNullOrBlank())repo.get("api/support/admin/$id").asJsonObject.get("supportCase") else null
+   _state.value=_state.value.copy(busy=false,supportSelectedCase=detail,actionMessage=result.takeIf{it.isJsonObject}?.asJsonObject?.get("message")?.asString?: "تم تنفيذ الإجراء")
+   val list=repo.get("api/support/admin").asJsonObject.get("supportCases")?.takeIf{it.isJsonArray}?.asJsonArray?.map{it}?:emptyList()
+   _state.value=_state.value.copy(supportCases=list)
+  }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تنفيذ إجراء الدعم")}
+ }
  fun searchSupport(query:String)=viewModelScope.launch{
   if(query.trim().length<2){_state.value=_state.value.copy(error="اكتب رقم طلب أو هاتفًا من حرفين على الأقل");return@launch}
   _state.value=_state.value.copy(busy=true,error=null,section=AdminSection.SUPPORT)
