@@ -40,8 +40,28 @@ class AdminViewModel(app:Application):AndroidViewModel(app){
  }
  fun openFanniProfile(id:String)=viewModelScope.launch{
   _state.value=_state.value.copy(busy=true,error=null,editingProfile=null,editingProfileId=null)
-  try{val data=repo.get("api/admin/fannis/$id/profile");_state.value=_state.value.copy(busy=false,editingProfile=data,editingProfileId=id)}
-  catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل بيانات الفني")}
+  try{
+   val data=repo.get("api/admin/fannis/$id/profile")
+   val servicesResponse=repo.get("api/admin/services")
+   val regionsResponse=repo.get("api/admin/regions")
+   val serviceOptions=servicesResponse.takeIf{it.isJsonObject}?.asJsonObject?.get("services")?.takeIf{it.isJsonArray}?.asJsonArray
+   val areaOptions=regionsResponse.takeIf{it.isJsonObject}?.asJsonObject?.get("regions")?.takeIf{it.isJsonArray}?.asJsonArray
+   if(data.isJsonObject){
+    val root=data.asJsonObject
+    root.add("serviceOptions",com.google.gson.JsonArray().apply{
+     serviceOptions?.forEach{entry->val name=if(entry.isJsonObject)entry.asJsonObject.get("name")?.asString else entry.takeIf{it.isJsonPrimitive}?.asString;if(!name.isNullOrBlank())add(name)}
+    })
+    root.add("areaOptions",com.google.gson.JsonArray().apply{
+     areaOptions?.forEach{entry->if(entry.isJsonObject){val o=entry.asJsonObject;val name=o.get("name")?.asString;if(!name.isNullOrBlank()&&o.get("isActive")?.asBoolean!=false&&o.get("isDeleted")?.asBoolean!=true)add(name)}}
+    })
+    val fanni=root.get("fanni")?.takeIf{it.isJsonObject}?.asJsonObject
+    val selectedServices=fanni?.get("specialties")?.takeIf{it.isJsonArray}?.asJsonArray
+    val selectedAreas=fanni?.get("areas")?.takeIf{it.isJsonArray}?.asJsonArray
+    selectedServices?.forEach{root.getAsJsonArray("serviceOptions").add(it)}
+    selectedAreas?.forEach{root.getAsJsonArray("areaOptions").add(it)}
+   }
+   _state.value=_state.value.copy(busy=false,editingProfile=data,editingProfileId=id)
+  }catch(e:Exception){_state.value=_state.value.copy(busy=false,error=e.message?: "تعذر تحميل بيانات الفني")}
  }
  fun closeProfile(){_state.value=_state.value.copy(editingProfile=null,editingProfileId=null)}
  fun openRecovery(id:String)=viewModelScope.launch{
